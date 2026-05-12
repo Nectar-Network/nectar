@@ -17,7 +17,8 @@ func Register(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphra
 	}
 	nameVal := soroban.ScvString(name)
 
-	_, err = rpc.Invoke(horizonURL, kp, passphrase, registryAddr, "register", operatorVal, nameVal)
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, registryAddr, "register",
+		soroban.DefaultRetry(), operatorVal, nameVal)
 	if err != nil {
 		if isAlreadyRegistered(err.Error()) {
 			return nil

@@ -82,7 +82,8 @@ func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pas
 	}
 	pctVal := soroban.ScvU64(uint64(pct) * 1e7)
 
-	_, err = rpc.Invoke(horizonURL, kp, passphrase, poolAddr, "new_liquidation_auction", userVal, pctVal)
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "new_liquidation_auction",
+		soroban.DefaultRetry(), userVal, pctVal)
 	if err != nil {
 		if isAuctionExists(err.Error()) {
 			return nil
@@ -175,7 +176,8 @@ func fillAuctionRequest(rpc *soroban.Client, horizonURL string, kp *keypair.Full
 	reqVecPtr := &reqVec
 	requestsVal := xdr.ScVal{Type: xdr.ScValTypeScvVec, Vec: &reqVecPtr}
 
-	_, err = rpc.Invoke(horizonURL, kp, passphrase, poolAddr, "submit",
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "submit",
+		soroban.DefaultRetry(),
 		fromVal, fromVal, fromVal, requestsVal)
 	if err != nil {
 		if isAlreadyFilled(err.Error()) {

@@ -293,6 +293,7 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 	}
 
 	// draw vault capital
+	drawStart := time.Now()
 	if bidAmt > 0 {
 		if err := vault.Draw(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, bidAmt); err != nil {
 			return fmt.Errorf("vault draw: %w", err)
@@ -304,10 +305,15 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 	// attempt fill — only return proceeds on success or AlreadyFilled
 	fillErr := blend.FillAuction(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.BlendPool, user)
 	shouldReturn := false
+	// Captured for the keeper performance metric (avg_response_time_ms).
+	// Forwarded to ReturnProceeds → vault.return_proceeds → registry.record_execution.
+	// Zero for the AlreadyFilled branch — we didn't actually execute.
+	responseMs := int64(0)
 
 	switch {
 	case fillErr == nil:
-		logInfo("filled auction", "user", short(user))
+		responseMs = time.Since(drawStart).Milliseconds()
+		logInfo("filled auction", "user", short(user), "response_ms", responseMs)
 		state.addEvent(fmt.Sprintf("filled auction: %s", short(user)))
 		shouldReturn = bidAmt > 0
 		appMet.liquidationsTotal.Add(1)
@@ -342,11 +348,11 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 
 	if shouldReturn {
 		proceeds := bidAmt + bidAmt/10
-		if err := vault.ReturnProceeds(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, proceeds); err != nil {
+		if err := vault.ReturnProceeds(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, proceeds, responseMs); err != nil {
 			logWarn("return proceeds failed", "err", err)
 			state.addEvent(fmt.Sprintf("return proceeds failed: %v", err))
 		} else {
-			logInfo("returned proceeds", "amount", proceeds)
+			logInfo("returned proceeds", "amount", proceeds, "response_ms", responseMs)
 			state.addEvent(fmt.Sprintf("returned %d to vault", proceeds))
 		}
 	}

@@ -1,11 +1,21 @@
 package blend
 
 import (
+	"errors"
 	"math"
 	"testing"
+	"time"
 
 	"math/big"
+
+	"github.com/nectar-network/keeper/soroban"
 )
+
+// fastRetry is the policy used in retry-classifier tests. Short delays keep
+// the test fast; the classifier itself doesn't depend on the timing.
+func fastRetry() soroban.RetryConfig {
+	return soroban.RetryConfig{MaxAttempts: 3, InitialDelay: time.Millisecond, BackoffFactor: 1.5}
+}
 
 func makePool(price float64) *PoolState {
 	return &PoolState{
@@ -237,6 +247,69 @@ func TestErrAlreadyFilled_Sentinel(t *testing.T) {
 	}
 	if ErrAlreadyFilled.Error() == "" {
 		t.Fatal("ErrAlreadyFilled should have a non-empty message")
+	}
+}
+
+// The retry tests below exercise the policy that wraps fillAuctionRequest and
+// CreateAuction. They use soroban.RetryWith so we can simulate transient and
+// deterministic failures without spinning a live RPC.
+
+func TestFillAuction_RetriesOnSequenceError(t *testing.T) {
+	attempts := 0
+	err := soroban.RetryWith(fastRetry(), func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New("sequence number mismatch")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected success after retries, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts (2 retries + success), got %d", attempts)
+	}
+}
+
+func TestFillAuction_DoesNotRetryAlreadyFilled(t *testing.T) {
+	attempts := 0
+	err := soroban.RetryWith(fastRetry(), func() error {
+		attempts++
+		return errors.New("AlreadyFilled")
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if attempts != 1 {
+		t.Fatalf("AlreadyFilled is non-retryable; expected 1 attempt, got %d", attempts)
+	}
+}
+
+func TestFillAuction_RetriesOnResourceExhaust(t *testing.T) {
+	attempts := 0
+	err := soroban.RetryWith(fastRetry(), func() error {
+		attempts++
+		return errors.New("resource_exhaust: budget exceeded")
+	})
+	if err == nil {
+		t.Fatal("expected terminal error after max retries")
+	}
+	if attempts != 3 {
+		t.Fatalf("resource_exhaust is retryable; expected MaxAttempts=3, got %d", attempts)
+	}
+}
+
+func TestRegister_DoesNotRetryAlreadyRegistered(t *testing.T) {
+	attempts := 0
+	err := soroban.RetryWith(fastRetry(), func() error {
+		attempts++
+		return errors.New("already registered")
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if attempts != 1 {
+		t.Fatalf("already-registered is non-retryable; expected 1 attempt, got %d", attempts)
 	}
 }
 

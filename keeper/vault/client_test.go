@@ -39,7 +39,7 @@ func TestReturnProceeds_RejectsNonPositiveAmount(t *testing.T) {
 	kp := mustKP(t)
 
 	for _, amt := range []int64{0, -1, -100} {
-		err := ReturnProceeds(rpc, "http://invalid.local", kp, "Test SDF Network", "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM", amt)
+		err := ReturnProceeds(rpc, "http://invalid.local", kp, "Test SDF Network", "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM", amt, 100)
 		if err == nil {
 			t.Errorf("return_proceeds(%d): expected error", amt)
 			continue

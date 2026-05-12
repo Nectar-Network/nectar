@@ -47,7 +47,11 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 // ReturnProceeds sends capital back to the vault after a liquidation. Higher
 // retry budget than Draw because returning capital is the safer side: the
 // keeper has the funds in hand and we want to ensure they reach the vault.
-func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64) error {
+//
+// responseTimeMs is the keeper-observed elapsed time from draw → fill → here.
+// Pass 0 when the keeper did not actually execute (e.g. another bot beat it
+// to the auction); the registry will skip the response-time update.
+func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64, responseTimeMs int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("return_proceeds: amount must be > 0, got %d", amount)
 	}
@@ -56,9 +60,13 @@ func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 		return err
 	}
 	amtVal := soroban.ScvI128(amount)
+	if responseTimeMs < 0 {
+		responseTimeMs = 0
+	}
+	respVal := soroban.ScvU64(uint64(responseTimeMs))
 	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "return_proceeds",
 		soroban.DefaultRetry(),
-		keeperVal, amtVal)
+		keeperVal, amtVal, respVal)
 	if err != nil {
 		return fmt.Errorf("vault return_proceeds: %w", err)
 	}
