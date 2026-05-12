@@ -376,14 +376,41 @@ mod tests {
         let op = make_op(&s);
         s.client.register(&op, &String::from_str(&s.env, "alpha"));
 
-        s.client.record_execution(&s.vault, &op, &true, &50_0000000);
-        s.client.record_execution(&s.vault, &op, &true, &30_0000000);
-        s.client.record_execution(&s.vault, &op, &false, &0i128);
+        s.client
+            .record_execution(&s.vault, &op, &true, &50_0000000, &150u64);
+        s.client
+            .record_execution(&s.vault, &op, &true, &30_0000000, &250u64);
+        s.client
+            .record_execution(&s.vault, &op, &false, &0i128, &9999u64);
 
         let info = s.client.get_keeper(&op);
         assert_eq!(info.total_executions, 3);
         assert_eq!(info.successful_fills, 2);
         assert_eq!(info.total_profit, 80_0000000);
+        // Failures don't contribute to response-time stats.
+        assert_eq!(info.response_count, 2);
+        assert_eq!(info.total_response_time_ms, 400);
+    }
+
+    #[test]
+    fn test_avg_response_time_computed() {
+        let s = setup();
+        let op = make_op(&s);
+        s.client.register(&op, &String::from_str(&s.env, "alpha"));
+
+        // No executions yet — avg should be 0.
+        assert_eq!(s.client.avg_response_time_ms(&op), 0);
+
+        s.client
+            .record_execution(&s.vault, &op, &true, &10_0000000, &100u64);
+        s.client
+            .record_execution(&s.vault, &op, &true, &10_0000000, &200u64);
+        assert_eq!(s.client.avg_response_time_ms(&op), 150);
+
+        // Failure shouldn't move the average.
+        s.client
+            .record_execution(&s.vault, &op, &false, &0i128, &9999u64);
+        assert_eq!(s.client.avg_response_time_ms(&op), 150);
     }
 
     #[test]

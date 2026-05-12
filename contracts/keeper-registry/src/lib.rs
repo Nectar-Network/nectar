@@ -75,6 +75,8 @@ impl KeeperRegistry {
             total_profit: 0,
             last_draw_time: 0,
             has_active_draw: false,
+            total_response_time_ms: 0,
+            response_count: 0,
         };
 
         pstore.set(&DataKey::Keeper(operator.clone()), &info);
@@ -160,6 +162,20 @@ impl KeeperRegistry {
             .ok_or(Error::NotRegistered)
     }
 
+    pub fn avg_response_time_ms(env: Env, operator: Address) -> Result<u64, Error> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        let info: KeeperInfo = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Keeper(operator))
+            .ok_or(Error::NotRegistered)?;
+        if info.response_count == 0 {
+            Ok(0)
+        } else {
+            Ok(info.total_response_time_ms / info.response_count)
+        }
+    }
+
     pub fn get_keepers(env: Env) -> Vec<Address> {
         env.storage().instance().extend_ttl(1000, 1000);
         env.storage()
@@ -235,6 +251,7 @@ impl KeeperRegistry {
         keeper: Address,
         success: bool,
         profit: i128,
+        response_time_ms: u64,
     ) -> Result<(), Error> {
         env.storage().instance().extend_ttl(1000, 1000);
         Self::require_vault(&env, &caller)?;
@@ -248,6 +265,10 @@ impl KeeperRegistry {
         if success {
             info.successful_fills = info.successful_fills.saturating_add(1);
             info.total_profit = info.total_profit.saturating_add(profit);
+            info.total_response_time_ms = info
+                .total_response_time_ms
+                .saturating_add(response_time_ms);
+            info.response_count = info.response_count.saturating_add(1);
         }
 
         pstore.set(&DataKey::Keeper(keeper.clone()), &info);
@@ -255,7 +276,7 @@ impl KeeperRegistry {
 
         env.events().publish(
             (Symbol::new(&env, "execution"), keeper),
-            (success, profit, info.total_executions),
+            (success, profit, info.total_executions, response_time_ms),
         );
         Ok(())
     }

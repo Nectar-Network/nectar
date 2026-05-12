@@ -13,6 +13,8 @@ pub struct KeeperInfo {
     pub total_profit: i128,
     pub last_draw_time: u64,
     pub has_active_draw: bool,
+    pub total_response_time_ms: u64,
+    pub response_count: u64,
 }
 
 #[contracttype]

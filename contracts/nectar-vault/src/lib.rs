@@ -256,7 +256,16 @@ impl NectarVault {
     }
 
     /// Keeper returns capital + profit after a successful liquidation.
-    pub fn return_proceeds(env: Env, keeper: Address, amount: i128) -> Result<(), VaultError> {
+    ///
+    /// `response_time_ms` is the keeper-observed elapsed time from draw to
+    /// fill+return — forwarded to the registry to build the per-keeper
+    /// average response-time metric.
+    pub fn return_proceeds(
+        env: Env,
+        keeper: Address,
+        amount: i128,
+        response_time_ms: u64,
+    ) -> Result<(), VaultError> {
         env.storage().instance().extend_ttl(1000, 1000);
         require_init(&env)?;
         keeper.require_auth();
@@ -299,7 +308,7 @@ impl NectarVault {
         if drawn > 0 {
             env.storage().persistent().remove(&draw_key);
             registry_call(&env, "clear_draw", &keeper)?;
-            registry_record_execution(&env, &keeper, true, profit)?;
+            registry_record_execution(&env, &keeper, true, profit, response_time_ms)?;
         }
 
         env.events().publish(
@@ -392,6 +401,7 @@ fn registry_record_execution(
     keeper: &Address,
     success: bool,
     profit: i128,
+    response_time_ms: u64,
 ) -> Result<(), VaultError> {
     let registry: Address = env
         .storage()
@@ -408,6 +418,7 @@ fn registry_record_execution(
             keeper.into_val(env),
             success.into_val(env),
             profit.into_val(env),
+            response_time_ms.into_val(env),
         ],
     );
     Ok(())

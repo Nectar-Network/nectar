@@ -32,6 +32,7 @@ mod tests {
             _keeper: Address,
             _success: bool,
             _profit: i128,
+            _response_time_ms: u64,
         ) {
         }
     }
@@ -128,7 +129,7 @@ mod tests {
 
         client.deposit(&user, &1000_0000000);
         client.draw(&keeper, &500_0000000);
-        client.return_proceeds(&keeper, &510_0000000);
+        client.return_proceeds(&keeper, &510_0000000, &120u64);
 
         let state = client.get_state();
         assert_eq!(state.total_usdc, 1010_0000000);
@@ -240,7 +241,7 @@ mod tests {
         client.deposit(&user, &1000_0000000);
         client.draw(&keeper, &500_0000000);
 
-        client.return_proceeds(&keeper, &400_0000000);
+        client.return_proceeds(&keeper, &400_0000000, &120u64);
 
         let state = client.get_state();
         assert_eq!(state.active_liq, 100_0000000);
@@ -276,7 +277,7 @@ mod tests {
 
         client.deposit(&user, &1000_0000000);
 
-        client.return_proceeds(&keeper, &50_0000000);
+        client.return_proceeds(&keeper, &50_0000000, &120u64);
         let state = client.get_state();
         assert_eq!(state.total_profit, 50_0000000);
         assert_eq!(state.total_usdc, 1050_0000000);
@@ -296,10 +297,10 @@ mod tests {
         client.deposit(&user, &2000_0000000);
 
         client.draw(&keeper, &300_0000000);
-        client.return_proceeds(&keeper, &310_0000000);
+        client.return_proceeds(&keeper, &310_0000000, &120u64);
 
         client.draw(&keeper, &200_0000000);
-        client.return_proceeds(&keeper, &215_0000000);
+        client.return_proceeds(&keeper, &215_0000000, &120u64);
 
         let state = client.get_state();
         assert_eq!(state.active_liq, 0);
@@ -387,7 +388,7 @@ mod tests {
 
         client.deposit(&user, &1000_0000000);
         client.draw(&keeper, &100_0000000);
-        client.return_proceeds(&keeper, &110_0000000);
+        client.return_proceeds(&keeper, &110_0000000, &120u64);
 
         let events = env.events().all();
         let has_return = events
@@ -624,7 +625,7 @@ mod tests {
         client.deposit(&user_a, &1000_0000000);
         client.draw(&keeper, &500_0000000);
         // Return with 100 USDC profit.
-        client.return_proceeds(&keeper, &600_0000000);
+        client.return_proceeds(&keeper, &600_0000000, &120u64);
 
         // Total: 1100 USDC, 1000 shares. Share price = 1.1.
         // user_b deposits 1000 → gets 1000 * 1000 / 1100 = 909_0909090 shares.
@@ -699,7 +700,7 @@ mod tests {
 
         // Total = 600. Keeper draws 200, returns 260 → 60 profit.
         client.draw(&keeper, &200_0000000);
-        client.return_proceeds(&keeper, &260_0000000);
+        client.return_proceeds(&keeper, &260_0000000, &120u64);
 
         // Total now 660 USDC across 600 shares. Share price = 1.1.
         let (_, a_val) = client.balance(&a);
@@ -818,13 +819,16 @@ mod tests {
         // Keeper repays 510 (10 profit) — vault calls clear_draw + record_execution.
         // Mint extra so keeper can pay back.
         usdc_admin_client.mint(&keeper, &10_0000000);
-        vault.return_proceeds(&keeper, &510_0000000);
+        vault.return_proceeds(&keeper, &510_0000000, &175u64);
 
         let info = registry.get_keeper(&keeper);
         assert!(!info.has_active_draw);
         assert_eq!(info.total_executions, 1);
         assert_eq!(info.successful_fills, 1);
         assert_eq!(info.total_profit, 10_0000000);
+        assert_eq!(info.response_count, 1);
+        assert_eq!(info.total_response_time_ms, 175);
+        assert_eq!(registry.avg_response_time_ms(&keeper), 175);
 
         let state = vault.get_state();
         assert_eq!(state.active_liq, 0);

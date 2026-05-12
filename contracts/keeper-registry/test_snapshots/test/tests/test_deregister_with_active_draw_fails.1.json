@@ -278,6 +278,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "response_count"
+                      },
+                      "val": {
+                        "u64": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "stake"
                       },
                       "val": {
@@ -312,6 +320,14 @@
                           "hi": 0,
                           "lo": 0
                         }
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "total_response_time_ms"
+                      },
+                      "val": {
+                        "u64": 0
                       }
                     }
                   ]
