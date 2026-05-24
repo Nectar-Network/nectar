@@ -4,13 +4,63 @@ const TESTNET_RPC = "https://soroban-testnet.stellar.org";
 const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 const HORIZON_TESTNET = "https://horizon-testnet.stellar.org";
 
-// Vault contract address — set via env or fallback
+// Contract addresses — set via env. USDC_CONTRACT must be the mock-USDC SAC
+// the vault was initialized with (registry.get_config().usdc_token), NOT the
+// classic-asset Circle USDC trustline a user might happen to hold.
+//
+// `.trim()` because `echo "$value" | vercel env add` smuggles a trailing
+// newline; that bumps the strkey length to 57 and decodeContract rejects it
+// with "Invalid contract ID: …". Belt-and-suspenders against env hygiene.
 const VAULT_CONTRACT =
-  process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "";
+  (process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "").trim();
 const REGISTRY_CONTRACT =
-  process.env.NEXT_PUBLIC_REGISTRY_CONTRACT ?? "";
+  (process.env.NEXT_PUBLIC_REGISTRY_CONTRACT ?? "").trim();
+const USDC_CONTRACT =
+  (process.env.NEXT_PUBLIC_USDC_CONTRACT ?? "").trim();
 
 const STORAGE_SELECTED_WALLET = "nectar.selectedWalletId";
+
+/** Fetch a user's mock-USDC SAC balance, returned as a 2-decimal-USDC string. */
+export async function fetchUsdcBalance(address: string): Promise<string> {
+  if (!USDC_CONTRACT || !address) return "0";
+  try {
+    const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+    // Simulator needs a source account; use the user's own — it exists by
+    // the time we're displaying their balance.
+    let account: StellarSdk.Account;
+    try {
+      account = await server.getAccount(address);
+    } catch {
+      account = new StellarSdk.Account(address, "0");
+    }
+    const contract = new StellarSdk.Contract(USDC_CONTRACT);
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: "100",
+      networkPassphrase: TESTNET_PASSPHRASE,
+    })
+      .addOperation(
+        contract.call(
+          "balance",
+          StellarSdk.nativeToScVal(address, { type: "address" })
+        )
+      )
+      .setTimeout(30)
+      .build();
+    const sim = await server.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationError(sim)) return "0";
+    if (StellarSdk.rpc.Api.isSimulationSuccess(sim) && sim.result) {
+      const v = StellarSdk.scValToNative(sim.result.retval) as bigint | number;
+      const stroops = typeof v === "bigint" ? v : BigInt(Math.trunc(Number(v)));
+      const denom = BigInt(10000000);
+      const whole = Number(stroops / denom);
+      const frac = Number(stroops % denom) / 10000000;
+      return (whole + frac).toFixed(2);
+    }
+    return "0";
+  } catch {
+    return "0";
+  }
+}
 
 export interface WalletState {
   connected: boolean;
@@ -112,9 +162,10 @@ export async function connectWallet(): Promise<WalletState | null> {
     const walletId =
       window.localStorage.getItem(STORAGE_SELECTED_WALLET) ?? undefined;
 
-    // Fetch XLM + classic-asset balances via Horizon.
+    // Fetch XLM via Horizon, USDC via the SAC the vault was initialized with.
+    // Reading USDC from the classic-asset list would surface Circle's
+    // testnet-USDC trustline balance, which is unrelated to our vault.
     let xlmBalance = "0";
-    let usdcBalance = "0";
     try {
       const server = new StellarSdk.Horizon.Server(HORIZON_TESTNET);
       const account = await server.loadAccount(address);
@@ -124,14 +175,10 @@ export async function connectWallet(): Promise<WalletState | null> {
       if (native) {
         xlmBalance = parseFloat(native.balance).toFixed(2);
       }
-      for (const b of account.balances) {
-        if ("asset_code" in b && b.asset_code === "USDC") {
-          usdcBalance = parseFloat(b.balance).toFixed(2);
-        }
-      }
     } catch {
       // Account may not exist yet on testnet (needs Friendbot) — that's fine.
     }
+    const usdcBalance = await fetchUsdcBalance(address);
 
     return {
       connected: true,

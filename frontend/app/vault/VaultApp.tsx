@@ -26,8 +26,8 @@ import {
 type Tab = "deposit" | "withdraw";
 type TxStatus = "idle" | "simulating" | "signing" | "submitted" | "confirmed" | "error";
 
-const VAULT_CONTRACT = process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "";
-const REGISTRY_CONTRACT = process.env.NEXT_PUBLIC_REGISTRY_CONTRACT ?? "";
+const VAULT_CONTRACT = (process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "").trim();
+const REGISTRY_CONTRACT = (process.env.NEXT_PUBLIC_REGISTRY_CONTRACT ?? "").trim();
 
 // APY is the only value we display before chain data arrives — it's a
 // modelled estimate, not on-chain state. TVL / share count / depositors

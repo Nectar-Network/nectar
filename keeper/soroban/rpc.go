@@ -5,18 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 )
 
 type Client struct {
-	url  string
-	http *http.Client
-	seq  atomic.Int64
+	url    string
+	origin string
+	http   *http.Client
+	seq    atomic.Int64
 }
 
+// NewClient returns a Soroban JSON-RPC + Horizon helper. The Origin header
+// it sends on every request defaults to https://nectarnetwork.fun (whitelisted
+// by our paid Ankr endpoint); override via RPC_ORIGIN if the keeper is hosted
+// under a different domain.
 func NewClient(url string) *Client {
-	return &Client{url: url, http: &http.Client{Timeout: 30 * time.Second}}
+	origin := os.Getenv("RPC_ORIGIN")
+	if origin == "" {
+		origin = "https://nectarnetwork.fun"
+	}
+	return &Client{
+		url:    url,
+		origin: origin,
+		http:   &http.Client{Timeout: 30 * time.Second},
+	}
 }
 
 type SimulateResult struct {
@@ -129,7 +143,13 @@ func (c *Client) GetLedgerEntries(keys []string) ([]LedgerEntry, error) {
 
 func (c *Client) GetAccount(horizonURL, address string) (int64, error) {
 	url := fmt.Sprintf("%s/accounts/%s", horizonURL, address)
-	resp, err := c.http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Origin", c.origin)
+	req.Header.Set("User-Agent", "nectar-keeper/1.0")
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -158,6 +178,8 @@ func (c *Client) call(method string, params any, out any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", c.origin)
+	req.Header.Set("User-Agent", "nectar-keeper/1.0")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err

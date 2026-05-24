@@ -21,11 +21,12 @@ case "$NAME" in
     ;;
 esac
 
-# Tranche 1 contracts (testnet, redeployed 2026-05-13)
-# Deployed by ./scripts/tranche-1-e2e.sh on this branch — ABI now includes
-# response_time_ms plumbing (vault.return_proceeds → registry.record_execution).
-REGISTRY=CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW
-VAULT=CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU
+# Tranche 1 hardened contracts (testnet, redeployed 2026-05-24).
+# Deployed by the post-verification hardening pass — vault now uses
+# try_invoke_contract for cross-contract calls, has a liquid-balance guard
+# on withdraw, and runs with a production-grade 1h withdraw cooldown.
+REGISTRY=CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
+VAULT=CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
 USDC=CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
 
 ARGS=(
@@ -37,6 +38,7 @@ ARGS=(
   --set "HORIZON_URL=https://horizon-testnet.stellar.org"
   --set "POLL_INTERVAL=10"
   --set "MIN_PROFIT=1.02"
+  --set "SLASH_SCAN_EVERY=30"
   --set "API_PORT=8080"
 )
 
