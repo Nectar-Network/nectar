@@ -60,60 +60,86 @@ Nectar replaces single-bot liquidation systems with a distributed network of com
 | Keeper Alpha API | [keeper-alpha-production.up.railway.app](https://keeper-alpha-production.up.railway.app) |
 | Keeper Beta API | [keeper-beta-production.up.railway.app](https://keeper-beta-production.up.railway.app) |
 
-Both keepers run on Railway from `keeper/Dockerfile`. They need an env-var refresh + redeploy after Tranche 1 redeploy — `REGISTRY_CONTRACT`, `VAULT_CONTRACT`, `USDC_CONTRACT`, `BLEND_POOL` all moved. Use `./scripts/railway-keeper-env.sh keeper-alpha` and `… keeper-beta`, then `railway up`.
+Both keepers run on Railway from `keeper/Dockerfile`. After every redeploy of the contracts they need an env-var refresh (`REGISTRY_CONTRACT`, `VAULT_CONTRACT`, `USDC_CONTRACT`, `BLEND_POOL`). Use `./scripts/railway-keeper-env.sh keeper-alpha` and `… keeper-beta`, then `railway up`. The latest hardened addresses are pinned in [.env](.env) and [wallets.md](wallets.md).
 
 ### On-Chain Contracts (Soroban Testnet)
 
-Tranche 1 redeploy on 2026-05-13 — these contracts ship the staking + slashing + performance-tracking + cap/cooldown surface, and the keeper sends a Blend-compatible `submit` payload (`request_type: u32`, `amount: i128`). Reproduce locally with `./scripts/tranche-1-e2e.sh`.
+**Tranche 1 hardened redeploy on 2026-05-24** — these contracts ship the full
+Tranche 1 surface plus the post-review hardening: `try_invoke_contract` for
+cross-contract calls (vault returns a clean `Unauthorized` instead of a host
+panic when an unregistered keeper calls `draw`), a liquid-balance guard on
+`withdraw` (returns `InsufficientVault` instead of an opaque SAC revert), and
+a 1-hour withdraw cooldown (was 30s for demo). Reproduce locally with
+`./scripts/tranche-1-e2e.sh`.
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| KeeperRegistry | `CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW` | [View](https://stellar.expert/explorer/testnet/contract/CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW) |
-| NectarVault | `CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU` | [View](https://stellar.expert/explorer/testnet/contract/CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU) |
+| KeeperRegistry | `CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB` | [View](https://stellar.expert/explorer/testnet/contract/CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB) |
+| NectarVault | `CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345` | [View](https://stellar.expert/explorer/testnet/contract/CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345) |
 | Mock USDC (SAC) | `CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW` | [View](https://stellar.expert/explorer/testnet/contract/CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW) |
 | Blend testnet pool (V2) | `CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF` | [View](https://stellar.expert/explorer/testnet/contract/CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF) |
+| Blend's Reflector oracle | `CAZOKR2Y5E2OSWSIBRVZMJ47RUTQPIGVWSAQ2UISGAVC46XKPGDG5PKI` | [View](https://stellar.expert/explorer/testnet/contract/CAZOKR2Y5E2OSWSIBRVZMJ47RUTQPIGVWSAQ2UISGAVC46XKPGDG5PKI) |
 
 The Blend pool ID comes from [blend-utils/testnet.contracts.json](https://github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json) (key: `TestnetV2`). Point the keeper at it with `./scripts/keeper-blend-testnet.sh` — no code changes needed.
 
-### Testnet Stats (live, post Tranche 1 redeploy)
+### Testnet Stats (live, post Tranche 1 hardened redeploy)
 
-- **TVL**: 50,020 USDC across 15+ depositors
-- **Realized profit on-chain**: 100 USDC from one full draw→fill→return cycle (`response_time_ms: 175`)
-- **Keepers**: 2 registered operators (alpha + beta), each staked 100 USDC on-chain
-- **Vault config**: deposit cap 10M USDC, withdraw cooldown 30s (demo), max draw 10k USDC/keeper
-- **Registry config**: 100 USDC min stake, slash timeout 3600s, slash rate 10% bps
-- **Profit model**: 10% per successful liquidation returned to vault depositors
+- **TVL on the hardened vault**: 10,000 USDC seed deposit; topped up to
+  10,100 USDC after the first profit cycle. The pre-hardening vault at
+  `CCHR5KXX…` still carries the prior ~50K TVL and remains functional but
+  doesn't have the new guards.
+- **Realized profit on-chain**: `total_profit = 1_000_000_000` stroops
+  (= 100 USDC) from one full draw → fill → return cycle (drew 5,000 USDC,
+  returned 5,100 USDC), with `total_response_time_ms = 175`,
+  `response_count = 1`, `total_executions = 1`.
+- **Keepers**: 2 registered operators (`keeper-alpha`, `keeper-beta`), each
+  staked 100 USDC on-chain. Verified via `get_keeper(operator)` returning
+  `stake = 1_000_000_000` (i.e. 100 USDC in 7-decimal stroops).
+- **Vault config**: deposit cap 10M USDC, withdraw cooldown 3600s (1h —
+  production-grade, no longer the 30s demo), max draw 10K USDC/keeper.
+- **Registry config**: 100 USDC min stake, slash timeout 3600s, slash rate 1000 bps (10%).
+- **Profit model**: keeper returns its real USDC balance delta (production)
+  or, when `DEMO_PROFIT_BPS` is set, tops up to that target from its own
+  balance (LiquidationLab demos only).
+- **Oracle integration**: the keeper now reads live Reflector prices from
+  Blend's configured oracle (`CAZOKR2Y…`) for every reserve before computing
+  health factor or auction profitability. No more hardcoded $0.30 fallback.
 
 ## Tranche 1 Status
 
-Each Tranche 1 deliverable below cites the on-chain code + tests that prove the measurement criteria. Run `cargo test --workspace` (77 contract tests) and `cd keeper && go test ./...` to reproduce locally.
+Each Tranche 1 deliverable below cites the on-chain code + tests that prove the measurement criteria. Run `cargo test --workspace` (**79 contract tests**) and `cd keeper && go test -race ./...` (**60+ Go tests**) to reproduce locally.
 
 ### 1. KeeperRegistry v1 — Staking & Performance Tracking ✓
 
-**Status: code complete, on-chain proof from `./scripts/tranche-1-e2e.sh`**
+**Status: code complete, on-chain proof on the hardened deploy (registry `CDT257SL…`).**
 
 - **Staking enforced on-chain**: `register()` pulls `min_stake` USDC from the operator via SAC `transfer` ([contracts/keeper-registry/src/lib.rs:56-65](contracts/keeper-registry/src/lib.rs#L56-L65)). Registration fails with `InsufficientStake` (#7) when `min_stake = 0`. Tests: `test_register_with_stake`, `test_register_insufficient_stake`, `test_register_zero_min_stake_rejected`.
 - **Performance metrics on-chain**: `KeeperInfo` carries `total_executions`, `successful_fills`, `total_profit`, `total_response_time_ms`, `response_count` ([types.rs:5-18](contracts/keeper-registry/src/types.rs#L5-L18)). `avg_response_time_ms(operator)` returns the per-keeper average ([lib.rs:165-177](contracts/keeper-registry/src/lib.rs#L165-L177)). Recorded by `record_execution()` invoked from `vault.return_proceeds()`.
-- **Slashing**: `slash(keeper)` ([lib.rs:284-326](contracts/keeper-registry/src/lib.rs#L284-L326)) transfers `slash_rate_bps` of stake to the vault when `now - last_draw_time > slash_timeout`. Tests: `test_slash_after_timeout`, `test_slash_before_timeout_fails`, `test_slash_without_active_draw_fails`.
+- **Slashing**: `slash(keeper)` ([lib.rs:284-326](contracts/keeper-registry/src/lib.rs#L284-L326)) transfers `slash_rate_bps` of stake to the vault when `now - last_draw_time > slash_timeout`. Tests: `test_slash_after_timeout`, `test_slash_before_timeout_fails`, `test_slash_without_active_draw_fails`. An off-chain slasher fires automatically — either the in-keeper sweep (`SLASH_SCAN_EVERY=N` cycles, see [keeper/main.go](keeper/main.go) `runSlashSweep`) or the standalone [scripts/slasher.sh](scripts/slasher.sh) cron.
 
 ### 2. NectarVault v1 — Production Deposit/Withdraw ✓
 
-**Status: code complete, on-chain proof from `./scripts/tranche-1-e2e.sh`**
+**Status: code complete, on-chain proof on the hardened deploy (vault `CDZR6VDC…`).**
 
-- **Deposit cap**: `deposit()` rejects with `DepositCapExceeded` (#8) when `state.total_usdc + amount > cfg.deposit_cap` ([contracts/nectar-vault/src/lib.rs:66-68](contracts/nectar-vault/src/lib.rs#L66-L68)). Tests: `test_deposit_exceeds_cap`, `test_deposit_at_exact_cap`, `test_deposit_cap_with_existing_balance`.
-- **Withdraw cooldown**: `withdraw()` rejects with `WithdrawalCooldown` (#9) when `now - depositor.last_deposit_time < cfg.withdraw_cooldown` ([lib.rs:132-135](contracts/nectar-vault/src/lib.rs#L132-L135)). Tests: `test_withdraw_before_cooldown`, `test_withdraw_after_cooldown`, `test_cooldown_resets_on_new_deposit`.
-- **Share-price hardening at 7-decimal precision** ([lib.rs:71-76, 146-150](contracts/nectar-vault/src/lib.rs#L71-L76)): integer-division floors-toward-zero on both deposit (caller gets ≤ fair shares) and withdraw (caller gets ≤ fair USDC). Zero-share guard at line 142. Tests: `test_share_math_first_deposit`, `test_share_math_large_amounts`, `test_share_math_tiny_amounts`, `test_share_math_with_profit`, `test_share_rounding_bounded`, `test_multiple_depositors_proportional_shares`, `test_multiple_depositors_proportional_with_profit`, `test_withdraw_with_zero_shares_fails`, `test_withdraw_more_than_owned_fails`, `test_withdraw_more_than_available_fails`. **34 vault tests total — more than the 10+ measurement asked for.**
+- **Deposit cap**: `deposit()` rejects with `DepositCapExceeded` (#8) when `state.total_usdc + amount > cfg.deposit_cap` ([contracts/nectar-vault/src/lib.rs:66-68](contracts/nectar-vault/src/lib.rs#L66-L68)). Tests: `test_deposit_exceeds_cap`, `test_deposit_at_exact_cap`, `test_deposit_cap_with_existing_balance`. Verified live: an over-cap deposit fails with `HostError: Error(Contract, #8)` on the testnet vault.
+- **Withdraw cooldown**: `withdraw()` rejects with `WithdrawalCooldown` (#9) when `now - depositor.last_deposit_time < cfg.withdraw_cooldown` ([lib.rs:132-135](contracts/nectar-vault/src/lib.rs#L132-L135)). Live config sets cooldown to **3600s (1 hour)** — production-grade, no longer the 30s demo. Tests: `test_withdraw_before_cooldown`, `test_withdraw_after_cooldown`, `test_cooldown_resets_on_new_deposit`.
+- **Liquid-balance guard**: `withdraw()` now refuses with `InsufficientVault` (#4) when the requested amount exceeds `total_usdc - active_liq`, rather than reverting deep inside the SAC token transfer ([lib.rs:143-158](contracts/nectar-vault/src/lib.rs#L143-L158)). Test: `test_withdraw_blocked_by_active_liq`.
+- **Hardened cross-contract calls**: `require_registered_keeper`, `registry_call`, and `registry_record_execution` use `try_invoke_contract` so an unregistered keeper's `draw` cleanly returns `Unauthorized` (#5) instead of bubbling a host panic ([lib.rs:368-450](contracts/nectar-vault/src/lib.rs#L368-L450)). Test: `test_draw_unregistered_returns_unauthorized`. Verified live: unregistered draw on `CDZR6VDC…` errors with `Error(Contract, #5)` after the registry's `try_call` returns `#4` (NotRegistered).
+- **Share-price hardening at 7-decimal precision** ([lib.rs:71-76, 146-150](contracts/nectar-vault/src/lib.rs#L71-L76)): integer-division floors-toward-zero on both deposit (caller gets ≤ fair shares) and withdraw (caller gets ≤ fair USDC). Zero-share guard at line 142. Tests: `test_share_math_first_deposit`, `test_share_math_large_amounts`, `test_share_math_tiny_amounts`, `test_share_math_with_profit`, `test_share_rounding_bounded`, `test_multiple_depositors_proportional_shares`, `test_multiple_depositors_proportional_with_profit`, `test_withdraw_with_zero_shares_fails`, `test_withdraw_more_than_owned_fails`, `test_withdraw_more_than_available_fails`. **36 vault tests total — more than the 10+ measurement asked for.**
 
 ### 3. Blend Liquidation Adapter — Full Auction Integration ✓
 
-**Status: code complete, smoke-testable against Blend's live testnet pool**
+**Status: code complete, multi-auction wired into the live keeper main loop.**
 
-- **All three auction kinds handled**: user liquidation (request_type 6), bad debt (7), interest (8) — see [keeper/blend/auction.go:15-49](keeper/blend/auction.go#L15-L49). `DetectAuctions()` scans all three for an address; `FillByType()` dispatches.
+- **All three auction kinds dispatched from the keeper main loop** — not just defined and dead-coded: [keeper/main.go](keeper/main.go) calls `handleUserLiquidation` (creates + fills request_type 6) for each underwater position, then sweeps the same address set with `handlePoolManagedAuctions` which uses `GetAuctionByType` for bad-debt (7) and interest (8) and dispatches through `FillByType`. Pool-managed auctions detect+log+attempt-fill on every cycle.
 - **Blend ABI compatibility**: the submit payload encodes `request_type` as `ScvU32` and `amount` as `ScvI128` to match Blend's `#[contracttype] struct Request { request_type: u32, address: Address, amount: i128 }` ([keeper/blend/auction.go:155-189](keeper/blend/auction.go#L155-L189)). Locked in by `TestSubmitPayload_BlendABITypes`.
-- **Dutch auction profitability** at 200-block boundaries: `lotPct = elapsed/200`, `bidPct = (200-elapsed)/200`; fair-price point at elapsed=200; expired at 400. Tests: `TestProfitability_Block0_LotZero`, `…Block200_FairPrice`, `…Block100_LotScaling`, `…Block300_BidScaling`, `…Block400_BidZero`, `…PastExpiry_StaysInfinite`, `TestPhaseAt_Boundaries`.
+- **Live Reflector oracle prices**: `LoadPool` reads the pool's `oracle` address from `get_config`, fetches `decimals` once, and looks up each reserve's USD price via `lastprice(Asset::Stellar(addr))` ([keeper/blend/pool.go:39-118](keeper/blend/pool.go#L39-L118)). No more hardcoded $0.30 fallback. The new `PoolState.PriceFor` / `HasPricesFor` helpers gate every fill on having fresh prices for both lot and bid assets ([keeper/main.go](keeper/main.go) `auctionPricesKnown`). Tests: `TestParseReserve_RealBlendShape`, `TestParseReserve_FlatLabShape`, `TestPriceFor_*`, `TestHasPricesFor_RequiresAll`, `TestParseConfigOracle_*`.
+- **Capital sizing via EstimateCapital**: `handleUserLiquidation` now pre-flights the draw with `blend.EstimateCapital(pos, pool, 50)`, sizing the vault draw from oracle-priced debt rather than blindly summing the auction bid. ([keeper/main.go](keeper/main.go))
+- **Honest proceeds — no more fabricated +10%**: the keeper measures its USDC balance delta from before-draw to after-fill via the new `soroban.TokenBalance` helper, and returns that delta to the vault. The `ErrAlreadyFilled` branch returns only `drawAmount` (no profit, `response_time_ms = 0`) so the per-keeper avg-response metric stays clean. A `DEMO_PROFIT_BPS` env var lets LiquidationLab demos opt-in to synthesizing profit from the keeper's own balance — production deploys leave it at 0. Tests: `TestComputeProceeds_RealDelta`, `…LossClampedToZero`, `…DemoModeTopsUp`, `…DemoModeRespectsRealProfit`, `…BalanceUnknown`.
+- **Dutch auction profitability** at 200-block boundaries: `lotPct = elapsed/200`, `bidPct = (200-elapsed)/200`; fair-price point at elapsed=200; expired at 400. Tests: `TestProfitability_Block0_LotZero`, `…Block200_FairPrice`, `…Block100_LotScaling`, `…Block300_BidScaling`, `…Block400_BidZero`, `…PastExpiry_StaysInfinite`, `TestPhaseAt_Boundaries`, `TestProfitability_AuctionTypeAgnostic`.
 - **Retry wrapper** with exponential backoff (3 attempts, 2.0× backoff): classifies `sequence`, `resource_exhaust`, `timeout`, `tx_too_late` as retryable; `already filled`, `already registered`, `insufficient_balance`, `contract error` as non-retryable ([keeper/soroban/retry.go:25-67](keeper/soroban/retry.go#L25-L67)). Tests: `TestFillAuction_RetriesOnSequenceError`, `…RetriesOnResourceExhaust`, `…DoesNotRetryAlreadyFilled`, `TestRegister_DoesNotRetryAlreadyRegistered`.
-- **`/api/state` carries response_time_ms** on each liquidation record ([keeper/main.go:25-33, 325-332](keeper/main.go#L25-L33)). On a successful fill the keeper measures `time.Since(drawStart).Milliseconds()` between `vault.draw` and `vault.return_proceeds`, populates the `response_time_ms` field on the appended `LiquidationRecord`, and forwards the same value on-chain via `vault.return_proceeds → registry.record_execution`.
-- **Live Blend testnet pool**: `BLEND_POOL=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF` (Blend V2 from blend-utils). Run `./scripts/keeper-blend-testnet.sh` to point the keeper at it locally — the keeper reads reserves + positions and attempts liquidations against the real pool. Filling against a real Blend auction requires either (a) a position that has organically gone underwater, or (b) admin access to Blend's mock oracle (`CAZOKR2Y…`) to manipulate prices via `./scripts/trigger-liquidation.ts`.
+- **`/api/state` carries response_time_ms** on each liquidation record. On a successful fill the keeper measures `time.Since(drawStart).Milliseconds()` between `vault.draw` and `vault.return_proceeds`, populates the `response_time_ms` field on the appended `LiquidationRecord`, and forwards the same value on-chain via `vault.return_proceeds → registry.record_execution`.
+- **Live Blend testnet pool**: `BLEND_POOL=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF` (Blend V2 from blend-utils). Run `./scripts/keeper-blend-testnet.sh` to point the keeper at it locally — the keeper reads reserves + live oracle prices + positions and attempts liquidations against the real pool. Filling against a real Blend auction requires either (a) a position that has organically gone underwater, or (b) admin access to Blend's mock oracle (`CAZOKR2Y…`) to manipulate prices via `./scripts/trigger-liquidation.ts`.
 
 ### What `LiquidationLab` is for
 
@@ -125,7 +151,7 @@ Each Tranche 1 deliverable below cites the on-chain code + tests that prove the 
 nectar-poc/
 ├── contracts/
 │   ├── keeper-registry/      # Soroban (Rust) — operator registration + stake + slash, 26 tests
-│   ├── nectar-vault/         # Soroban (Rust) — USDC vault + LP shares + cap + cooldown, 34 tests
+│   ├── nectar-vault/         # Soroban (Rust) — USDC vault + LP shares + cap + cooldown + liquid guard, 36 tests
 │   ├── liquidation-lab/      # Soroban (Rust) — Blend-compatible test pool, 12 tests
 │   └── mock-token/           # Soroban (Rust) — admin-mint mock USDC SAC, 5 tests
 ├── keeper/                   # Go 1.22 — keeper binary
@@ -303,24 +329,27 @@ docker-compose up
 | `KEEPER_NAME` | no | Display name (default: `keeper-alpha`) |
 | `REGISTRY_CONTRACT` | yes | KeeperRegistry contract ID |
 | `VAULT_CONTRACT` | yes | NectarVault contract ID |
+| `USDC_CONTRACT` | no | USDC SAC for the keeper's balance reads (needed for honest-proceeds accounting; without it the keeper books 0 profit per fill unless `DEMO_PROFIT_BPS` is set) |
 | `BLEND_POOL` | yes | Pool contract ID (Blend or LiquidationLab) |
 | `POLL_INTERVAL` | no | Seconds between cycles (default: `10`, range: 3-300) |
-| `MIN_PROFIT` | no | Minimum lot/bid ratio to fill (default: `1.0`) |
+| `MIN_PROFIT` | no | Minimum lot/bid ratio to fill (default: `1.02`) |
+| `DEMO_PROFIT_BPS` | no | Synthetic profit (in basis points) the keeper tops up from its own balance. `0` = production; set `1000` (10%) when running against LiquidationLab. Never set against real Blend. |
+| `SLASH_SCAN_EVERY` | no | Sweep the registry and slash any keeper past its `slash_timeout` every N cycles. `0` (default) = off (admin/scripts/slasher.sh handles it instead). |
 | `KNOWN_DEPOSITORS` | no | Comma-separated G-addresses for performance page |
 | `API_PORT` | no | HTTP API port (default: `8080`) |
 
 ## Test Suite
 
 ```bash
-# Rust contract tests (38 total)
+# Rust contract tests (79 total)
 cargo test -p keeper-registry     # 26 tests (incl. staking + slashing scenarios)
-cargo test -p nectar-vault        # 34 tests (incl. cap + cooldown + share-math edges)
+cargo test -p nectar-vault        # 36 tests (incl. cap + cooldown + share-math + unregistered + liquid-guard)
 cargo test -p liquidation-lab     # 12 tests
 cargo test -p mock-token          # 5 tests
 
-# Go keeper tests (30+ total)
+# Go keeper tests (60+ total)
 cd keeper && go test -race -count=1 ./...
-# unit tests, integration tests, stress tests, benchmarks
+# unit + integration + stress + retry + oracle-parse + proceeds-accounting tests
 
 # Frontend build
 cd frontend && npm run build
@@ -353,14 +382,16 @@ Required env vars in the Railway dashboard (mark `KEEPER_SECRET` as secret):
 ```
 KEEPER_SECRET       S...                                                         # operator key (mark as secret)
 KEEPER_NAME         keeper-alpha
-REGISTRY_CONTRACT   CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW
-VAULT_CONTRACT      CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU
+REGISTRY_CONTRACT   CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
+VAULT_CONTRACT      CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
 USDC_CONTRACT       CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
 BLEND_POOL          CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF      # Blend testnet V2 pool
 SOROBAN_RPC         https://soroban-testnet.stellar.org:443
 HORIZON_URL         https://horizon-testnet.stellar.org
 POLL_INTERVAL       10
 MIN_PROFIT          1.02
+SLASH_SCAN_EVERY    20                                                            # 0 = off; >0 = sweep every N cycles
+# DEMO_PROFIT_BPS   1000                                                          # ONLY set against LiquidationLab; never against real Blend
 API_PORT            8080
 ```
 

@@ -759,6 +759,87 @@ mod tests {
         assert_eq!(result, Err(Ok(VaultError::Unauthorized)));
     }
 
+    // ── Tranche 1 hardening: unregistered-keeper + liquid-balance guards ──
+
+    // Mock registry that ALWAYS panics on get_keeper to simulate an
+    // unregistered operator. Lives in its own module so the #[contractimpl]
+    // macro's generated spec symbols don't collide with the happy-path
+    // MockRegistry above.
+    mod rejecting {
+        use soroban_sdk::{contract, contractimpl, Address, Env};
+
+        #[contract]
+        pub struct RejectingRegistry;
+        #[contractimpl]
+        impl RejectingRegistry {
+            pub fn get_keeper(_env: Env, _operator: Address) -> Address {
+                panic!("NotRegistered");
+            }
+            pub fn mark_draw(_env: Env, _caller: Address, _keeper: Address) {}
+            pub fn clear_draw(_env: Env, _caller: Address, _keeper: Address) {}
+            pub fn record_execution(
+                _env: Env,
+                _caller: Address,
+                _keeper: Address,
+                _success: bool,
+                _profit: i128,
+                _response_time_ms: u64,
+            ) {
+            }
+        }
+    }
+
+    fn setup_with_rejecting_registry<'a>(
+        env: &'a Env,
+    ) -> (NectarVaultClient<'a>, Address, Address, Address) {
+        let admin = Address::generate(env);
+        let usdc = setup_token(env, &admin);
+        let registry_id = env.register(rejecting::RejectingRegistry, ());
+        let vault_id = env.register(NectarVault, ());
+        let client = NectarVaultClient::new(env, &vault_id);
+        client.initialize(&admin, &usdc, &registry_id, &default_config());
+        (client, admin, usdc, vault_id)
+    }
+
+    #[test]
+    fn test_draw_unregistered_returns_unauthorized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_rejecting_registry(&env);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        let keeper = Address::generate(&env);
+        let result = client.try_draw(&keeper, &100_0000000);
+        assert_eq!(result, Err(Ok(VaultError::Unauthorized)));
+    }
+
+    #[test]
+    fn test_withdraw_blocked_by_active_liq() {
+        // Depositor's share value covers their full deposit on paper, but if a
+        // keeper has drawn most of the liquid balance the withdraw must fail
+        // with a clean InsufficientVault rather than reverting deep in the SAC.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        client.draw(&keeper, &900_0000000);
+        // Liquid balance is now 100; trying to withdraw 500 must be rejected.
+        let result = client.try_withdraw(&user, &500_0000000);
+        assert_eq!(result, Err(Ok(VaultError::InsufficientVault)));
+
+        // Partial withdraw under the liquid limit still works.
+        let out = client.withdraw(&user, &50_0000000);
+        assert_eq!(out, 50_0000000);
+    }
+
     // ── Cross-contract integration with the real KeeperRegistry ──────────
 
     #[test]

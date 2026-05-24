@@ -2,7 +2,9 @@
 
 mod types;
 
-use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, IntoVal, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, token, vec, Address, ConversionError, Env, InvokeError, IntoVal, Symbol,
+};
 use types::{Depositor, VaultConfig, VaultError, VaultKey, VaultState};
 
 #[contract]
@@ -148,6 +150,15 @@ impl NectarVault {
         // depositor empties the vault (their shares == total_shares), this
         // formula naturally returns the full state.total_usdc.
         let usdc_out = shares * state.total_usdc / state.total_shares;
+
+        // Liquid balance == total_usdc - active_liq. The token transfer below
+        // would revert anyway if the contract doesn't hold enough USDC, but we
+        // return a clean VaultError::InsufficientVault instead of bubbling up
+        // an opaque SAC host panic so the depositor can retry once the keeper
+        // returns capital.
+        if usdc_out > state.total_usdc.saturating_sub(state.active_liq) {
+            return Err(VaultError::InsufficientVault);
+        }
 
         let usdc: Address = env
             .storage()
@@ -373,12 +384,19 @@ fn require_registered_keeper(env: &Env, keeper: &Address) -> Result<(), VaultErr
         .instance()
         .get(&VaultKey::KeeperRegistry)
         .ok_or(VaultError::NotInit)?;
-    let _: soroban_sdk::Val = env.invoke_contract(
-        &registry,
-        &Symbol::new(env, "get_keeper"),
-        soroban_sdk::vec![env, keeper.to_val()],
-    );
-    Ok(())
+    // try_invoke_contract surfaces the registry's error as a Result instead of
+    // panicking, so an unregistered keeper gets a clean VaultError::Unauthorized
+    // and the host log stays free of generic NotRegistered panics.
+    let res: Result<Result<soroban_sdk::Val, ConversionError>, Result<soroban_sdk::Error, InvokeError>> =
+        env.try_invoke_contract(
+            &registry,
+            &Symbol::new(env, "get_keeper"),
+            soroban_sdk::vec![env, keeper.to_val()],
+        );
+    match res {
+        Ok(Ok(_)) => Ok(()),
+        _ => Err(VaultError::Unauthorized),
+    }
 }
 
 fn registry_call(env: &Env, fn_name: &str, keeper: &Address) -> Result<(), VaultError> {
@@ -388,12 +406,20 @@ fn registry_call(env: &Env, fn_name: &str, keeper: &Address) -> Result<(), Vault
         .get(&VaultKey::KeeperRegistry)
         .ok_or(VaultError::NotInit)?;
     let vault = env.current_contract_address();
-    let _: soroban_sdk::Val = env.invoke_contract(
-        &registry,
-        &Symbol::new(env, fn_name),
-        vec![env, vault.into_val(env), keeper.into_val(env)],
-    );
-    Ok(())
+    let res: Result<Result<soroban_sdk::Val, ConversionError>, Result<soroban_sdk::Error, InvokeError>> =
+        env.try_invoke_contract(
+            &registry,
+            &Symbol::new(env, fn_name),
+            vec![env, vault.into_val(env), keeper.into_val(env)],
+        );
+    match res {
+        Ok(Ok(_)) => Ok(()),
+        // A failed mark_draw / clear_draw breaks the contract's invariant (the
+        // registry is the source of truth for keeper draw state). Surface it
+        // as Unauthorized so the keeper can investigate rather than silently
+        // continuing with stale state.
+        _ => Err(VaultError::Unauthorized),
+    }
 }
 
 fn registry_record_execution(
@@ -409,19 +435,23 @@ fn registry_record_execution(
         .get(&VaultKey::KeeperRegistry)
         .ok_or(VaultError::NotInit)?;
     let vault = env.current_contract_address();
-    let _: soroban_sdk::Val = env.invoke_contract(
-        &registry,
-        &Symbol::new(env, "record_execution"),
-        vec![
-            env,
-            vault.into_val(env),
-            keeper.into_val(env),
-            success.into_val(env),
-            profit.into_val(env),
-            response_time_ms.into_val(env),
-        ],
-    );
-    Ok(())
+    let res: Result<Result<soroban_sdk::Val, ConversionError>, Result<soroban_sdk::Error, InvokeError>> =
+        env.try_invoke_contract(
+            &registry,
+            &Symbol::new(env, "record_execution"),
+            vec![
+                env,
+                vault.into_val(env),
+                keeper.into_val(env),
+                success.into_val(env),
+                profit.into_val(env),
+                response_time_ms.into_val(env),
+            ],
+        );
+    match res {
+        Ok(Ok(_)) => Ok(()),
+        _ => Err(VaultError::Unauthorized),
+    }
 }
 
 #[cfg(test)]
