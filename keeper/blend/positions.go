@@ -109,6 +109,34 @@ func parsePositions(val xdr.ScVal, user string) *Position {
 	return pos
 }
 
+// EstimateCapital returns an upper-bound USD estimate of the capital a
+// keeper needs to liquidate `pct`% of the position's debt. The result is
+// expressed in 7-decimal stroops (USDC). Returns 0 if the position has no
+// liabilities or pct <= 0.
+func EstimateCapital(pos Position, pool *PoolState, pct int64) int64 {
+	if pct <= 0 {
+		return 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	indexMap := make(map[uint32]*Reserve)
+	for _, r := range pool.Reserves {
+		indexMap[r.Index] = r
+	}
+	var totalUSD float64
+	for idx, dAmt := range pos.Liabilities {
+		r, ok := indexMap[idx]
+		if !ok {
+			continue
+		}
+		f, _ := new(big.Float).SetInt(dAmt).Float64()
+		totalUSD += (f / scalar) * (r.DRate / scalar) * r.OraclePrice
+	}
+	scaled := totalUSD * float64(pct) / 100.0
+	return int64(scaled * scalar)
+}
+
 // CalcHealthFactor computes HF = Σ(collateral*price*cFactor) / Σ(liability*price/lFactor).
 func CalcHealthFactor(pos Position, pool *PoolState) float64 {
 	// build index -> reserve map

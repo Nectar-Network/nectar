@@ -3,6 +3,7 @@ package vault
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/xdr"
@@ -22,7 +23,9 @@ type BalanceResult struct {
 	USDCValue int64
 }
 
-// Draw requests capital from NectarVault for a liquidation.
+// Draw requests capital from NectarVault for a liquidation. Retries on
+// transient infra failures (sequence/fee/timeout); does not retry on
+// deterministic contract errors (insufficient balance, draw limit, etc.).
 func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("draw: amount must be > 0, got %d", amount)
@@ -32,15 +35,23 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 		return err
 	}
 	amtVal := soroban.ScvI128(amount)
-	_, err = rpc.Invoke(horizonURL, kp, passphrase, vaultAddr, "draw", keeperVal, amtVal)
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "draw",
+		soroban.RetryConfig{MaxAttempts: 2, InitialDelay: time.Second, BackoffFactor: 2.0},
+		keeperVal, amtVal)
 	if err != nil {
 		return fmt.Errorf("vault draw: %w", err)
 	}
 	return nil
 }
 
-// ReturnProceeds sends capital back to the vault after a liquidation.
-func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64) error {
+// ReturnProceeds sends capital back to the vault after a liquidation. Higher
+// retry budget than Draw because returning capital is the safer side: the
+// keeper has the funds in hand and we want to ensure they reach the vault.
+//
+// responseTimeMs is the keeper-observed elapsed time from draw → fill → here.
+// Pass 0 when the keeper did not actually execute (e.g. another bot beat it
+// to the auction); the registry will skip the response-time update.
+func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64, responseTimeMs int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("return_proceeds: amount must be > 0, got %d", amount)
 	}
@@ -49,7 +60,13 @@ func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 		return err
 	}
 	amtVal := soroban.ScvI128(amount)
-	_, err = rpc.Invoke(horizonURL, kp, passphrase, vaultAddr, "return_proceeds", keeperVal, amtVal)
+	if responseTimeMs < 0 {
+		responseTimeMs = 0
+	}
+	respVal := soroban.ScvU64(uint64(responseTimeMs))
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "return_proceeds",
+		soroban.DefaultRetry(),
+		keeperVal, amtVal, respVal)
 	if err != nil {
 		return fmt.Errorf("vault return_proceeds: %w", err)
 	}

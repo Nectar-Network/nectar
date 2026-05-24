@@ -1,0 +1,31 @@
+# Railway service config for the Nectar keeper.
+# Deploy from this directory with `railway up` or via the Railway dashboard
+# (point it at this repo, root directory: keeper/, builder: Dockerfile).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "./keeper"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+
+# Environment variables — set these in the Railway dashboard, NOT here.
+# Required:
+#   KEEPER_SECRET   (mark as secret) — operator's Stellar S... key
+#   KEEPER_NAME     keeper-alpha (or keeper-beta for the second instance)
+#   REGISTRY_CONTRACT  CAEHWZOOEP6YSU3EJDO7B2L7QJTG4YHXJIACRBWRTFRPMRVND56LTWAO
+#   VAULT_CONTRACT     CCSR5GT6BEZXCW5UWV4LOXC24L75YQ7JJ5Q3Q7WJKLCGSKOSWOELJJFQ
+#   USDC_CONTRACT      CD3YAGUK4SV67PIHRYKR5QAKTNVIGVDAXT6P426EO2E76DAXGMPLMSAH
+#   BLEND_POOL         (Blend testnet pool address you're monitoring)
+#   SOROBAN_RPC        https://soroban-testnet.stellar.org:443
+#   HORIZON_URL        https://horizon-testnet.stellar.org
+#   POLL_INTERVAL      10
+#   MIN_PROFIT         1.02
+#   API_PORT           8080
+#
+# Optional:
+#   KNOWN_DEPOSITORS   comma-separated list of depositor addresses to display

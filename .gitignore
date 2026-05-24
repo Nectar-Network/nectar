@@ -6,7 +6,9 @@ Cargo.lock
 node_modules/
 dist/
 .next/
+out/
 *.js.map
+*.tsbuildinfo
 
 # Env / secrets
 .env
@@ -27,9 +29,37 @@ logs/
 *.swp
 .DS_Store
 
+# Claude Code / agent state
+.claude/
+
 # Generated wallet files
 wallets.json
+wallets.md
 
-# Stellar CLI identity files (secret keys)
+# Local notes
+claude.md
+
+# Stellar CLI identity files (secret keys) and local config cache
 .config/stellar/
+.stellar/
 *.toml.bak
+
+# Deployment artifacts (contains secret keys)
+deploy/
+*.deployer.json
+
+# Generic private keys / certs (defense in depth)
+*.pem
+*.key
+*.p12
+
+# Coverage reports
+coverage/
+*.profraw
+tarpaulin-report.html
+lcov.info
+
+# macOS AppleDouble metadata (external-volume artefact; never useful in git)
+._*
+.AppleDouble
+.LSOverride

@@ -74,12 +74,12 @@ func TestMinProfitDefault(t *testing.T) {
 func setRequiredEnvs(t *testing.T) {
 	t.Helper()
 	pairs := map[string]string{
-		"KEEPER_SECRET":    "SABC123FAKE",
+		"KEEPER_SECRET":     "SABC123FAKE",
 		"REGISTRY_CONTRACT": "CABC123FAKE",
-		"VAULT_CONTRACT":   "CDEF456FAKE",
-		"BLEND_POOL":       "CGHI789FAKE",
-		"POLL_INTERVAL":    "10",
-		"MIN_PROFIT":       "1.02",
+		"VAULT_CONTRACT":    "CDEF456FAKE",
+		"BLEND_POOL":        "CGHI789FAKE",
+		"POLL_INTERVAL":     "10",
+		"MIN_PROFIT":        "1.02",
 	}
 	for k, v := range pairs {
 		os.Setenv(k, v)

@@ -37,6 +37,12 @@ export interface KeeperStat {
   address: string;
   liquidations: number;
   total_profit: number;
+  // Tranche 1 on-chain extensions (optional — keeper API may not surface them yet).
+  stake?: number;
+  total_executions?: number;
+  successful_fills?: number;
+  has_active_draw?: boolean;
+  last_draw_time?: number;
 }
 
 export interface LiquidationRecord {
@@ -90,4 +96,34 @@ export function formatUSDC(stroops: number): string {
 export function shortAddress(addr: string): string {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+/**
+ * Format a duration in seconds as H:MM:SS or MM:SS, suitable for the
+ * withdrawal-cooldown timer. Returns "0:00" for non-positive values.
+ */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+  return `${m}:${pad(sec)}`;
+}
+
+/**
+ * Compute share price (USDC per share) from vault state. Returns 1.0 when the
+ * vault is empty so the UI never has to handle a divide-by-zero.
+ */
+export function sharePrice(totalUsdc: number, totalShares: number): number {
+  if (!totalShares) return 1.0;
+  return totalUsdc / totalShares;
+}
+
+/** Success rate as a 0-1 fraction. Returns 0 when no executions recorded. */
+export function successRate(executions: number, fills: number): number {
+  if (!executions) return 0;
+  return Math.min(1, fills / executions);
 }

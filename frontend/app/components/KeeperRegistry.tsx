@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import { fetchState, KeeperRow } from "../../lib/api";
 
+// Fallback shown while the keeper API is reachable but hasn't yet returned the
+// live registry list. These are the operator addresses registered against the
+// Tranche-1-hardened KeeperRegistry (CDT257SL…). Update after every redeploy
+// — they're public keys, not secrets.
 const FALLBACK: KeeperRow[] = [
-  { address: "GCR36Y5AHRAMJGHJLA4EFORJKR3E4D4QVIMPFM26MWAP77DAQ463ZTGZ", name: "keeper-alpha", active: true },
-  { address: "GBOE5QCNDXNSVSEMU3GJ3INAJITX44UOK5D5YXRIX523DYBSTPCS546F", name: "keeper-beta", active: true },
+  { address: "GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF", name: "keeper-alpha", active: true },
+  { address: "GDQ7VA37AB7YRQ6CNNKFFWTR2QQ5Z232GPHX5U6IQCQFENTASBAV6DCV", name: "keeper-beta", active: true },
 ];
 
 function shortAddr(addr: string): string {

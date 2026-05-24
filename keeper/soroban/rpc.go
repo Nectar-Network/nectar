@@ -5,18 +5,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 )
 
 type Client struct {
-	url  string
-	http *http.Client
-	seq  atomic.Int64
+	url    string
+	origin string
+	http   *http.Client
+	seq    atomic.Int64
 }
 
+// NewClient returns a Soroban JSON-RPC + Horizon helper. The Origin header
+// it sends on every request defaults to https://nectarnetwork.fun (whitelisted
+// by our paid Ankr endpoint); override via RPC_ORIGIN if the keeper is hosted
+// under a different domain.
 func NewClient(url string) *Client {
-	return &Client{url: url, http: &http.Client{Timeout: 30 * time.Second}}
+	origin := os.Getenv("RPC_ORIGIN")
+	if origin == "" {
+		origin = "https://nectarnetwork.fun"
+	}
+	return &Client{
+		url:    url,
+		origin: origin,
+		http:   &http.Client{Timeout: 30 * time.Second},
+	}
 }
 
 type SimulateResult struct {
@@ -33,18 +47,18 @@ type SimEntry struct {
 }
 
 type TxResult struct {
-	Status        string `json:"status"`
-	Hash          string
-	ResultXDR     string `json:"resultXdr,omitempty"`
+	Status         string `json:"status"`
+	Hash           string
+	ResultXDR      string `json:"resultXdr,omitempty"`
 	ErrorResultXDR string `json:"errorResultXdr,omitempty"`
 }
 
 type Event struct {
-	Type        string   `json:"type"`
-	ContractID  string   `json:"contractId"`
-	Topic       []string `json:"topic"`
-	Value       string   `json:"value"`
-	Ledger      int64    `json:"ledger"`
+	Type       string   `json:"type"`
+	ContractID string   `json:"contractId"`
+	Topic      []string `json:"topic"`
+	Value      string   `json:"value"`
+	Ledger     int64    `json:"ledger"`
 }
 
 func (c *Client) Simulate(txXDR string) (*SimulateResult, error) {
@@ -109,9 +123,33 @@ func (c *Client) LatestLedger() (int64, error) {
 	return r.Sequence, c.call("getLatestLedger", nil, &r)
 }
 
+// LedgerEntry is a single getLedgerEntries result entry.
+type LedgerEntry struct {
+	Key                string `json:"key"`
+	XDR                string `json:"xdr"`
+	LastModifiedLedger int64  `json:"lastModifiedLedgerSeq"`
+	LiveUntilLedgerSeq int64  `json:"liveUntilLedgerSeq,omitempty"`
+}
+
+// GetLedgerEntries fetches raw ledger entries for the given base64-XDR keys.
+// Useful for direct contract-storage lookups when SimulateRead is overkill.
+func (c *Client) GetLedgerEntries(keys []string) ([]LedgerEntry, error) {
+	var r struct {
+		Entries []LedgerEntry `json:"entries"`
+	}
+	params := map[string]any{"keys": keys}
+	return r.Entries, c.call("getLedgerEntries", params, &r)
+}
+
 func (c *Client) GetAccount(horizonURL, address string) (int64, error) {
 	url := fmt.Sprintf("%s/accounts/%s", horizonURL, address)
-	resp, err := c.http.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Origin", c.origin)
+	req.Header.Set("User-Agent", "nectar-keeper/1.0")
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -140,6 +178,8 @@ func (c *Client) call(method string, params any, out any) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", c.origin)
+	req.Header.Set("User-Agent", "nectar-keeper/1.0")
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err

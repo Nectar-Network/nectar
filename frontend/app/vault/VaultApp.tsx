@@ -1,28 +1,53 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { formatUSDC } from "../../lib/api";
+import { formatUSDC, formatDuration, sharePrice } from "../../lib/api";
 import {
-  checkFreighter,
   connectWallet,
+  disconnectWallet,
   depositToVault,
   withdrawFromVault,
   queryVaultBalance,
+  queryVaultConfig,
+  queryVaultState,
+  queryDepositor,
+  queryKeeper,
+  queryRegistryConfig,
+  registerKeeper,
+  deregisterKeeper,
   shortAddr,
   type WalletState,
+  type VaultConfig,
+  type VaultStateOnchain,
+  type DepositorOnchain,
+  type KeeperInfoOnchain,
 } from "../../lib/stellar";
 
 type Tab = "deposit" | "withdraw";
 type TxStatus = "idle" | "simulating" | "signing" | "submitted" | "confirmed" | "error";
 
-const VAULT_CONTRACT = process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "";
+const VAULT_CONTRACT = (process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "").trim();
+const REGISTRY_CONTRACT = (process.env.NEXT_PUBLIC_REGISTRY_CONTRACT ?? "").trim();
 
+// APY is the only value we display before chain data arrives — it's a
+// modelled estimate, not on-chain state. TVL / share count / depositors
+// must come from the chain; never substitute mock values for them, or the
+// UI flashes wrong numbers between disconnect and the first chain read.
 const VAULT_INFO = {
-  tvl: 5117310000000,
   apy: 12.4,
-  totalShares: 5517300000000,
-  depositors: 22,
 };
+
+function walletDisplayName(id: string | undefined): string {
+  switch (id) {
+    case "freighter": return "Freighter";
+    case "albedo": return "Albedo";
+    case "xbull": return "xBull";
+    case "lobstr": return "Lobstr";
+    case "hana": return "Hana";
+    case "rabet": return "Rabet";
+    default: return "wallet";
+  }
+}
 
 export default function VaultApp() {
   const [tab, setTab] = useState<Tab>("deposit");
@@ -31,24 +56,59 @@ export default function VaultApp() {
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
-  const [hasFreighter, setHasFreighter] = useState<boolean | null>(null);
   const [vaultShares, setVaultShares] = useState<number>(0);
   const [vaultUsdcValue, setVaultUsdcValue] = useState<number>(0);
+  const [vaultCfg, setVaultCfg] = useState<VaultConfig | null>(null);
+  const [vaultState, setVaultState] = useState<VaultStateOnchain | null>(null);
+  const [depositor, setDepositor] = useState<DepositorOnchain | null>(null);
+  const [keeperInfo, setKeeperInfo] = useState<KeeperInfoOnchain | null>(null);
+  const [registryMinStake, setRegistryMinStake] = useState<number | null>(null);
+  const [keeperName, setKeeperName] = useState("");
+  const [keeperBusy, setKeeperBusy] = useState(false);
+  const [keeperError, setKeeperError] = useState("");
+  const [now, setNow] = useState<number>(() => Math.floor(Date.now() / 1000));
 
-  // Check Freighter on mount
+  // Tick once a second so the cooldown countdown updates without re-querying chain.
   useEffect(() => {
-    checkFreighter().then(setHasFreighter);
+    const t = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(t);
   }, []);
 
-  // Query vault balance when connected
+  // Read on-chain config + state once on mount (cheap, refreshable on tx).
+  const refreshVaultMeta = useCallback(async () => {
+    if (!VAULT_CONTRACT) return;
+    const [cfg, state] = await Promise.all([queryVaultConfig(), queryVaultState()]);
+    if (cfg) setVaultCfg(cfg);
+    if (state) setVaultState(state);
+  }, []);
+
+  // Query vault balance + depositor + keeper status when connected
   const refreshVaultBalance = useCallback(async () => {
     if (!wallet?.address || !VAULT_CONTRACT) return;
-    const bal = await queryVaultBalance(wallet.address);
+    const [bal, dep, keeper] = await Promise.all([
+      queryVaultBalance(wallet.address),
+      queryDepositor(wallet.address),
+      REGISTRY_CONTRACT ? queryKeeper(wallet.address) : Promise.resolve(null),
+    ]);
     if (bal) {
       setVaultShares(bal.shares);
       setVaultUsdcValue(bal.usdcValue);
     }
+    setDepositor(dep);
+    setKeeperInfo(keeper);
   }, [wallet?.address]);
+
+  // Read registry minStake once if registry is configured.
+  useEffect(() => {
+    if (!REGISTRY_CONTRACT) return;
+    queryRegistryConfig().then((c) => {
+      if (c) setRegistryMinStake(c.minStake);
+    });
+  }, []);
+
+  useEffect(() => {
+    refreshVaultMeta();
+  }, [refreshVaultMeta]);
 
   useEffect(() => {
     refreshVaultBalance();
@@ -64,16 +124,69 @@ export default function VaultApp() {
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    await disconnectWallet();
     setWallet(null);
     setVaultShares(0);
     setVaultUsdcValue(0);
+    setDepositor(null);
+    setKeeperInfo(null);
     resetTx();
+  };
+
+  const handleRegisterKeeper = async () => {
+    if (!wallet) return;
+    if (!keeperName.trim()) {
+      setKeeperError("Choose a keeper name first.");
+      return;
+    }
+    setKeeperError("");
+    setKeeperBusy(true);
+    try {
+      await registerKeeper(wallet.address, keeperName.trim());
+      const fresh = await queryKeeper(wallet.address);
+      setKeeperInfo(fresh);
+    } catch (err) {
+      setKeeperError(err instanceof Error ? err.message : "Register failed");
+    } finally {
+      setKeeperBusy(false);
+    }
+  };
+
+  const handleDeregisterKeeper = async () => {
+    if (!wallet) return;
+    setKeeperError("");
+    setKeeperBusy(true);
+    try {
+      await deregisterKeeper(wallet.address);
+      setKeeperInfo(null);
+    } catch (err) {
+      setKeeperError(err instanceof Error ? err.message : "Deregister failed");
+    } finally {
+      setKeeperBusy(false);
+    }
   };
 
   const handleSubmit = async () => {
     if (!amount || parseFloat(amount) <= 0 || !wallet) return;
     setError("");
+
+    // Pre-flight checks against on-chain config so we fail fast with a clear
+    // message instead of letting Soroban's simulator return a cryptic error.
+    if (tab === "deposit" && cap > 0) {
+      const planned = parseFloat(amount) * 1e7;
+      if (liveTvl + planned > cap) {
+        setError(
+          `Deposit would exceed the vault cap. Capacity remaining: $${((capRemaining ?? 0) / 1e7).toLocaleString(undefined, { maximumFractionDigits: 2 })}.`,
+        );
+        return;
+      }
+    }
+    if (tab === "withdraw" && cooldownRemaining > 0) {
+      setError(`Withdrawal cooldown active. Available in ${formatDuration(cooldownRemaining)}.`);
+      return;
+    }
+
     setTxStatus("simulating");
 
     try {
@@ -93,7 +206,7 @@ export default function VaultApp() {
       if (result.success) {
         setTxStatus("confirmed");
         // Refresh balances
-        await refreshVaultBalance();
+        await Promise.all([refreshVaultBalance(), refreshVaultMeta()]);
         // Refresh wallet balances
         const updated = await connectWallet();
         if (updated) setWallet(updated);
@@ -121,6 +234,36 @@ export default function VaultApp() {
   };
 
   const connected = wallet?.connected;
+
+  // ── Derived UI bits from on-chain state ─────────────────────────────
+  const liveTvl = vaultState?.totalUsdc ?? 0;
+  const liveTotalShares = vaultState?.totalShares ?? 0;
+  const liveTotalProfit = vaultState?.totalProfit ?? 0;
+  const liveActiveLiq = vaultState?.activeLiq ?? 0;
+  const livePrice = sharePrice(liveTvl, liveTotalShares);
+
+  const cap = vaultCfg?.depositCap ?? 0;
+  const capRemaining = cap > 0 ? Math.max(cap - liveTvl, 0) : null;
+  const capPctUsed = cap > 0 ? Math.min(1, liveTvl / cap) : 0;
+
+  const cooldownSec = vaultCfg?.withdrawCooldown ?? 0;
+  const lastDeposit = depositor?.lastDepositTime ?? 0;
+  const cooldownRemaining =
+    cooldownSec > 0 && lastDeposit > 0
+      ? Math.max(lastDeposit + cooldownSec - now, 0)
+      : 0;
+  const withdrawReady = cooldownRemaining === 0;
+
+  const isKeeper = !!keeperInfo;
+  const stakeUsdc = (keeperInfo?.stake ?? 0) / 1e7;
+  const minStakeUsdc = (registryMinStake ?? 0) / 1e7;
+
+  const explainCap = (() => {
+    if (cap <= 0) return "Unlimited";
+    const remainingDollars = (capRemaining ?? 0) / 1e7;
+    const capDollars = cap / 1e7;
+    return `$${remainingDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })} / $${capDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })} remaining`;
+  })();
 
   return (
     <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "32px 24px" }}>
@@ -190,10 +333,12 @@ export default function VaultApp() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               {[
-                { label: "TVL", value: `$${formatUSDC(VAULT_INFO.tvl)}` },
+                { label: "TVL", value: `$${formatUSDC(liveTvl)}` },
+                { label: "Share Price", value: `$${livePrice.toFixed(4)}`, accent: livePrice > 1.0 },
+                { label: "Total Profit", value: `+$${formatUSDC(liveTotalProfit)}`, accent: liveTotalProfit > 0 },
+                { label: "Active Deployed", value: `$${formatUSDC(liveActiveLiq)}` },
+                { label: "Total Shares", value: `${(liveTotalShares / 1e7).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
                 { label: "Est. APY", value: `${VAULT_INFO.apy}%`, accent: true },
-                { label: "Depositors", value: `${VAULT_INFO.depositors}` },
-                { label: "Total Shares", value: `${(VAULT_INFO.totalShares / 1e7).toLocaleString()}` },
               ].map(({ label, value, accent }) => (
                 <div key={label}>
                   <div style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>
@@ -205,6 +350,30 @@ export default function VaultApp() {
                 </div>
               ))}
             </div>
+
+            {/* Capacity bar — only shown when a deposit cap is configured */}
+            {cap > 0 && (
+              <div style={{ marginTop: "20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    Capacity
+                  </span>
+                  <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--text)" }}>
+                    {explainCap}
+                  </span>
+                </div>
+                <div style={{ height: "6px", background: "var(--surface)", borderRadius: "2px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${capPctUsed * 100}%`,
+                      height: "100%",
+                      background: capPctUsed > 0.95 ? "var(--amber)" : "var(--accent)",
+                      transition: "width 0.5s",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Your Position (when connected) */}
@@ -255,6 +424,176 @@ export default function VaultApp() {
                   </div>
                 </div>
               </div>
+
+              {cooldownSec > 0 && depositor && (
+                <div
+                  style={{
+                    marginTop: "16px",
+                    padding: "10px 12px",
+                    border: `1px solid ${withdrawReady ? "var(--accent)" : "var(--amber)"}`,
+                    borderRadius: "2px",
+                    background: withdrawReady ? "rgba(0, 229, 160, 0.06)" : "rgba(230, 172, 47, 0.06)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                    Withdrawal
+                  </span>
+                  <span style={{ fontSize: "13px", fontFamily: "monospace", color: withdrawReady ? "var(--accent)" : "var(--amber)" }}>
+                    {withdrawReady
+                      ? "Available now"
+                      : `Available in ${formatDuration(cooldownRemaining)}`}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Keeper Operator panel — only when registry is wired in */}
+          {connected && REGISTRY_CONTRACT && (
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "4px",
+                padding: "20px",
+                background: "rgba(255,255,255,0.02)",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div style={{ fontSize: "11px", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                  Keeper Operator
+                </div>
+                <div
+                  style={{
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                    fontSize: "10px",
+                    fontFamily: "monospace",
+                    background: isKeeper ? "rgba(0, 229, 160, 0.1)" : "rgba(255,255,255,0.04)",
+                    color: isKeeper ? "var(--accent)" : "var(--text-dim)",
+                    border: `1px solid ${isKeeper ? "var(--accent)" : "var(--border)"}`,
+                  }}
+                >
+                  {isKeeper ? "REGISTERED" : "NOT REGISTERED"}
+                </div>
+              </div>
+
+              {isKeeper ? (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                        Name
+                      </div>
+                      <div style={{ fontSize: "13px", fontFamily: "monospace", color: "var(--text)" }}>
+                        {keeperInfo?.name || "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                        Stake
+                      </div>
+                      <div style={{ fontSize: "13px", fontFamily: "monospace", color: "var(--accent)" }}>
+                        ${stakeUsdc.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                        Executions
+                      </div>
+                      <div style={{ fontSize: "13px", fontFamily: "monospace", color: "var(--text)" }}>
+                        {keeperInfo?.totalExecutions ?? 0} ({keeperInfo?.successfulFills ?? 0} filled)
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "10px", color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "4px" }}>
+                        Active Draw
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          fontFamily: "monospace",
+                          color: keeperInfo?.hasActiveDraw ? "var(--amber)" : "var(--text-dim)",
+                        }}
+                      >
+                        {keeperInfo?.hasActiveDraw ? "Outstanding" : "None"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleDeregisterKeeper}
+                    disabled={keeperBusy || keeperInfo?.hasActiveDraw}
+                    title={keeperInfo?.hasActiveDraw ? "Cannot deregister with an outstanding draw" : ""}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      background: "transparent",
+                      border: "1px solid var(--border)",
+                      color: keeperInfo?.hasActiveDraw ? "var(--text-dim)" : "var(--text)",
+                      fontSize: "12px",
+                      fontFamily: "monospace",
+                      cursor: keeperBusy || keeperInfo?.hasActiveDraw ? "not-allowed" : "pointer",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {keeperBusy ? "Submitting..." : "Deregister & Withdraw Stake"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace", marginBottom: "12px", lineHeight: 1.5 }}>
+                    Operate a keeper to liquidate underwater Blend positions. Registration locks
+                    {minStakeUsdc > 0 ? ` $${minStakeUsdc.toLocaleString()} USDC ` : " "}
+                    as stake — slashable on draw timeout.
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="keeper name"
+                    value={keeperName}
+                    onChange={(e) => setKeeperName(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      background: "var(--surface)",
+                      color: "var(--text)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "2px",
+                      fontSize: "13px",
+                      fontFamily: "monospace",
+                      outline: "none",
+                      marginBottom: "12px",
+                    }}
+                  />
+                  {keeperError && (
+                    <div style={{ fontSize: "11px", color: "var(--red)", fontFamily: "monospace", marginBottom: "8px" }}>
+                      {keeperError}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleRegisterKeeper}
+                    disabled={keeperBusy || !keeperName.trim()}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      background: keeperBusy || !keeperName.trim() ? "var(--surface)" : "var(--accent)",
+                      color: keeperBusy || !keeperName.trim() ? "var(--text-dim)" : "var(--bg)",
+                      border: "none",
+                      fontSize: "12px",
+                      fontFamily: "monospace",
+                      fontWeight: 600,
+                      cursor: keeperBusy || !keeperName.trim() ? "not-allowed" : "pointer",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {keeperBusy ? "Submitting..." : minStakeUsdc > 0 ? `Register (Stake $${minStakeUsdc.toLocaleString()})` : "Register Keeper"}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -345,25 +684,6 @@ export default function VaultApp() {
             <div style={{ padding: "24px" }}>
               {!connected ? (
                 <div style={{ textAlign: "center", padding: "32px 0" }}>
-                  {hasFreighter === false && (
-                    <div style={{
-                      fontSize: "12px", color: "var(--amber)", fontFamily: "monospace",
-                      marginBottom: "16px", padding: "8px 12px", background: "rgba(230, 172, 47, 0.08)",
-                      border: "1px solid rgba(230, 172, 47, 0.2)", borderRadius: "2px",
-                    }}>
-                      Freighter wallet extension not detected.
-                      <br />
-                      <a
-                        href="https://www.freighter.app/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: "var(--accent)", textDecoration: "underline" }}
-                      >
-                        Install Freighter
-                      </a>
-                      {" "}to interact with the vault.
-                    </div>
-                  )}
                   <div style={{ fontSize: "13px", color: "var(--text-dim)", fontFamily: "monospace", marginBottom: "16px" }}>
                     Connect your Stellar wallet to {tab}
                   </div>
@@ -381,10 +701,10 @@ export default function VaultApp() {
                       letterSpacing: "0.05em",
                     }}
                   >
-                    Connect Freighter
+                    Connect Wallet
                   </button>
                   <div style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace", marginTop: "12px" }}>
-                    Stellar wallet for Soroban dApps
+                    Freighter · Albedo · xBull · Lobstr · Hana · Rabet
                   </div>
                   {error && (
                     <div style={{ fontSize: "11px", color: "var(--red)", fontFamily: "monospace", marginTop: "8px" }}>
@@ -583,7 +903,7 @@ export default function VaultApp() {
                     {txStatus === "simulating"
                       ? "Simulating..."
                       : txStatus === "signing"
-                      ? "Sign in Freighter..."
+                      ? `Sign in ${walletDisplayName(wallet?.walletId)}...`
                       : txStatus === "submitted"
                       ? "Confirming on Soroban..."
                       : tab === "deposit"
