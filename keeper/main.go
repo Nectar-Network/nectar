@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/go/keypair"
 
 	"github.com/nectar-network/keeper/blend"
+	"github.com/nectar-network/keeper/dex"
 	"github.com/nectar-network/keeper/registry"
 	"github.com/nectar-network/keeper/soroban"
 	"github.com/nectar-network/keeper/vault"
@@ -310,17 +311,35 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 	// Forwarded to ReturnProceeds → vault.return_proceeds → registry.record_execution.
 	// Zero for the AlreadyFilled branch — we didn't actually execute.
 	responseMs := int64(0)
+	// proceeds is the REAL USDC returned to the vault — never synthesized.
+	proceeds := int64(0)
 
 	switch {
 	case fillErr == nil:
 		responseMs = time.Since(drawStart).Milliseconds()
 		logInfo("filled auction", "user", short(user), "response_ms", responseMs)
 		state.addEvent(fmt.Sprintf("filled auction: %s", short(user)))
-		shouldReturn = bidAmt > 0
 		appMet.liquidationsTotal.Add(1)
-		proceeds := int64(0)
+
+		// Convert the seized collateral (auction lot) into USDC, but only when we
+		// actually drew vault capital to fund the bid. Returning proceeds with no
+		// recorded draw would book the full swap output as cost-free profit
+		// on-chain (the vault's drawn==0 branch). Assets that can't be swapped are
+		// held for manual recovery and excluded, so we never book unearned profit.
 		if bidAmt > 0 {
-			proceeds = bidAmt + bidAmt/10
+			dexc := dex.NewSwapClient(rpc, dexConfig(cfg))
+			proceeds = swapCollateral(dexc, kp, cfg, pool, auction)
+			shouldReturn = proceeds > 0
+			if proceeds == 0 {
+				logWarn("fill succeeded but produced zero returnable proceeds — outstanding draw at slash risk",
+					"user", short(user), "drew", bidAmt)
+				state.addEvent(fmt.Sprintf("zero proceeds, draw outstanding: %s", short(user)))
+			}
+		}
+
+		profit := proceeds - bidAmt
+		if profit < 0 {
+			profit = 0
 		}
 		state.mu.Lock()
 		state.Liquidations = append(state.Liquidations, LiquidationRecord{
@@ -333,14 +352,16 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 		})
 		if ks := state.KeeperStats[cfg.KeeperName]; ks != nil {
 			ks.Liquidations++
-			ks.TotalProfit += bidAmt / 10
+			ks.TotalProfit += profit
 		}
 		state.mu.Unlock()
 
 	case fillErr == blend.ErrAlreadyFilled:
-		// Another keeper won. Return drawn capital to vault (it won't profit).
+		// Another keeper won. We drew capital but never spent it — return it
+		// unchanged (no profit, no loss).
 		logInfo("auction already filled by another keeper", "user", short(user))
 		state.addEvent(fmt.Sprintf("already filled: %s", short(user)))
+		proceeds = bidAmt
 		shouldReturn = bidAmt > 0
 
 	default:
@@ -349,7 +370,6 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 	}
 
 	if shouldReturn {
-		proceeds := bidAmt + bidAmt/10
 		if err := vault.ReturnProceeds(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, proceeds, responseMs); err != nil {
 			logWarn("return proceeds failed", "err", err)
 			state.addEvent(fmt.Sprintf("return proceeds failed: %v", err))
@@ -360,6 +380,64 @@ func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *
 	}
 
 	return nil
+}
+
+// dexConfig projects the keeper Config into the dex package's Config.
+func dexConfig(cfg Config) dex.Config {
+	return dex.Config{
+		HorizonURL:     cfg.HorizonURL,
+		Passphrase:     cfg.Passphrase,
+		UsdcAddr:       cfg.UsdcAddr,
+		SoroswapRouter: cfg.SoroswapRouter,
+		PhoenixRouter:  cfg.PhoenixRouter,
+		SlippageBps:    cfg.SlippageBps,
+	}
+}
+
+// swapCollateral converts every non-USDC asset in the auction lot to USDC and
+// returns the total real USDC obtained. USDC already in the lot is counted
+// directly; assets whose swap fails are logged and held (excluded from the
+// total) rather than booked as phantom profit.
+func swapCollateral(dexc *dex.SwapClient, kp *keypair.Full, cfg Config, pool *blend.PoolState, auction *blend.Auction) int64 {
+	var total int64
+	for asset, amt := range auction.Lot {
+		if amt == nil {
+			continue
+		}
+		a := amt.Int64()
+		if a <= 0 {
+			continue
+		}
+		if asset == cfg.UsdcAddr {
+			total += a
+			continue
+		}
+		ref := oracleValueUSDC(pool, asset, a)
+		res, err := dexc.SwapToUSDC(kp, asset, a, ref)
+		if err != nil {
+			logWarn("collateral swap failed, holding asset", "asset", short(asset), "amount", a, "err", err)
+			state.addEvent(fmt.Sprintf("swap failed %s: %v", short(asset), err))
+			continue
+		}
+		logInfo("swapped collateral to USDC", "asset", short(asset), "in", a, "usdc_out", res.OutputAmount, "route", res.Route)
+		state.addEvent(fmt.Sprintf("swapped %s -> %d USDC via %s", short(asset), res.OutputAmount, res.Route))
+		total += res.OutputAmount
+	}
+	return total
+}
+
+// oracleValueUSDC returns the Blend-oracle-implied USDC value (7-decimal
+// stroops) of amt of asset, or 0 when no price is available. Used to anchor the
+// swap slippage check to a fair reference price.
+func oracleValueUSDC(pool *blend.PoolState, asset string, amt int64) int64 {
+	if pool == nil {
+		return 0
+	}
+	r, ok := pool.Reserves[asset]
+	if !ok || r.OraclePrice <= 0 {
+		return 0
+	}
+	return int64(float64(amt) * r.OraclePrice)
 }
 
 // ── HTTP handlers ─────────────────────────────────────────────────────────────
