@@ -212,6 +212,20 @@ func ScvString(s string) xdr.ScVal {
 	return xdr.ScVal{Type: xdr.ScValTypeScvString, Str: &str}
 }
 
+// ScvVec wraps a slice of ScVals as a Soroban vector (e.g. Vec<Address> for a
+// swap path). xdr.ScVal.Vec is a pointer-to-pointer, so the double indirection
+// mirrors the hand-built vectors in blend/auction.go.
+func ScvVec(vals ...xdr.ScVal) xdr.ScVal {
+	vec := xdr.ScVec(vals)
+	vecPtr := &vec
+	return xdr.ScVal{Type: xdr.ScValTypeScvVec, Vec: &vecPtr}
+}
+
+// ScvVoid encodes the unit value, used for a Soroban Option::None argument.
+func ScvVoid() xdr.ScVal {
+	return xdr.ScVal{Type: xdr.ScValTypeScvVoid}
+}
+
 // ParseAddress extracts a string address from an xdr.ScAddress.
 func ParseAddress(addr xdr.ScAddress) (string, error) {
 	switch addr.Type {
