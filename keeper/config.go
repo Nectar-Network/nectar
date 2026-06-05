@@ -19,10 +19,12 @@ type Config struct {
 	UsdcAddr        string // USDC token contract; collateral is swapped into this
 	SoroswapRouter  string // Soroswap router contract (primary DEX); empty disables
 	PhoenixRouter   string // Phoenix multihop contract (fallback DEX); empty disables
+	DeFindexVault   string // DeFindex vault to monitor for rebalancing; empty disables
 	APIPort         string
 	PollInterval    int
 	MinProfit       float64
 	SlippageBps     int      // max swap slippage in basis points (100 = 1%)
+	DriftBps        int      // DeFindex allocation drift threshold in bps (500 = 5%)
 	KnownDepositors []string // comma-separated G-addresses for performance page
 }
 
@@ -39,6 +41,7 @@ func LoadConfig() Config {
 		UsdcAddr:       envOr("USDC_CONTRACT", ""),
 		SoroswapRouter: envOr("SOROSWAP_ROUTER", ""),
 		PhoenixRouter:  envOr("PHOENIX_ROUTER", ""),
+		DeFindexVault:  envOr("DEFINDEX_VAULT", ""),
 		APIPort:        envOr("API_PORT", "8080"),
 	}
 
@@ -77,6 +80,18 @@ func LoadConfig() Config {
 		os.Exit(1)
 	}
 	c.SlippageBps = slip
+
+	driftStr := envOr("DEFINDEX_DRIFT_BPS", "500")
+	drift, err := strconv.Atoi(driftStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "DEFINDEX_DRIFT_BPS=%q is not a valid integer\n", driftStr)
+		os.Exit(1)
+	}
+	if drift < 0 || drift > 10000 {
+		fmt.Fprintf(os.Stderr, "DEFINDEX_DRIFT_BPS=%d out of range [0,10000]\n", drift)
+		os.Exit(1)
+	}
+	c.DriftBps = drift
 
 	if raw := os.Getenv("KNOWN_DEPOSITORS"); raw != "" {
 		for _, addr := range strings.Split(raw, ",") {

@@ -91,6 +91,16 @@ func TestSlippageBpsCustom(t *testing.T) {
 	}
 }
 
+func TestDriftBpsDefault(t *testing.T) {
+	setRequiredEnvs(t)
+	os.Unsetenv("DEFINDEX_DRIFT_BPS")
+
+	cfg := LoadConfig()
+	if cfg.DriftBps != 500 {
+		t.Fatalf("expected default 500, got %d", cfg.DriftBps)
+	}
+}
+
 // setRequiredEnvs sets the minimum env vars so LoadConfig doesn't os.Exit.
 func setRequiredEnvs(t *testing.T) {
 	t.Helper()
