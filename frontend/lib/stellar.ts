@@ -404,6 +404,7 @@ export interface KeeperInfoOnchain {
   totalProfit: number;
   lastDrawTime: number;
   hasActiveDraw: boolean;
+  avgResponseTimeMs: number;
 }
 
 /** Internal helper: simulate a read-only contract call and return retval. */
@@ -520,9 +521,23 @@ export async function queryKeeper(
       totalProfit: Number(obj.total_profit ?? 0),
       lastDrawTime: Number(obj.last_draw_time ?? 0),
       hasActiveDraw: Boolean(obj.has_active_draw ?? false),
+      avgResponseTimeMs: Number(obj.avg_response_time_ms ?? 0),
     };
   } catch {
     return null;
+  }
+}
+
+/** Read all registered keeper addresses from the registry (get_keepers). */
+export async function queryKeepers(): Promise<string[]> {
+  const v = await simulateRead(REGISTRY_CONTRACT, "get_keepers", []);
+  if (!v) return [];
+  try {
+    const native = StellarSdk.scValToNative(v);
+    if (!Array.isArray(native)) return [];
+    return native.map((a) => String(a)).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
