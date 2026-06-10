@@ -1,20 +1,22 @@
 import Nav from "./components/Nav";
-import Hero from "./components/Hero";
+import HomeHero from "./components/HomeHero";
 import ProblemStats from "./components/ProblemStats";
 import Architecture from "./components/Architecture";
-import KeeperRegistry from "./components/KeeperRegistry";
+import NetworkNow from "./components/NetworkNow";
 import MonitorFeed from "./components/MonitorFeed";
+import VaultCTA from "./components/VaultCTA";
 import Footer from "./components/Footer";
 
 export default function Page() {
   return (
     <main className="min-h-screen">
       <Nav />
-      <Hero />
+      <HomeHero />
       <ProblemStats />
       <Architecture />
-      <KeeperRegistry />
+      <NetworkNow />
       <MonitorFeed />
+      <VaultCTA />
       <Footer />
     </main>
   );

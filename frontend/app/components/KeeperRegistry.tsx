@@ -34,7 +34,7 @@ export default function KeeperRegistry() {
       style={{ borderTop: "1px solid var(--border)" }}
     >
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-end justify-between mb-12">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-12">
           <div>
             <p
               className="text-xs font-mono mb-2"
@@ -58,9 +58,10 @@ export default function KeeperRegistry() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <div
           className="border overflow-hidden"
-          style={{ borderColor: "var(--border)" }}
+          style={{ borderColor: "var(--border)", minWidth: "440px" }}
         >
           <div
             className="grid grid-cols-3 px-4 py-3 text-xs font-mono border-b"
@@ -96,6 +97,7 @@ export default function KeeperRegistry() {
               </span>
             </div>
           ))}
+        </div>
         </div>
 
         <div

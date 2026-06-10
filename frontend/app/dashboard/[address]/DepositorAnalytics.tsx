@@ -2,15 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   DepositorRow,
   PerformanceData,
   fetchPerformance,
@@ -19,12 +10,13 @@ import {
   sharePriceSeries,
 } from "../../../lib/api";
 import { queryDepositor } from "../../../lib/stellar";
+import { LineChart } from "../../components/ds";
 
 const statCard: React.CSSProperties = {
   padding: 20,
   border: "1px solid var(--border)",
   borderRadius: 4,
-  background: "rgba(255,255,255,0.02)",
+  background: "var(--card-fill)",
 };
 const statLabel: React.CSSProperties = {
   fontSize: 11,
@@ -147,7 +139,7 @@ export default function DepositorAnalytics({
                   fontSize: 22,
                   fontFamily: "monospace",
                   fontWeight: 600,
-                  color: yieldStroops >= 0 ? "var(--accent)" : "#ff6b6b",
+                  color: yieldStroops >= 0 ? "var(--accent)" : "var(--red)",
                 }}
               >
                 {yieldStroops >= 0 ? "+" : "-"}${formatUSDC(Math.abs(yieldStroops))}
@@ -160,7 +152,7 @@ export default function DepositorAnalytics({
                   fontSize: 22,
                   fontFamily: "monospace",
                   fontWeight: 600,
-                  color: pnlPct >= 0 ? "var(--accent)" : "#ff6b6b",
+                  color: pnlPct >= 0 ? "var(--accent)" : "var(--red)",
                 }}
               >
                 {pnlPct >= 0 ? "+" : ""}
@@ -193,27 +185,9 @@ export default function DepositorAnalytics({
             >
               Position Value Over Time
             </h2>
-            <div style={{ border: "1px solid var(--border)", borderRadius: 4, background: "rgba(255,255,255,0.02)", padding: 20 }}>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 4, background: "var(--card-fill)", padding: 20 }}>
               {series.length >= 2 ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-                    <defs>
-                      <linearGradient id="depFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "var(--text-dim)", fontSize: 10, fontFamily: "monospace" }} stroke="var(--border)" minTickGap={24} />
-                    <YAxis tick={{ fill: "var(--text-dim)", fontSize: 10, fontFamily: "monospace" }} stroke="var(--border)" width={56} tickFormatter={(v) => `$${Number(v).toFixed(0)}`} />
-                    <Tooltip
-                      contentStyle={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, fontFamily: "monospace", fontSize: 12 }}
-                      labelStyle={{ color: "var(--text-dim)" }}
-                      formatter={(v) => [`$${Number(v as number).toFixed(2)}`, "value"]}
-                    />
-                    <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill="url(#depFill)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <LineChart data={series} height={240} variant="area" label="position" valueFmt={(v) => `$${v.toFixed(0)}`} />
               ) : (
                 <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontFamily: "monospace", fontSize: 12 }}>
                   Not enough history yet to chart this position.

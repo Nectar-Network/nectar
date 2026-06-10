@@ -1,332 +1,404 @@
 "use client";
 
-export default function FeaturesContent() {
+import Architecture from "../components/Architecture";
+import {
+  Card,
+  Btn,
+  StatusDot,
+  Eyebrow,
+  SectionHead,
+  keeperColor,
+} from "../components/ds";
+
+type CSS = React.CSSProperties;
+
+const WRAP: CSS = { maxWidth: 1100, margin: "0 auto", padding: "0 24px" };
+
+// ── Header ──────────────────────────────────────────────────────────────────
+function Header() {
   return (
-    <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "32px 24px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: "48px" }}>
+    <section style={{ paddingTop: 70, paddingBottom: 20 }}>
+      <div style={WRAP}>
+        <Eyebrow style={{ marginBottom: 16 }}>How it works</Eyebrow>
         <h1
           style={{
-            fontFamily: "var(--font-syne)",
-            fontSize: "20px",
-            fontWeight: 700,
-            letterSpacing: "0.15em",
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: "clamp(2.4rem, 5vw, 3.6rem)",
+            lineHeight: 1.05,
+            letterSpacing: "-0.015em",
             color: "var(--text)",
-            textTransform: "uppercase",
-            marginBottom: "4px",
+            margin: "0 0 22px",
+            maxWidth: 760,
           }}
         >
-          How Nectar Works
+          A liquidation network with{" "}
+          <span style={{ color: "var(--accent)" }}>no coordinator</span> and no
+          single key.
         </h1>
-        <p style={{ fontSize: "12px", color: "var(--text-dim)", fontFamily: "monospace", maxWidth: "600px", lineHeight: "1.6" }}>
-          Nectar is a multi-operator keeper infrastructure for Blend Protocol on Stellar.
-          It replaces single-bot liquidation systems with a distributed network of competing keepers,
-          funded by a shared vault.
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 14,
+            lineHeight: 1.8,
+            color: "var(--text-dim)",
+            maxWidth: 560,
+            margin: 0,
+          }}
+        >
+          Stellar DeFi relies on single-operator bots for critical automation.
+          Nectar distributes keeper responsibility across competing operators,
+          funded by one shared vault.
         </p>
       </div>
-
-      {/* Core Features */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "48px" }}>
-
-        {/* Feature 1: Vault */}
-        <FeatureSection
-          number="01"
-          title="Nectar Vault"
-          subtitle="Pooled Liquidation Capital"
-          description="Users deposit USDC into the NectarVault smart contract on Soroban. This pooled capital is available for keepers to draw from when profitable liquidation opportunities arise. Depositors receive LP shares and earn yield from successful liquidations."
-          details={[
-            { label: "Contract", value: "NectarVault (Soroban/Rust)" },
-            { label: "Asset", value: "USDC" },
-            { label: "Share Model", value: "Pro-rata LP shares" },
-            { label: "Yield Source", value: "10% profit from each liquidation" },
-          ]}
-          actions={[
-            { label: "Deposit USDC", href: "/vault", primary: true },
-            { label: "View Performance", href: "/performance", primary: false },
-          ]}
-        />
-
-        {/* Feature 2: Keeper Registry */}
-        <FeatureSection
-          number="02"
-          title="Keeper Registry"
-          subtitle="Decentralized Operator Network"
-          description="Any operator can register as a keeper by calling the KeeperRegistry contract. Registered keepers independently monitor the Blend pool, detect liquidation opportunities, and compete to fill auctions. The admin can pause the registry in emergencies."
-          details={[
-            { label: "Contract", value: "KeeperRegistry (Soroban/Rust)" },
-            { label: "Registration", value: "Permissionless self-registration" },
-            { label: "Current Keepers", value: "2 (alpha + beta)" },
-            { label: "Safety", value: "Admin emergency pause" },
-          ]}
-          codeSnippet={`// Register as a keeper operator
-soroban contract invoke \\
-  --id $REGISTRY_CONTRACT \\
-  -- register \\
-  --keeper $YOUR_ADDRESS \\
-  --name "my-keeper"`}
-        />
-
-        {/* Feature 3: Liquidation Engine */}
-        <FeatureSection
-          number="03"
-          title="Liquidation Engine"
-          subtitle="Dutch Auction Monitoring & Execution"
-          description="Keepers poll the Blend pool every few seconds for positions with health factor below 1.0. When found, they create an auction and evaluate profitability using the Dutch auction mechanics — collateral lot grows over 200 blocks while bid cost decreases. Keepers fill when the lot/bid ratio exceeds their threshold."
-          details={[
-            { label: "Protocol", value: "Blend Protocol Dutch Auctions" },
-            { label: "Duration", value: "200 blocks (~16 minutes)" },
-            { label: "HF Threshold", value: "< 1.0 triggers liquidation" },
-            { label: "Profit Model", value: "Lot/bid ratio evaluation" },
-          ]}
-          flow={[
-            "Monitor positions (poll every 5s)",
-            "Detect HF < 1.0",
-            "Create auction on Blend pool",
-            "Evaluate lot/bid profitability",
-            "Draw capital from NectarVault",
-            "Fill auction (submit bid)",
-            "Return capital + profit to vault",
-          ]}
-        />
-
-        {/* Feature 4: Multi-Operator Competition */}
-        <FeatureSection
-          number="04"
-          title="Multi-Operator Competition"
-          subtitle="No Single Point of Failure"
-          description="Multiple keepers detect and attempt to fill the same auction simultaneously. The first confirmed transaction wins. Others gracefully handle the 'already filled' response. This ensures liquidations happen even if one operator goes offline — the core innovation over single-bot systems."
-          details={[
-            { label: "Race Resolution", value: "First-confirmed wins" },
-            { label: "Failure Handling", value: "Graceful ErrAlreadyFilled" },
-            { label: "Capital Safety", value: "Drawn USDC returned on loss" },
-            { label: "Redundancy", value: "N operators, any 1 suffices" },
-          ]}
-        />
-
-        {/* Feature 5: Real-time Monitoring */}
-        <FeatureSection
-          number="05"
-          title="Real-time Dashboard"
-          subtitle="Live Keeper & Vault Monitoring"
-          description="The frontend connects to the keeper API via Server-Sent Events (SSE) for real-time log streaming and polls REST endpoints for state updates. Monitor vault TVL, depositor positions, keeper stats, and liquidation history — all updating live."
-          details={[
-            { label: "Transport", value: "SSE + REST polling" },
-            { label: "Metrics", value: "Prometheus /metrics endpoint" },
-            { label: "Dashboard", value: "Performance + live log stream" },
-            { label: "Max SSE Clients", value: "100 concurrent" },
-          ]}
-          actions={[
-            { label: "View Dashboard", href: "/", primary: true },
-            { label: "Performance", href: "/performance", primary: false },
-          ]}
-        />
-      </div>
-
-      {/* Getting Started */}
-      <div
-        style={{
-          marginTop: "64px",
-          border: "1px solid var(--border)",
-          borderRadius: "4px",
-          padding: "32px",
-          background: "rgba(255,255,255,0.02)",
-        }}
-      >
-        <div style={{ fontSize: "11px", color: "var(--text-dim)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "24px" }}>
-          GETTING STARTED
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
-          <GettingStartedCard
-            title="As a Depositor"
-            steps={[
-              "Connect your Stellar wallet (Freighter/Albedo/xBull)",
-              "Navigate to Vault → Deposit",
-              "Enter USDC amount and confirm transaction",
-              "Monitor your PnL on the Performance page",
-              "Withdraw anytime by redeeming shares",
-            ]}
-          />
-          <GettingStartedCard
-            title="As a Keeper Operator"
-            steps={[
-              "Clone the repo and configure .env with your keypair",
-              "Register on-chain: soroban contract invoke -- register",
-              "Run the keeper binary: go run ./keeper",
-              "Monitor via the dashboard or /metrics endpoint",
-              "Compete for liquidation profits automatically",
-            ]}
-          />
-          <GettingStartedCard
-            title="Self-Host Everything"
-            steps={[
-              "Run scripts/testnet-setup.sh to provision wallets",
-              "Deploy contracts with scripts/deploy.sh",
-              "docker-compose up to launch keepers + frontend",
-              "Seed vault with scripts/seed-vault.sh",
-              "Monitor at localhost:3000",
-            ]}
-          />
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
 
-function FeatureSection({
-  number,
-  title,
-  subtitle,
-  description,
-  details,
-  codeSnippet,
-  flow,
-  actions,
-}: {
-  number: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  details: { label: string; value: string }[];
-  codeSnippet?: string;
-  flow?: string[];
-  actions?: { label: string; href: string; primary: boolean }[];
-}) {
-  return (
-    <div style={{ borderTop: "1px solid var(--border)", paddingTop: "32px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
-        {/* Left */}
-        <div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "12px", marginBottom: "8px" }}>
-            <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--accent)" }}>{number}</span>
-            <h2 style={{ fontFamily: "var(--font-syne)", fontSize: "18px", fontWeight: 700, color: "var(--text)" }}>
-              {title}
-            </h2>
-          </div>
-          <div style={{ fontSize: "12px", fontFamily: "monospace", color: "var(--accent)", marginBottom: "12px" }}>
-            {subtitle}
-          </div>
-          <p style={{ fontSize: "13px", fontFamily: "monospace", color: "var(--text-dim)", lineHeight: "1.7", marginBottom: "16px" }}>
-            {description}
-          </p>
-          {actions && (
-            <div style={{ display: "flex", gap: "8px" }}>
-              {actions.map((a) => (
-                <a
-                  key={a.label}
-                  href={a.href}
-                  style={{
-                    padding: "8px 16px",
-                    fontSize: "12px",
-                    fontFamily: "monospace",
-                    textDecoration: "none",
-                    border: a.primary ? "1px solid var(--accent)" : "1px solid var(--border)",
-                    background: a.primary ? "var(--accent)" : "transparent",
-                    color: a.primary ? "var(--bg)" : "var(--text-dim)",
-                  }}
-                >
-                  {a.label}
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
+// ── Flow — the keeper loop, deposit → monitor → race → settle → return ───────
+const STEPS = [
+  {
+    n: "01",
+    t: "Deposit",
+    d: "LPs deposit USDC into the shared vault and receive appreciating LP shares.",
+  },
+  {
+    n: "02",
+    t: "Monitor",
+    d: "Every keeper independently polls Blend pool positions for health factor < 1.0.",
+  },
+  {
+    n: "03",
+    t: "Race",
+    d: "On an underwater position, all keepers create & submit fill transactions at once.",
+  },
+  {
+    n: "04",
+    t: "Settle",
+    d: "First confirmed tx wins. Losers catch ErrAlreadyFilled and log it — no wasted gas spiral.",
+  },
+  {
+    n: "05",
+    t: "Return",
+    d: "Winner returns 90% of profit to the vault; retains 10%. Share price ticks up.",
+  },
+];
 
-        {/* Right */}
-        <div>
-          {/* Details grid */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "8px",
-              marginBottom: codeSnippet || flow ? "16px" : "0",
-            }}
-          >
-            {details.map(({ label, value }) => (
+function Flow() {
+  return (
+    <section
+      style={{ padding: "84px 24px", borderTop: "1px solid var(--border)" }}
+    >
+      <div style={{ ...WRAP, padding: 0 }}>
+        <SectionHead
+          eyebrow="The loop"
+          title="From deposit to liquidation, end to end"
+        />
+        <div className="features-flow">
+          {STEPS.map((s, i) => (
+            <div
+              key={s.n}
+              style={{
+                padding: "4px 20px 4px 0",
+                borderRight:
+                  i < STEPS.length - 1 ? "1px solid var(--border)" : "none",
+                paddingLeft: i ? 20 : 0,
+              }}
+            >
               <div
-                key={label}
                 style={{
-                  padding: "10px 12px",
-                  border: "1px solid var(--border)",
-                  borderRadius: "2px",
-                  background: "rgba(255,255,255,0.02)",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 26,
+                  color: "var(--accent)",
+                  marginBottom: 14,
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
-                <div style={{ fontSize: "10px", color: "var(--text-dim)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" }}>
-                  {label}
-                </div>
-                <div style={{ fontSize: "12px", color: "var(--text)", fontFamily: "monospace" }}>
-                  {value}
-                </div>
+                {s.n}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  color: "var(--text)",
+                  marginBottom: 10,
+                }}
+              >
+                {s.t}
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  lineHeight: 1.7,
+                  color: "var(--text-dim)",
+                }}
+              >
+                {s.d}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Contention — ErrAlreadyFilled "graceful contention" replay ───────────────
+// Illustrative replay (marketing copy, not a live feed): a representative
+// position address and profit figure mirror the auction-contention pattern.
+const CONTEND: { tag: string; msg: React.ReactNode; c: string }[] = [
+  {
+    tag: "keeper-alpha",
+    msg: "pos GD7F9…2K1R hf=0.946 — LIQUIDATABLE",
+    c: "var(--amber)",
+  },
+  {
+    tag: "keeper-beta",
+    msg: "pos GD7F9…2K1R hf=0.946 — LIQUIDATABLE",
+    c: "var(--amber)",
+  },
+  {
+    tag: "keeper-alpha",
+    msg: "creating auction · submitting fill",
+    c: "var(--text)",
+  },
+  {
+    tag: "keeper-beta",
+    msg: "creating auction · submitting fill",
+    c: "var(--text)",
+  },
+  {
+    tag: "keeper-alpha",
+    msg: "filled auction: GD7F9…2K1R",
+    c: "var(--accent)",
+  },
+  {
+    tag: "keeper-beta",
+    msg: "already filled by another keeper",
+    c: "var(--text-mute)",
+  },
+  {
+    tag: "keeper-alpha",
+    msg: "returned drawn capital + profit to vault",
+    c: "var(--info)",
+  },
+];
+
+function Contention() {
+  return (
+    <section
+      style={{ padding: "84px 24px", borderTop: "1px solid var(--border)" }}
+    >
+      <div className="features-two" style={{ ...WRAP, padding: 0 }}>
+        <div>
+          <Eyebrow style={{ marginBottom: 14 }}>Graceful contention</Eyebrow>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "clamp(1.4rem, 3vw, 2rem)",
+              color: "var(--text)",
+              margin: "0 0 18px",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Two keepers fill. One wins. Nothing breaks.
+          </h2>
+          <div style={{ borderLeft: "2px solid var(--border)", paddingLeft: 18 }}>
+            <p
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 13,
+                lineHeight: 1.8,
+                color: "var(--text-dim)",
+                margin: 0,
+              }}
+            >
+              When a position goes underwater, multiple keepers submit fill
+              transactions simultaneously. The first confirmed transaction wins
+              the auction. The others receive{" "}
+              <span style={{ color: "var(--text)" }}>ErrAlreadyFilled</span> and
+              handle it gracefully — logging the miss, returning any drawn
+              capital, and moving on. Redundancy without a coordinator, and
+              without a single point of failure.
+            </p>
+          </div>
+        </div>
+        <Card style={{ padding: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "11px 16px",
+              borderBottom: "1px solid var(--border)",
+            }}
+          >
+            <StatusDot />
+            <span
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                color: "var(--text-dim)",
+              }}
+            >
+              auction contention — replay
+            </span>
+          </div>
+          <div
+            style={{
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            {CONTEND.map((l, i) => (
+              <div
+                key={i}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11.5,
+                  color: l.c,
+                }}
+              >
+                <span style={{ color: "var(--text-mute)" }}>[</span>
+                <span style={{ color: keeperColor(l.tag) }}>{l.tag}</span>
+                <span style={{ color: "var(--text-mute)" }}>] </span>
+                {l.msg}
               </div>
             ))}
           </div>
-
-          {/* Code Snippet */}
-          {codeSnippet && (
-            <div
-              style={{
-                padding: "12px 16px",
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "2px",
-                overflow: "auto",
-              }}
-            >
-              <pre style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--text-dim)", margin: 0, whiteSpace: "pre-wrap" }}>
-                {codeSnippet}
-              </pre>
-            </div>
-          )}
-
-          {/* Flow */}
-          {flow && (
-            <div
-              style={{
-                padding: "12px 16px",
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "2px",
-              }}
-            >
-              {flow.map((step, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: i < flow.length - 1 ? "6px" : 0 }}>
-                  <span style={{ fontSize: "10px", fontFamily: "monospace", color: "var(--accent)" }}>
-                    {i < flow.length - 1 ? "├" : "└"}
-                  </span>
-                  <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--text-dim)" }}>
-                    {step}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </Card>
       </div>
-    </div>
+    </section>
   );
 }
 
-function GettingStartedCard({ title, steps }: { title: string; steps: string[] }) {
+// ── Economics — profit becomes share price ───────────────────────────────────
+const ECON = [
+  {
+    t: "90 / 10 split",
+    d: "Every liquidation returns 90% of realized profit to the vault. The winning keeper keeps 10% as its execution incentive.",
+  },
+  {
+    t: "One rising price",
+    d: "Profit accrues to a single share price — total_usdc ÷ total_shares. No reward tokens, no emissions, no lockups.",
+  },
+  {
+    t: "Staked operators",
+    d: "Keepers register on-chain and bond stake. Misbehavior is slashable; the leaderboard ranks by realized profit.",
+  },
+];
+
+function Economics() {
   return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: "4px",
-        padding: "20px",
-        background: "rgba(255,255,255,0.02)",
-      }}
+    <section
+      style={{ padding: "84px 24px", borderTop: "1px solid var(--border)" }}
     >
-      <div style={{ fontSize: "13px", fontFamily: "monospace", color: "var(--text)", fontWeight: 600, marginBottom: "12px" }}>
-        {title}
+      <div style={{ ...WRAP, padding: 0 }}>
+        <SectionHead
+          eyebrow="Vault economics"
+          title="Profit becomes share price"
+          right={
+            <Btn href="/dashboard" small>
+              See it live →
+            </Btn>
+          }
+        />
+        <div className="features-econ">
+          {ECON.map((e) => (
+            <div
+              key={e.t}
+              style={{ borderLeft: "2px solid var(--accent)", paddingLeft: 18 }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 17,
+                  color: "var(--text)",
+                  marginBottom: 12,
+                }}
+              >
+                {e.t}
+              </div>
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12.5,
+                  lineHeight: 1.75,
+                  color: "var(--text-dim)",
+                  margin: 0,
+                }}
+              >
+                {e.d}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-      <ol style={{ margin: 0, paddingLeft: "16px", display: "flex", flexDirection: "column", gap: "6px" }}>
-        {steps.map((step, i) => (
-          <li key={i} style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--text-dim)", lineHeight: "1.5" }}>
-            {step}
-          </li>
-        ))}
-      </ol>
+    </section>
+  );
+}
+
+// ── Closing CTA ──────────────────────────────────────────────────────────────
+function CTA() {
+  return (
+    <section
+      style={{ padding: "84px 24px", borderTop: "1px solid var(--border)" }}
+    >
+      <div
+        style={{
+          ...WRAP,
+          padding: 0,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            fontSize: "clamp(1.3rem, 2.4vw, 1.8rem)",
+            color: "var(--text)",
+            margin: "0 24px 0 0",
+          }}
+        >
+          Ready to deposit?
+        </h2>
+        <Btn primary href="/vault">
+          Open the vault
+        </Btn>
+        <Btn href="/dashboard">Live dashboard →</Btn>
+      </div>
+    </section>
+  );
+}
+
+export default function FeaturesContent() {
+  return (
+    <div>
+      <style>{`
+        .features-flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; }
+        .features-two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+        .features-econ { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+        @media (max-width: 880px) {
+          .features-flow { grid-template-columns: 1fr 1fr; }
+          .features-two, .features-econ { grid-template-columns: 1fr; }
+        }
+      `}</style>
+      <Header />
+      <Flow />
+      <Architecture />
+      <Contention />
+      <Economics />
+      <CTA />
     </div>
   );
 }
