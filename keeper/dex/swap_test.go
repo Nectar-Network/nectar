@@ -2,8 +2,11 @@ package dex
 
 import (
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stellar/go/keypair"
@@ -136,11 +139,64 @@ func TestMinOutForSlippage(t *testing.T) {
 		{1_000_000_000, 10000, 0},         // 100%
 		{1_000_000_000, 12000, 0},         // clamped >100%
 		{0, 100, 0},                       // zero quote
+		// A manipulated/absurd quote must not overflow the multiply: the math
+		// runs in 128-bit, so MaxInt64 at 1% slippage stays exact.
+		{math.MaxInt64, 100, math.MaxInt64/10000*9900 + math.MaxInt64%10000*9900/10000},
 	}
 	for _, c := range cases {
 		if got := minOutForSlippage(c.quoted, c.bps); got != c.want {
 			t.Errorf("minOutForSlippage(%d,%d)=%d want %d", c.quoted, c.bps, got, c.want)
 		}
+	}
+}
+
+// Phoenix is quote-less, so without an oracle reference there is no slippage
+// floor at all — the client must refuse rather than swap unprotected.
+func TestSwapToUSDC_PhoenixRefusesWithoutOracleRef(t *testing.T) {
+	cfg := baseCfg()
+	cfg.SoroswapRouter = "" // phoenix-only
+	cfg.PhoenixRouter = testPhx
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), cfg)
+
+	_, err := c.SwapToUSDC(mustKP(t), testToken, 1_000_000_000, 0)
+	if !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("expected ErrNoRoute wrapper, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "refusing swap without a slippage floor") {
+		t.Fatalf("expected the unprotected-swap refusal, got %v", err)
+	}
+}
+
+// With an oracle reference the Phoenix guard passes and the attempt proceeds
+// to the RPC layer (which fails here — but NOT with the refusal).
+func TestSwapToUSDC_PhoenixAttemptsWithOracleRef(t *testing.T) {
+	srv := mockRPCError(t)
+	defer srv.Close()
+
+	cfg := baseCfg()
+	cfg.SoroswapRouter = ""
+	cfg.PhoenixRouter = testPhx
+	c := NewSwapClient(soroban.NewClient(srv.URL), cfg)
+
+	_, err := c.SwapToUSDC(mustKP(t), testToken, 1_000_000_000, 1_000_000_000)
+	if err == nil || strings.Contains(err.Error(), "refusing swap") {
+		t.Fatalf("expected an RPC-layer failure, not the refusal: %v", err)
+	}
+}
+
+// Once a swap tx is (possibly) broadcast, an ambiguous failure must not fall
+// back to the second venue — the collateral may already be sold.
+func TestSentClassification_TxStatusUnknown(t *testing.T) {
+	amb := &soroban.TxStatusUnknownError{Hash: "deadbeef", Err: errors.New("tx deadbeef timed out")}
+	if !soroban.IsTxStatusUnknown(amb) {
+		t.Fatal("bare TxStatusUnknownError must classify as ambiguous")
+	}
+	wrapped := fmt.Errorf("swap_exact_tokens_for_tokens: %w", amb)
+	if !soroban.IsTxStatusUnknown(wrapped) {
+		t.Fatal("wrapped TxStatusUnknownError must classify as ambiguous")
+	}
+	if soroban.IsTxStatusUnknown(errors.New("rpc simulateTransaction: boom")) {
+		t.Fatal("pre-send failures must not classify as ambiguous")
 	}
 }
 

@@ -18,7 +18,7 @@ type Config struct {
 	BlendPool       string
 	UsdcAddr        string // USDC token contract; collateral is swapped into this
 	SoroswapRouter  string // Soroswap router contract (primary DEX); empty disables
-	PhoenixRouter   string // Phoenix multihop contract (fallback DEX); empty disables
+	PhoenixRouter   string // Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX); empty disables
 	DeFindexVault   string // DeFindex vault to monitor for rebalancing; empty disables
 	APIPort         string
 	PollInterval    int
