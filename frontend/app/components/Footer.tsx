@@ -15,11 +15,11 @@ export default function Footer() {
         </p>
         <div className="flex items-center gap-6 text-xs font-mono">
           {[
-            { label: "Docs", href: "https://docs.nectarnetwork.fun", external: true },
+            { label: "Docs", href: "https://docs.nectar.monster", external: true },
             { label: "Keeper SDK", href: "https://github.com/Nectar-Network/keeper-sdk", external: true },
             { label: "Media Kit", href: "/media-kit", external: false },
             { label: "Twitter", href: "https://x.com/nectar_xlm", external: true },
-            { label: "GitHub", href: "https://github.com/nectar-network/nectar-poc", external: true },
+            { label: "GitHub", href: "https://github.com/Nectar-Network/nectar", external: true },
             { label: "Blend Protocol", href: "https://blend.capital", external: true },
           ].map((link) => (
             <a
