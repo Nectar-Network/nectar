@@ -30,8 +30,12 @@ type ProtocolAdapter interface {
 - **`Execute(rpc, kp, task, vault)`** — perform one task. Draw/return capital via
   the `VaultClient` only when the task actually needs Nectar capital. Return a
   `Result`; never log.
-- **`EstimateCapital(task)`** — best-effort USDC needed (0 if the task uses no
-  Nectar capital, e.g. a DeFindex rebalance).
+- **`EstimateCapital(task)`** — best-effort USDC (7-decimal stroops) needed to
+  execute the task; 0 when the task uses no Nectar capital (e.g. a DeFindex
+  rebalance) or the cost is unknowable before execution (the Blend bid is only
+  sized after the auction exists). The keeper consults this each cycle and
+  skips tasks whose estimate exceeds the vault's available capital, so a
+  truthful estimate saves doomed draws.
 
 ### Task and Result
 
@@ -131,9 +135,11 @@ if cfg.MyProtoContract != "" {
 }
 ```
 
-The keeper runs every registered adapter each cycle: `GetTasks` →
-`SortByPriority` → `Execute` per task → fold the `Result` into dashboard
-state/metrics.
+Each cycle the keeper scans every registered adapter (`GetTasks`), merges all
+discovered tasks into ONE queue ordered by `Priority` (a critical liquidation
+from one protocol runs before a routine task from another), gates each task on
+`EstimateCapital` vs the vault's available capital, then `Execute`s and folds
+the `Result` into dashboard state/metrics.
 
 ## Reference implementations
 

@@ -3,6 +3,7 @@ package soroban
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -67,25 +68,58 @@ func (c *Client) Send(txXDR string) (string, error) {
 	return r.Hash, nil
 }
 
+// TxStatusUnknownError marks failures that happened AFTER the transaction was
+// accepted by the network: polling errored or timed out, so the tx may still
+// land. Auto-retrying a state-changing call on this class risks executing it
+// twice; callers that must not double-execute disable retries for it via
+// RetryConfig.RetryAmbiguous.
+type TxStatusUnknownError struct {
+	Hash string
+	Err  error
+}
+
+func (e *TxStatusUnknownError) Error() string {
+	return fmt.Sprintf("tx %s status unknown: %v", short8(e.Hash), e.Err)
+}
+
+func (e *TxStatusUnknownError) Unwrap() error { return e.Err }
+
+// IsTxStatusUnknown reports whether err (anywhere in its chain) is a
+// post-send ambiguous failure — the transaction may have landed.
+func IsTxStatusUnknown(err error) bool {
+	var u *TxStatusUnknownError
+	return errors.As(err, &u)
+}
+
+func short8(s string) string {
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
+}
+
 func (c *Client) AwaitTx(hash string, timeout time.Duration) (*TxResult, error) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		var r TxResult
 		if err := c.call("getTransaction", map[string]string{"hash": hash}, &r); err != nil {
-			return nil, err
+			// The tx was already sent — a polling failure leaves its fate unknown.
+			return nil, &TxStatusUnknownError{Hash: hash, Err: err}
 		}
 		r.Hash = hash
 		switch r.Status {
 		case "SUCCESS":
 			return &r, nil
 		case "FAILED":
-			return nil, fmt.Errorf("tx %s failed: %s", hash[:8], r.ResultXDR)
+			// Definitive: the tx landed and failed. Safe to classify normally.
+			return nil, fmt.Errorf("tx %s failed: %s", short8(hash), r.ResultXDR)
 		}
 		select {
 		case <-time.After(3 * time.Second):
 		}
 	}
-	return nil, fmt.Errorf("tx %s timed out", hash[:8])
+	// Still NOT_FOUND/PENDING at the deadline — it may land after we stop looking.
+	return nil, &TxStatusUnknownError{Hash: hash, Err: fmt.Errorf("tx %s timed out", short8(hash))}
 }
 
 func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error) {

@@ -510,6 +510,11 @@ export async function queryKeeper(
   if (!v) return null;
   try {
     const obj = StellarSdk.scValToNative(v) as Record<string, unknown>;
+    // KeeperInfo carries totals (total_response_time_ms, response_count) — the
+    // average is a separate contract function, not a struct field. Derive it
+    // here so the leaderboard's avg-response column reflects real data.
+    const totalResponseMs = Number(obj.total_response_time_ms ?? 0);
+    const responseCount = Number(obj.response_count ?? 0);
     return {
       addr: String(obj.addr ?? operatorAddress),
       name: String(obj.name ?? ""),
@@ -521,7 +526,7 @@ export async function queryKeeper(
       totalProfit: Number(obj.total_profit ?? 0),
       lastDrawTime: Number(obj.last_draw_time ?? 0),
       hasActiveDraw: Boolean(obj.has_active_draw ?? false),
-      avgResponseTimeMs: Number(obj.avg_response_time_ms ?? 0),
+      avgResponseTimeMs: responseCount > 0 ? Math.round(totalResponseMs / responseCount) : 0,
     };
   } catch {
     return null;

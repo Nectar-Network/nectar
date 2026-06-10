@@ -10,19 +10,22 @@ import (
 )
 
 // swapViaSoroswap quotes then executes a token→USDC swap on the Soroswap
-// router, returning the real USDC received (balance delta).
-func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, error) {
+// router, returning the real USDC received (balance delta). The second return
+// reports whether the swap transaction was (or may have been) broadcast — once
+// true, the caller must not try another venue: the collateral may already be
+// sold even though this call errored.
+func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, bool, error) {
 	path := []string{tokenAddr, s.cfg.UsdcAddr}
 
 	expectedOut, err := s.soroswapQuote(amount, path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if expectedOut <= 0 {
-		return nil, fmt.Errorf("empty quote")
+		return nil, false, fmt.Errorf("empty quote")
 	}
 	if belowFloor(expectedOut, refValueUSDC, s.cfg.SlippageBps) {
-		return nil, fmt.Errorf("%w: quote %d < floor %d", ErrSlippageExceeded,
+		return nil, false, fmt.Errorf("%w: quote %d < floor %d", ErrSlippageExceeded,
 			expectedOut, minOutForSlippage(refValueUSDC, s.cfg.SlippageBps))
 	}
 
@@ -30,21 +33,22 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount,
 
 	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	hash, err := s.soroswapSwap(kp, amount, minOut, path)
 	if err != nil {
-		return nil, err
+		// Post-send-ambiguous failures mean the tx may still land — report sent.
+		return nil, soroban.IsTxStatusUnknown(err), err
 	}
 
 	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
 	if err != nil {
-		return nil, err
+		return nil, true, fmt.Errorf("swap landed but post-swap balance read failed: %w", err)
 	}
 	got := after - before
 	if got <= 0 {
-		return nil, fmt.Errorf("swap sent but USDC balance did not increase")
+		return nil, true, fmt.Errorf("swap sent but USDC balance did not increase")
 	}
 
 	ref := refValueUSDC
@@ -58,7 +62,7 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount,
 		Slippage:     slippageFraction(ref, got),
 		Route:        "soroswap",
 		TxHash:       hash,
-	}, nil
+	}, true, nil
 }
 
 // soroswapQuote calls router_get_amounts_out (read-only) and returns the final

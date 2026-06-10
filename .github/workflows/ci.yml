@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, tranche-2]
   pull_request:
-    branches: [main]
+    branches: [main, tranche-2]
 
 jobs:
   contracts:
@@ -37,6 +37,9 @@ jobs:
       - name: Test mock-token
         run: cargo test -p mock-token
 
+      - name: Test liquidation-lab
+        run: cargo test -p liquidation-lab
+
       - name: Build contracts (release + wasm32)
         run: cargo build --target wasm32-unknown-unknown --release
 
@@ -49,7 +52,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          # Matches keeper/go.mod (go 1.24.0); avoids a toolchain auto-download.
+          go-version: "1.24"
           cache-dependency-path: keeper/go.sum
 
       - name: Download modules

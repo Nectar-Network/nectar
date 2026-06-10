@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/signal"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -32,8 +33,15 @@ type LiquidationRecord struct {
 	Drew           int64     `json:"drew"`
 	Proceeds       int64     `json:"proceeds"`
 	ResponseTimeMs int64     `json:"response_time_ms"`
+	TxHash         string    `json:"tx_hash,omitempty"`
+	Keeper         string    `json:"keeper,omitempty"`
 	Timestamp      time.Time `json:"ts"`
 }
+
+// maxLiquidationRecords bounds the in-memory fill history (and the
+// /api/performance payload) on long-lived keepers; the chain remains the
+// authoritative full history.
+const maxLiquidationRecords = 200
 
 // KeeperStat tracks per-keeper performance metrics.
 type KeeperStat struct {
@@ -265,9 +273,28 @@ func (k *Keeper) recoverStaleDraw() {
 	state.addEvent(fmt.Sprintf("recovered stale draw: returned %d to vault", ret))
 }
 
+// plannedTask pairs a discovered task with the adapter that produced it, so
+// tasks from every protocol can be ordered by priority in one queue.
+type plannedTask struct {
+	ad   adapters.ProtocolAdapter
+	task adapters.Task
+}
+
 func (k *Keeper) cycle() error {
 	k.recoverStaleDraw()
 
+	// Read available vault capital once up front so EstimateCapital can gate
+	// tasks that cannot possibly be funded this cycle. available < 0 means the
+	// read failed and the gate is disabled.
+	available := int64(-1)
+	if vs, err := vault.GetState(k.rpc, k.cfg.Passphrase, k.cfg.VaultID); err == nil {
+		available = vs.TotalUSDC - vs.ActiveLiq
+	}
+
+	// Scan every protocol first, then execute across protocols in a single
+	// priority order — a critical Blend liquidation must not wait behind a
+	// routine DeFindex rebalance just because of adapter registration order.
+	var planned []plannedTask
 	var posRows []posRow
 	for _, ad := range k.protocols {
 		tasks, err := ad.GetTasks(k.rpc)
@@ -276,7 +303,6 @@ func (k *Keeper) cycle() error {
 			state.addEvent(fmt.Sprintf("%s scan error: %v", ad.Name(), err))
 			continue
 		}
-		adapters.SortByPriority(tasks)
 		for _, task := range tasks {
 			// Surface liquidation targets (with their health factor) on the
 			// dashboard; rebalance/other task types are not positions and must
@@ -287,17 +313,34 @@ func (k *Keeper) cycle() error {
 					state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f", short(task.Target), task.Health))
 				}
 			}
-			logInfo("executing task", "protocol", task.Protocol, "type", task.Type,
-				"target", short(task.Target), "priority", task.Priority)
-			res, err := ad.Execute(k.rpc, k.kp, task, k.vault)
-			if err != nil {
-				logWarn("execute failed", "protocol", task.Protocol, "type", task.Type,
-					"target", short(task.Target), "err", err)
-				state.addEvent(fmt.Sprintf("%s %s failed: %s %v", task.Protocol, task.Type, short(task.Target), err))
+			planned = append(planned, plannedTask{ad: ad, task: task})
+		}
+	}
+	sort.SliceStable(planned, func(i, j int) bool {
+		return planned[i].task.Priority > planned[j].task.Priority
+	})
+
+	for _, p := range planned {
+		task := p.task
+		if available >= 0 {
+			if est, err := p.ad.EstimateCapital(task); err == nil && est > 0 && est > available {
+				logInfo("task skipped: insufficient vault capital",
+					"protocol", task.Protocol, "target", short(task.Target), "est", est, "available", available)
+				state.addEvent(fmt.Sprintf("%s %s skipped: needs %d, vault has %d",
+					task.Protocol, task.Type, est, available))
 				continue
 			}
-			k.recordResult(task, res)
 		}
+		logInfo("executing task", "protocol", task.Protocol, "type", task.Type,
+			"target", short(task.Target), "priority", task.Priority)
+		res, err := p.ad.Execute(k.rpc, k.kp, task, k.vault)
+		if err != nil {
+			logWarn("execute failed", "protocol", task.Protocol, "type", task.Type,
+				"target", short(task.Target), "err", err)
+			state.addEvent(fmt.Sprintf("%s %s failed: %s %v", task.Protocol, task.Type, short(task.Target), err))
+			continue
+		}
+		k.recordResult(task, res)
 	}
 	state.mu.Lock()
 	state.Positions = posRows
@@ -358,12 +401,17 @@ func (k *Keeper) recordResult(task adapters.Task, res *adapters.Result) {
 	if task.Type == "liquidation" {
 		appMet.liquidationsTotal.Add(1)
 		state.mu.Lock()
+		if len(state.Liquidations) >= maxLiquidationRecords {
+			state.Liquidations = state.Liquidations[1:]
+		}
 		state.Liquidations = append(state.Liquidations, LiquidationRecord{
 			User:           task.Target,
 			Block:          res.Block,
 			Drew:           res.Drew,
 			Proceeds:       res.Proceeds,
 			ResponseTimeMs: res.ResponseTimeMs,
+			TxHash:         res.TxHash,
+			Keeper:         k.cfg.KeeperName,
 			Timestamp:      time.Now().UTC(),
 		})
 		if ks := state.KeeperStats[k.cfg.KeeperName]; ks != nil {
@@ -400,7 +448,15 @@ func serveHTTP(port string) {
 
 	addr := ":" + port
 	logInfo("API server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		// No WriteTimeout: /api/events is a long-lived SSE stream.
+		IdleTimeout: 120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		logErr("API server", "err", err)
 	}
 }

@@ -13,43 +13,48 @@ import (
 // testnet deployment and ships multiple swap ABIs, so it is gated behind the
 // PhoenixRouter config (set to the XYK pool/pair contract for the
 // collateral/USDC pair) and used only when Soroswap is unavailable.
-func (s *SwapClient) swapViaPhoenix(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, error) {
-	minOut := int64(0)
-	if refValueUSDC > 0 {
-		minOut = minOutForSlippage(refValueUSDC, s.cfg.SlippageBps)
+//
+// Unlike the Soroswap path there is no pre-trade quote here, so the oracle
+// reference is the ONLY slippage anchor: without a positive refValueUSDC the
+// swap would execute with no minimum at all on exactly the venue used when
+// things are already degraded. Refuse instead. The second return mirrors
+// swapViaSoroswap's sent semantics.
+func (s *SwapClient) swapViaPhoenix(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, bool, error) {
+	if refValueUSDC <= 0 {
+		return nil, false, fmt.Errorf("phoenix: no oracle reference value — refusing swap without a slippage floor")
+	}
+	minOut := minOutForSlippage(refValueUSDC, s.cfg.SlippageBps)
+	if minOut <= 0 {
+		return nil, false, fmt.Errorf("phoenix: slippage floor computed as 0 — refusing unprotected swap")
 	}
 
 	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	hash, err := s.phoenixSwap(kp, s.cfg.PhoenixRouter, tokenAddr, amount, minOut)
 	if err != nil {
-		return nil, err
+		return nil, soroban.IsTxStatusUnknown(err), err
 	}
 
 	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
 	if err != nil {
-		return nil, err
+		return nil, true, fmt.Errorf("swap landed but post-swap balance read failed: %w", err)
 	}
 	got := after - before
 	if got <= 0 {
-		return nil, fmt.Errorf("swap sent but USDC balance did not increase")
+		return nil, true, fmt.Errorf("swap sent but USDC balance did not increase")
 	}
 
-	ref := refValueUSDC
-	if ref <= 0 {
-		ref = got
-	}
 	return &SwapResult{
 		InputToken:   tokenAddr,
 		InputAmount:  amount,
 		OutputAmount: got,
-		Slippage:     slippageFraction(ref, got),
+		Slippage:     slippageFraction(refValueUSDC, got),
 		Route:        "phoenix",
 		TxHash:       hash,
-	}, nil
+	}, true, nil
 }
 
 // phoenixSwap executes a Phoenix XYK pool swap and returns the tx hash. ABI per

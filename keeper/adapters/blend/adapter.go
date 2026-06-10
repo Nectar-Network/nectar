@@ -8,6 +8,7 @@
 package blend
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -121,6 +122,18 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		return &adapters.Result{Block: ledger, Note: fmt.Sprintf("not profitable (%.4f < %.4f)", ratio, a.cfg.MinProfit)}, nil
 	}
 
+	// The draw is sized by summing raw bid amounts, which is only valid when
+	// the debt being repaid is USDC itself. Refuse mixed/non-USDC bids rather
+	// than drawing a number of USDC stroops that matches a different asset.
+	if a.cfg.UsdcAddr != "" {
+		for asset := range auction.Bid {
+			if asset != a.cfg.UsdcAddr {
+				return &adapters.Result{Block: ledger,
+					Note: fmt.Sprintf("unsupported non-USDC bid asset %s — skipping", asset)}, nil
+			}
+		}
+	}
+
 	bidAmt := int64(0)
 	for _, amt := range auction.Bid {
 		if amt != nil {
@@ -137,10 +150,11 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		}
 	}
 
-	fillErr := core.FillAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user)
+	fillTx, fillErr := core.FillAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user)
 	switch {
 	case fillErr == nil:
 		res.Success = true
+		res.TxHash = fillTx
 		res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
 		if bidAmt > 0 {
 			res.Proceeds = a.swapCollateral(kp, pool, auction)
@@ -152,7 +166,7 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 				res.Note = "zero returnable proceeds — outstanding draw at slash risk"
 			}
 		}
-	case fillErr == core.ErrAlreadyFilled:
+	case errors.Is(fillErr, core.ErrAlreadyFilled):
 		// Another keeper won. We drew capital but never spent it — return it
 		// unchanged (no profit, no loss).
 		res.Note = "already filled by another keeper"

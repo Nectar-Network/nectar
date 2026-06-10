@@ -150,16 +150,17 @@ func DetectAuctions(rpc *soroban.Client, passphrase, poolAddr, user string) ([]*
 }
 
 // fillAuctionRequest builds the Soroban submit() arguments and invokes the
-// pool. addr/from/spender are all the keeper. The request map is the same
-// shape across all three fill paths — only the request_type constant changes.
-func fillAuctionRequest(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind AuctionType) error {
+// pool, returning the landed transaction hash. addr/from/spender are all the
+// keeper. The request map is the same shape across all three fill paths —
+// only the request_type constant changes.
+func fillAuctionRequest(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind AuctionType) (string, error) {
 	fromVal, err := soroban.ScvAddress(kp.Address())
 	if err != nil {
-		return err
+		return "", err
 	}
 	userVal, err := soroban.ScvAddress(user)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Blend's Request struct: request_type:u32, address:Address, amount:i128.
@@ -179,43 +180,43 @@ func fillAuctionRequest(rpc *soroban.Client, horizonURL string, kp *keypair.Full
 	reqVecPtr := &reqVec
 	requestsVal := xdr.ScVal{Type: xdr.ScValTypeScvVec, Vec: &reqVecPtr}
 
-	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "submit",
+	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "submit",
 		soroban.DefaultRetry(),
 		fromVal, fromVal, fromVal, requestsVal)
 	if err != nil {
 		if isAlreadyFilled(err.Error()) {
-			return ErrAlreadyFilled
+			return "", ErrAlreadyFilled
 		}
-		return fmt.Errorf("fill %s auction: %w", kind, err)
+		return "", fmt.Errorf("fill %s auction: %w", kind, err)
 	}
-	return nil
+	return tx.Hash, nil
 }
 
-// FillAuction fills a user-liquidation auction (request_type 6).
-// Backward-compat alias for FillUserLiquidationAuction.
-func FillAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) error {
+// FillAuction fills a user-liquidation auction (request_type 6) and returns
+// the landed transaction hash. Alias for FillUserLiquidationAuction.
+func FillAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) (string, error) {
 	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, user, AuctionUserLiquidation)
 }
 
 // FillUserLiquidationAuction fills a user-liquidation auction (request_type 6).
-func FillUserLiquidationAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) error {
+func FillUserLiquidationAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) (string, error) {
 	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, user, AuctionUserLiquidation)
 }
 
 // FillBadDebtAuction fills a bad-debt auction (request_type 7). The bidder
 // takes on socialized bad debt in exchange for the lot of bToken collateral.
-func FillBadDebtAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) error {
+func FillBadDebtAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) (string, error) {
 	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, AuctionBadDebt)
 }
 
 // FillInterestAuction fills an interest auction (request_type 8). The bidder
 // pays BLND in exchange for accumulated backstop interest.
-func FillInterestAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) error {
+func FillInterestAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) (string, error) {
 	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, AuctionInterest)
 }
 
 // FillByType dispatches to the right Fill* function based on the auction kind.
-func FillByType(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string, kind AuctionType) error {
+func FillByType(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string, kind AuctionType) (string, error) {
 	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, kind)
 }
 

@@ -28,6 +28,7 @@ import {
 const EMPTY: PerformanceData = { vault: null, depositors: [], keeper_stats: {}, liquidations: [] };
 
 const EXPLORER_ACCOUNT = "https://stellar.expert/explorer/testnet/account/";
+const EXPLORER_TX = "https://stellar.expert/explorer/testnet/tx/";
 
 // ── Page header — Syne hero + live pill ───────────────────────────────────────
 function PageHeader({ live, liqCount, lastUpdate }: { live: boolean; liqCount: number; lastUpdate: Date }) {
@@ -292,9 +293,12 @@ function TopKeepers({ stats }: { stats: Record<string, KeeperStat> }) {
         </div>
       )}
       {rows.map((k, i) => {
-        const exec = k.total_executions ?? k.liquidations;
-        const fills = k.successful_fills ?? k.liquidations;
-        const rate = exec > 0 ? successRate(exec, fills) * 100 : null;
+        // Win rate only when the API actually surfaces execution counts —
+        // falling back to liquidations for both terms would always fabricate
+        // 100% (the full leaderboard reads the real rate on-chain).
+        const exec = k.total_executions;
+        const fills = k.successful_fills ?? 0;
+        const rate = exec != null && exec > 0 ? successRate(exec, fills) * 100 : null;
         const color = keeperColor(k.name);
         return (
           <div
@@ -425,12 +429,17 @@ function RecentLiquidations({ perf }: { perf: PerformanceData }) {
                     {profit >= 0 ? "+" : "-"}${formatUSDC(Math.abs(profit))}
                   </span>
                   <a
-                    href={`${EXPLORER_ACCOUNT}${l.user}`}
+                    href={l.tx_hash ? `${EXPLORER_TX}${l.tx_hash}` : `${EXPLORER_ACCOUNT}${l.user}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ textAlign: "right", color: "var(--text-mute)", textDecoration: "none" }}
+                    title={l.tx_hash ?? l.user}
+                    style={{
+                      textAlign: "right",
+                      color: l.tx_hash ? "var(--accent)" : "var(--text-mute)",
+                      textDecoration: "none",
+                    }}
                   >
-                    view↗
+                    {l.tx_hash ? "tx↗" : "view↗"}
                   </a>
                 </div>
               );

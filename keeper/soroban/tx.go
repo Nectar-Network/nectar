@@ -226,6 +226,22 @@ func ScvVoid() xdr.ScVal {
 	return xdr.ScVal{Type: xdr.ScValTypeScvVoid}
 }
 
+// I128ToInt64 decodes an i128 ScVal into an int64, returning ok=false when the
+// value does not fit (Hi must be the sign-extension of Lo). Callers decide what
+// an out-of-range value means — most treat it as 0/skip rather than driving
+// downstream math with a silently wrapped number.
+func I128ToInt64(val xdr.ScVal) (int64, bool) {
+	if val.Type != xdr.ScValTypeScvI128 || val.I128 == nil {
+		return 0, false
+	}
+	hi := int64(val.I128.Hi)
+	lo := uint64(val.I128.Lo)
+	if (hi == 0 && lo>>63 == 0) || (hi == -1 && lo>>63 == 1) {
+		return int64(lo), true
+	}
+	return 0, false
+}
+
 // ParseAddress extracts a string address from an xdr.ScAddress.
 func ParseAddress(addr xdr.ScAddress) (string, error) {
 	switch addr.Type {

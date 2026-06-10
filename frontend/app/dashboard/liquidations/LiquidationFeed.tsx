@@ -21,9 +21,8 @@ import {
 
 const EMPTY: PerformanceData = { vault: null, depositors: [], keeper_stats: {}, liquidations: [] };
 
-// LiquidationRecord carries no tx hash, so the explorer link resolves the
-// liquidated position account on stellar.expert (testnet).
 const EXPLORER_ACCOUNT = "https://stellar.expert/explorer/testnet/account/";
+const EXPLORER_TX = "https://stellar.expert/explorer/testnet/tx/";
 
 interface Row {
   key: string;
@@ -33,6 +32,8 @@ interface Row {
   drew: number; // stroops
   proceeds: number; // stroops
   profit: number; // stroops
+  txHash?: string; // fill transaction (when the keeper recorded it)
+  keeper?: string; // filling keeper's name (when recorded)
 }
 
 // 7-col grid mirroring the design's LiqTable: time · keeper · position · drew · proceeds · profit · tx
@@ -52,6 +53,8 @@ function toRows(liqs: LiquidationRecord[]): Row[] {
         drew: l.drew,
         proceeds: l.proceeds,
         profit: l.proceeds - l.drew,
+        txHash: l.tx_hash,
+        keeper: l.keeper,
       };
     })
     .reverse();
@@ -290,10 +293,24 @@ export default function LiquidationFeed({
                     <span style={{ color: "var(--text-dim)" }}>
                       {r.ts ? fmtClock(r.ts) : "—"}
                     </span>
-                    {/* Keeper — attribution is not surfaced per-liquidation by the API */}
-                    <span style={{ color: "var(--text-mute)" }} title="per-fill keeper attribution not yet recorded">
-                      —
-                    </span>
+                    {/* Keeper — attribution recorded by the filling keeper */}
+                    {r.keeper ? (
+                      <span
+                        style={{
+                          color: "var(--text)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                        title={r.keeper}
+                      >
+                        {r.keeper}
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-mute)" }} title="recorded before keeper attribution existed">
+                        —
+                      </span>
+                    )}
                     {/* Position */}
                     <a
                       href={`${EXPLORER_ACCOUNT}${r.user}`}
@@ -326,14 +343,19 @@ export default function LiquidationFeed({
                     >
                       {r.profit >= 0 ? "+" : "-"}${formatUSDC(Math.abs(r.profit))}
                     </span>
-                    {/* Tx → resolves the position account (no tx hash in record) */}
+                    {/* Tx → the fill transaction when recorded, else the position account */}
                     <a
-                      href={`${EXPLORER_ACCOUNT}${r.user}`}
+                      href={r.txHash ? `${EXPLORER_TX}${r.txHash}` : `${EXPLORER_ACCOUNT}${r.user}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ textAlign: "right", color: "var(--text-mute)", textDecoration: "none" }}
+                      title={r.txHash ?? r.user}
+                      style={{
+                        textAlign: "right",
+                        color: r.txHash ? "var(--accent)" : "var(--text-mute)",
+                        textDecoration: "none",
+                      }}
                     >
-                      view ↗
+                      {r.txHash ? "tx ↗" : "view ↗"}
                     </a>
                   </div>
                 ))
@@ -351,9 +373,9 @@ export default function LiquidationFeed({
             lineHeight: 1.6,
           }}
         >
-          Each fill returns realized profit (proceeds − drawn capital) to the shared vault. Links
-          resolve the liquidated position on stellar.expert (testnet) — per-fill transaction hashes
-          and keeper attribution are not yet surfaced by the keeper API.
+          Each fill returns realized profit (proceeds − drawn capital) to the shared vault. The tx
+          link opens the fill transaction on stellar.expert (testnet); rows recorded before the
+          keeper surfaced tx hashes fall back to the liquidated position account.
         </p>
       </div>
     </div>

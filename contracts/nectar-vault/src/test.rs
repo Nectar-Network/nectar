@@ -163,6 +163,67 @@ mod tests {
     }
 
     #[test]
+    fn test_partial_return_keeps_remaining_draw_slashable() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
+
+        client.deposit(&user, &1000_0000000);
+        client.draw(&keeper, &500_0000000);
+
+        // A partial return must NOT settle the draw: a 1-stroop return cannot
+        // clear a 500 USDC debt. The remainder stays owed (and slash-eligible).
+        client.return_proceeds(&keeper, &200_0000000, &0u64);
+        assert_eq!(client.get_keeper_draw(&keeper), 300_0000000);
+        let state = client.get_state();
+        assert_eq!(state.active_liq, 300_0000000);
+        assert_eq!(state.total_profit, 0);
+        assert_eq!(state.total_usdc, 1000_0000000);
+
+        // Settling the remainder (plus profit) clears the draw and books the
+        // profit exactly once: 200 + 310 returned vs 500 drawn = 10 profit.
+        client.return_proceeds(&keeper, &310_0000000, &120u64);
+        assert_eq!(client.get_keeper_draw(&keeper), 0);
+        let state = client.get_state();
+        assert_eq!(state.active_liq, 0);
+        assert_eq!(state.total_profit, 10_0000000);
+        assert_eq!(state.total_usdc, 1010_0000000);
+    }
+
+    #[test]
+    fn test_profitable_return_scoped_to_own_draw() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+
+        let user = Address::generate(&env);
+        let keeper_a = Address::generate(&env);
+        let keeper_b = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper_a, &100_0000000);
+
+        client.deposit(&user, &1000_0000000);
+        client.draw(&keeper_a, &100_0000000);
+        client.draw(&keeper_b, &100_0000000);
+
+        // A returns 150 (100 principal + 50 profit). Only A's principal may be
+        // repaid against active_liq — B's outstanding 100 must remain tracked.
+        client.return_proceeds(&keeper_a, &150_0000000, &120u64);
+
+        assert_eq!(client.get_keeper_draw(&keeper_a), 0);
+        assert_eq!(client.get_keeper_draw(&keeper_b), 100_0000000);
+        let state = client.get_state();
+        assert_eq!(state.active_liq, 100_0000000);
+        assert_eq!(state.total_profit, 50_0000000);
+        assert_eq!(state.total_usdc, 1050_0000000);
+    }
+
+    #[test]
     fn test_withdraw_more_than_owned_fails() {
         let env = Env::default();
         env.mock_all_auths();

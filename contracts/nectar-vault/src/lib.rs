@@ -285,18 +285,28 @@ impl NectarVault {
             .instance()
             .get(&VaultKey::State)
             .ok_or(VaultError::NotInit)?;
-        let repay = if amount < state.active_liq {
-            amount
+        // Principal repaid this call is capped at what THIS keeper owes, so a
+        // profitable return never deducts another keeper's outstanding draw
+        // from active_liq.
+        let repay_target = if drawn > 0 {
+            if amount < drawn {
+                amount
+            } else {
+                drawn
+            }
+        } else {
+            0
+        };
+        let repay = if repay_target < state.active_liq {
+            repay_target
         } else {
             state.active_liq
         };
-        let profit = if drawn > 0 && amount > drawn {
-            amount - drawn
-        } else if drawn == 0 {
+        let profit = if drawn == 0 {
             // No prior draw tracked — treat the whole amount as donated profit.
             amount
         } else {
-            0
+            amount - repay_target
         };
 
         state.active_liq -= repay;
@@ -304,11 +314,23 @@ impl NectarVault {
         state.total_profit += profit;
         env.storage().instance().set(&VaultKey::State, &state);
 
-        // Clear per-keeper draw record.
         if drawn > 0 {
-            env.storage().persistent().remove(&draw_key);
-            registry_call(&env, "clear_draw", &keeper)?;
-            registry_record_execution(&env, &keeper, true, profit, response_time_ms)?;
+            let remaining = drawn - repay_target;
+            if remaining > 0 {
+                // Partial repayment: the keeper still owes the remainder. Keep
+                // the draw record (and the registry's active-draw mark) so the
+                // shortfall stays slash-eligible — a 1-stroop return must not
+                // settle a 10k draw.
+                env.storage().persistent().set(&draw_key, &remaining);
+                env.storage()
+                    .persistent()
+                    .extend_ttl(&draw_key, 535680, 535680);
+            } else {
+                // Fully settled: clear the draw and book the execution.
+                env.storage().persistent().remove(&draw_key);
+                registry_call(&env, "clear_draw", &keeper)?;
+                registry_record_execution(&env, &keeper, true, profit, response_time_ms)?;
+            }
         }
 
         env.events().publish(

@@ -51,6 +51,11 @@ export interface LiquidationRecord {
   drew: number;
   proceeds: number;
   ts: string;
+  response_time_ms?: number;
+  // Set by keepers that record the fill transaction + their own identity;
+  // optional so older keeper APIs still parse.
+  tx_hash?: string;
+  keeper?: string;
 }
 
 export interface PerformanceData {

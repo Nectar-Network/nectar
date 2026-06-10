@@ -52,11 +52,14 @@ function joinedLabel(unixSeconds: number): string | null {
 
 export default function DepositorAnalytics({
   initialData,
+  initialAddress,
 }: {
   initialData: PerformanceData | null;
+  // Pre-filled by the /dashboard/<address> deep-link route; looked up on mount.
+  initialAddress?: string;
 }) {
   const [perf, setPerf] = useState<PerformanceData | null>(initialData);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialAddress ?? "");
   const [pos, setPos] = useState<Position | null>(null);
   const [looked, setLooked] = useState(false); // a lookup has completed (for empty-state)
   const [loading, setLoading] = useState(false);
@@ -72,6 +75,13 @@ export default function DepositorAnalytics({
     const t = setInterval(poll, 15_000);
     return () => clearInterval(t);
   }, []);
+
+  // Deep-link: resolve the address from the route once on mount.
+  useEffect(() => {
+    if (initialAddress) void lookup(initialAddress);
+    // lookup is stable for the component's lifetime; run once per deep-link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAddress]);
 
   // Re-read the looked-up position on the on-chain cadence so value/shares stay fresh.
   useEffect(() => {

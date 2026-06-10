@@ -13,11 +13,18 @@ type RetryConfig struct {
 	MaxAttempts   int
 	InitialDelay  time.Duration
 	BackoffFactor float64
+	// RetryAmbiguous also retries post-send failures (TxStatusUnknownError),
+	// where the first transaction may still land. Only safe for idempotent
+	// calls or ones whose double-execution is benign (e.g. a second auction
+	// fill fails as already-filled). Calls that must never double-execute —
+	// vault draw/return, swaps — leave this false.
+	RetryAmbiguous bool
 }
 
-// DefaultRetry is the recommended config for write-side calls (Invoke).
+// DefaultRetry is the recommended config for write-side calls (Invoke) whose
+// double-execution is benign.
 func DefaultRetry() RetryConfig {
-	return RetryConfig{MaxAttempts: 3, InitialDelay: time.Second, BackoffFactor: 2.0}
+	return RetryConfig{MaxAttempts: 3, InitialDelay: time.Second, BackoffFactor: 2.0, RetryAmbiguous: true}
 }
 
 // isRetryable reports whether the err is worth retrying. Transient sequence /
@@ -86,7 +93,8 @@ func (c *Client) InvokeWithRetry(
 			return result, nil
 		}
 		lastErr = err
-		if attempt == retry.MaxAttempts || !isRetryable(err) {
+		if attempt == retry.MaxAttempts || !isRetryable(err) ||
+			(!retry.RetryAmbiguous && IsTxStatusUnknown(err)) {
 			return nil, err
 		}
 		time.Sleep(delay)
@@ -112,7 +120,8 @@ func retryWith(retry RetryConfig, op func() error) error {
 			return nil
 		}
 		lastErr = err
-		if attempt == retry.MaxAttempts || !isRetryable(err) {
+		if attempt == retry.MaxAttempts || !isRetryable(err) ||
+			(!retry.RetryAmbiguous && IsTxStatusUnknown(err)) {
 			return err
 		}
 		time.Sleep(delay)
