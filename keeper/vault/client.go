@@ -126,6 +126,31 @@ func Balance(rpc *soroban.Client, passphrase, vaultAddr, userAddr string) (*Bala
 	}, nil
 }
 
+// GetKeeperDraw reads a keeper's outstanding (drawn-but-unreturned) capital, 0
+// when there is none. Returns an error on vaults deployed before the getter
+// existed, which the caller treats as "no recovery possible".
+func GetKeeperDraw(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, error) {
+	addrVal, err := soroban.ScvAddress(keeper)
+	if err != nil {
+		return 0, err
+	}
+	sim, err := rpc.SimulateRead(passphrase, vaultAddr, "get_keeper_draw", addrVal)
+	if err != nil {
+		return 0, fmt.Errorf("get_keeper_draw: %w", err)
+	}
+	if sim.Error != "" {
+		return 0, fmt.Errorf("get_keeper_draw: %s", sim.Error)
+	}
+	if len(sim.Results) == 0 {
+		return 0, nil
+	}
+	var val xdr.ScVal
+	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
+		return 0, err
+	}
+	return scI128(val), nil
+}
+
 func parseState(val xdr.ScVal) *VaultState {
 	s := &VaultState{}
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {

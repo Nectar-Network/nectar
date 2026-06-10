@@ -358,6 +358,17 @@ impl NectarVault {
             .get(&VaultKey::Depositor(user))
             .ok_or(VaultError::NoShares)
     }
+
+    /// Outstanding capital this keeper has drawn but not yet returned (0 if none).
+    /// Lets an off-chain keeper cap any self-recovery return at the amount it owes,
+    /// so a recovery never over-returns the keeper's own liquid balance.
+    pub fn get_keeper_draw(env: Env, keeper: Address) -> i128 {
+        env.storage().instance().extend_ttl(1000, 1000);
+        env.storage()
+            .persistent()
+            .get(&VaultKey::KeeperDraw(keeper))
+            .unwrap_or(0)
+    }
 }
 
 fn require_init(env: &Env) -> Result<(), VaultError> {

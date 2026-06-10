@@ -141,6 +141,28 @@ mod tests {
     }
 
     #[test]
+    fn test_get_keeper_draw_tracks_and_clears() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
+
+        client.deposit(&user, &1000_0000000);
+        // no outstanding draw initially
+        assert_eq!(client.get_keeper_draw(&keeper), 0);
+        // a draw is tracked under the keeper
+        client.draw(&keeper, &500_0000000);
+        assert_eq!(client.get_keeper_draw(&keeper), 500_0000000);
+        // returning proceeds clears the per-keeper draw
+        client.return_proceeds(&keeper, &510_0000000, &120u64);
+        assert_eq!(client.get_keeper_draw(&keeper), 0);
+    }
+
+    #[test]
     fn test_withdraw_more_than_owned_fails() {
         let env = Env::default();
         env.mock_all_auths();

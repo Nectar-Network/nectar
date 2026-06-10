@@ -234,7 +234,40 @@ func main() {
 
 // cycle runs every adapter once: scan tasks, execute them by priority, fold the
 // results into dashboard state, then refresh vault + depositor balances.
+// recoverStaleDraw makes the vault whole when a prior cycle left capital drawn
+// but unreturned (e.g. a transient ReturnProceeds failure after a fill). It
+// returns up to the outstanding draw from the keeper's USDC on hand, which clears
+// the draw and avoids a timeout slash. Safe: capped at the drawn amount (never
+// touches more of the keeper's float), and a no-op on vaults deployed before
+// get_keeper_draw existed.
+func (k *Keeper) recoverStaleDraw() {
+	if k.cfg.UsdcAddr == "" {
+		return
+	}
+	drawn, err := vault.GetKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
+	if err != nil || drawn <= 0 {
+		return // no outstanding draw, or the vault predates the getter
+	}
+	usdc, err := dex.TokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address())
+	if err != nil || usdc <= 0 {
+		logWarn("outstanding vault draw but no USDC on hand — holding collateral for manual recovery", "drawn", drawn)
+		return
+	}
+	ret := drawn
+	if usdc < ret {
+		ret = usdc
+	}
+	if err := k.vault.ReturnProceeds(ret, 0); err != nil {
+		logWarn("stale-draw recovery failed", "drawn", drawn, "return", ret, "err", err)
+		return
+	}
+	logInfo("recovered stale vault draw", "drawn", drawn, "returned", ret)
+	state.addEvent(fmt.Sprintf("recovered stale draw: returned %d to vault", ret))
+}
+
 func (k *Keeper) cycle() error {
+	k.recoverStaleDraw()
+
 	var posRows []posRow
 	for _, ad := range k.protocols {
 		tasks, err := ad.GetTasks(k.rpc)
