@@ -1,17 +1,27 @@
 import { fetchPerformance } from "../../../lib/api";
 import Nav from "../../components/Nav";
-import DepositorAnalytics from "./DepositorAnalytics";
+import Footer from "../../components/Footer";
+import DashSubnav from "../../components/DashSubnav";
+import DepositorAnalytics from "../depositor/DepositorAnalytics";
 
 export const dynamic = "force-dynamic";
 
-export default async function DepositorPage({ params }: { params: { address: string } }) {
+// Deep link: /dashboard/<G-address> renders the shared depositor analytics
+// with the address pre-resolved.
+export default async function DepositorDeepLinkPage({
+  params,
+}: {
+  params: { address: string };
+}) {
   const data = await fetchPerformance();
   return (
     <>
       <Nav />
-      <main style={{ paddingTop: "80px", minHeight: "100vh" }}>
-        <DepositorAnalytics address={params.address} initialData={data} />
+      <DashSubnav />
+      <main style={{ paddingTop: 64, minHeight: "100vh" }}>
+        <DepositorAnalytics initialData={data} initialAddress={params.address} />
       </main>
+      <Footer />
     </>
   );
 }
