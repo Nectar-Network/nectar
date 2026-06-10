@@ -64,14 +64,15 @@ Both keepers run on Railway from `keeper/Dockerfile`. They need an env-var refre
 
 ### On-Chain Contracts (Soroban Testnet)
 
-Tranche 1 redeploy on 2026-05-13 — these contracts ship the staking + slashing + performance-tracking + cap/cooldown surface, and the keeper sends a Blend-compatible `submit` payload (`request_type: u32`, `amount: i128`). Reproduce locally with `./scripts/tranche-1-e2e.sh`.
+Tranche 1 hardened redeploy on 2026-05-24 (see [wallets.md](wallets.md) for the full address book) — these contracts ship the staking + slashing + performance-tracking + cap/cooldown surface, and the keeper sends a Blend-compatible `submit` payload (`request_type: u32`, `amount: i128`). Reproduce locally with `./scripts/tranche-1-e2e.sh`.
 
 | Contract | Address | Explorer |
 |----------|---------|----------|
-| KeeperRegistry | `CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW` | [View](https://stellar.expert/explorer/testnet/contract/CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW) |
-| NectarVault | `CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU` | [View](https://stellar.expert/explorer/testnet/contract/CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU) |
+| KeeperRegistry | `CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB` | [View](https://stellar.expert/explorer/testnet/contract/CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB) |
+| NectarVault | `CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345` | [View](https://stellar.expert/explorer/testnet/contract/CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345) |
 | Mock USDC (SAC) | `CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW` | [View](https://stellar.expert/explorer/testnet/contract/CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW) |
 | Blend testnet pool (V2) | `CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF` | [View](https://stellar.expert/explorer/testnet/contract/CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF) |
+| Soroswap router | `CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD` | [View](https://stellar.expert/explorer/testnet/contract/CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD) |
 
 The Blend pool ID comes from [blend-utils/testnet.contracts.json](https://github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json) (key: `TestnetV2`). Point the keeper at it with `./scripts/keeper-blend-testnet.sh` — no code changes needed.
 
@@ -86,7 +87,7 @@ The Blend pool ID comes from [blend-utils/testnet.contracts.json](https://github
 
 ## Tranche 1 Status
 
-Each Tranche 1 deliverable below cites the on-chain code + tests that prove the measurement criteria. Run `cargo test --workspace` (77 contract tests) and `cd keeper && go test ./...` to reproduce locally.
+Each Tranche 1 deliverable below cites the on-chain code + tests that prove the measurement criteria. Run `cargo test --workspace` (80 contract tests) and `cd keeper && go test ./...` to reproduce locally.
 
 ### 1. KeeperRegistry v1 — Staking & Performance Tracking ✓
 
@@ -102,7 +103,7 @@ Each Tranche 1 deliverable below cites the on-chain code + tests that prove the 
 
 - **Deposit cap**: `deposit()` rejects with `DepositCapExceeded` (#8) when `state.total_usdc + amount > cfg.deposit_cap` ([contracts/nectar-vault/src/lib.rs:66-68](contracts/nectar-vault/src/lib.rs#L66-L68)). Tests: `test_deposit_exceeds_cap`, `test_deposit_at_exact_cap`, `test_deposit_cap_with_existing_balance`.
 - **Withdraw cooldown**: `withdraw()` rejects with `WithdrawalCooldown` (#9) when `now - depositor.last_deposit_time < cfg.withdraw_cooldown` ([lib.rs:132-135](contracts/nectar-vault/src/lib.rs#L132-L135)). Tests: `test_withdraw_before_cooldown`, `test_withdraw_after_cooldown`, `test_cooldown_resets_on_new_deposit`.
-- **Share-price hardening at 7-decimal precision** ([lib.rs:71-76, 146-150](contracts/nectar-vault/src/lib.rs#L71-L76)): integer-division floors-toward-zero on both deposit (caller gets ≤ fair shares) and withdraw (caller gets ≤ fair USDC). Zero-share guard at line 142. Tests: `test_share_math_first_deposit`, `test_share_math_large_amounts`, `test_share_math_tiny_amounts`, `test_share_math_with_profit`, `test_share_rounding_bounded`, `test_multiple_depositors_proportional_shares`, `test_multiple_depositors_proportional_with_profit`, `test_withdraw_with_zero_shares_fails`, `test_withdraw_more_than_owned_fails`, `test_withdraw_more_than_available_fails`. **34 vault tests total — more than the 10+ measurement asked for.**
+- **Share-price hardening at 7-decimal precision** ([lib.rs:71-76, 146-150](contracts/nectar-vault/src/lib.rs#L71-L76)): integer-division floors-toward-zero on both deposit (caller gets ≤ fair shares) and withdraw (caller gets ≤ fair USDC). Zero-share guard at line 142. Tests: `test_share_math_first_deposit`, `test_share_math_large_amounts`, `test_share_math_tiny_amounts`, `test_share_math_with_profit`, `test_share_rounding_bounded`, `test_multiple_depositors_proportional_shares`, `test_multiple_depositors_proportional_with_profit`, `test_withdraw_with_zero_shares_fails`, `test_withdraw_more_than_owned_fails`, `test_withdraw_more_than_available_fails`. **37 vault tests total — more than the 10+ measurement asked for.**
 
 ### 3. Blend Liquidation Adapter — Full Auction Integration ✓
 
@@ -119,21 +120,51 @@ Each Tranche 1 deliverable below cites the on-chain code + tests that prove the 
 
 `contracts/liquidation-lab/` ([lib.rs](contracts/liquidation-lab/src/lib.rs)) is a Blend-ABI-compatible test pool used by the keeper's local integration tests. It is **not** required for the live deployment — the keeper points at the real Blend pool via the `BLEND_POOL` env var. LiquidationLab exists for hermetic CI / replayable demo scenarios where you control both sides of the auction.
 
+## Tranche 2 Status
+
+### 1. DEX Integration for Collateral Conversion ✓
+
+Non-USDC collateral seized from auction fills is automatically converted to USDC before proceeds return to the vault ([keeper/dex/](keeper/dex/)).
+
+- **Soroswap primary, Phoenix XYK fallback** — routers configured via `SOROSWAP_ROUTER` / `PHOENIX_ROUTER`; either venue can be disabled by leaving it empty.
+- **Slippage enforced three ways**: an oracle-anchored floor before trading (a manipulated pool quote is rejected globally — no venue fallback), the on-chain `amount_out_min`, and post-trade measurement. Default `SLIPPAGE_BPS=100` (1%). Phoenix is quote-less, so it refuses to swap at all without an oracle reference.
+- **Proceeds are measured, never synthesized** — output is the keeper's real USDC balance delta. Failed swaps hold the asset instead of booking phantom profit.
+- **Swaps are never auto-retried** and a possibly-broadcast swap never falls back to the second venue — re-selling the same collateral is the failure mode this is built to avoid. The next cycle's stale-draw recovery (`get_keeper_draw` + `recoverStaleDraw`) reconciles any capital left outstanding.
+
+### 2. Multi-Protocol Adapter Interface ✓
+
+All protocol work runs through one minimal interface, [`adapters.ProtocolAdapter`](keeper/adapters/adapter.go) — `Name / GetTasks / Execute / EstimateCapital`.
+
+- **Blend** is a thin adapter over the fully-tested core package ([keeper/adapters/blend/](keeper/adapters/blend/)).
+- **DeFindex** rebalancing adapter as proof of extensibility ([keeper/adapters/defindex/](keeper/adapters/defindex/)): reads `fetch_total_managed_funds`, detects allocation drift vs target weights (`DEFINDEX_DRIFT_BPS`, default 5%), plans Unwind→Invest instructions capped to idle funds, pre-checks the on-chain RebalanceManager/Manager role, and submits a role-gated `rebalance`. It moves only the DeFindex vault's own funds — never Nectar capital.
+- The keeper loop scans every adapter, then executes **across protocols in one priority order**; `EstimateCapital` gates tasks that exceed the vault's available capital.
+- **[docs/ADAPTER-GUIDE.md](docs/ADAPTER-GUIDE.md)** documents the interface, encode/decode conventions, and the capital-safety rules for third-party adapter authors.
+
+### 3. Monitoring Dashboard v2 ✓
+
+Four routes under `/dashboard` (see the Frontend table below): network overview with a share-price/APY chart derived only from realized on-chain profit (short windows render as cumulative return, never a fabricated annualized figure), a keeper leaderboard read from the on-chain registry (sortable by executions, win rate, avg response, stake, profit), a real-time liquidation feed with fill-tx explorer links and keeper attribution, and per-depositor analytics with clearly-labeled cost-basis estimates.
+
+### 4. Keeper SDK & Operator Documentation — not started
+
+Scheduled as the final Tranche 2 work package: extracting `adapters.ProtocolAdapter` + the `soroban`/`vault`/`dex` packages into a published, `go get`-able module with operator setup/strategy/risk documentation.
+
 ## Repository Structure
 
 ```
 nectar-poc/
 ├── contracts/
 │   ├── keeper-registry/      # Soroban (Rust) — operator registration + stake + slash, 26 tests
-│   ├── nectar-vault/         # Soroban (Rust) — USDC vault + LP shares + cap + cooldown, 34 tests
+│   ├── nectar-vault/         # Soroban (Rust) — USDC vault + LP shares + cap + cooldown, 37 tests
 │   ├── liquidation-lab/      # Soroban (Rust) — Blend-compatible test pool, 12 tests
 │   └── mock-token/           # Soroban (Rust) — admin-mint mock USDC SAC, 5 tests
 ├── keeper/                   # Go 1.22 — keeper binary
 │   ├── main.go               # Entry point, HTTP API, SSE, keeper loop
 │   ├── config.go             # Env config with validation
 │   ├── soroban/              # Soroban JSON-RPC client + tx assembly
+│   ├── adapters/             # Generic ProtocolAdapter + blend/ + defindex/ adapters
+│   ├── dex/                  # Collateral→USDC swaps (Soroswap primary, Phoenix fallback)
 │   ├── blend/                # Pool, positions, auction (Blend-compatible)
-│   ├── vault/                # Vault draw/return/balance queries
+│   ├── vault/                # Vault draw/return/balance queries + stale-draw recovery
 │   └── registry/             # Keeper register/check
 ├── frontend/                 # Next.js 14 + Tailwind CSS
 │   ├── app/
@@ -231,7 +262,11 @@ Next.js 14 with Tailwind CSS. Dark theme, monospace design.
 | Home | `/` | Hero with live SSE log stream, problem stats, architecture diagram, keeper registry, position monitor |
 | Features | `/features` | 5 core features explained with getting-started guides |
 | Vault | `/vault` | Freighter wallet integration, deposit/withdraw, live balance queries |
-| Performance | `/performance` | 18 depositors, 2 keepers, vault TVL, liquidation history |
+| Dashboard | `/dashboard` | Network overview — TVL, share-price/APY chart (real returns, never annualized under 7 days), top keepers, recent fills |
+| Keeper Leaderboard | `/dashboard/keepers` | All registered operators read from the on-chain registry — executions, win rate, avg response, stake, profit |
+| Liquidation Feed | `/dashboard/liquidations` | Live SSE ticker + full fill history with amounts and fill-tx links |
+| Depositor Analytics | `/dashboard/depositor` | Per-address position lookup (or wallet connect) — shares, value, estimated yield; deep-linkable as `/dashboard/<G-address>` |
+| Performance | `/performance` | Legacy dashboard — depositors, keepers, vault TVL, liquidation history |
 
 ### Wallet Integration
 
@@ -304,6 +339,12 @@ docker-compose up
 | `REGISTRY_CONTRACT` | yes | KeeperRegistry contract ID |
 | `VAULT_CONTRACT` | yes | NectarVault contract ID |
 | `BLEND_POOL` | yes | Pool contract ID (Blend or LiquidationLab) |
+| `USDC_CONTRACT` | no | USDC token contract; enables collateral→USDC swaps + stale-draw recovery |
+| `SOROSWAP_ROUTER` | no | Soroswap router contract (primary DEX); empty disables swaps |
+| `PHOENIX_ROUTER` | no | Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX) |
+| `SLIPPAGE_BPS` | no | Max swap slippage in basis points (default: `100` = 1%, range 0-10000) |
+| `DEFINDEX_VAULT` | no | DeFindex vault to monitor for rebalancing; empty disables the adapter |
+| `DEFINDEX_DRIFT_BPS` | no | DeFindex allocation drift threshold in bps (default: `500` = 5%) |
 | `POLL_INTERVAL` | no | Seconds between cycles (default: `10`, range: 3-300) |
 | `MIN_PROFIT` | no | Minimum lot/bid ratio to fill (default: `1.0`) |
 | `KNOWN_DEPOSITORS` | no | Comma-separated G-addresses for performance page |
@@ -312,9 +353,9 @@ docker-compose up
 ## Test Suite
 
 ```bash
-# Rust contract tests (38 total)
+# Rust contract tests (80 total)
 cargo test -p keeper-registry     # 26 tests (incl. staking + slashing scenarios)
-cargo test -p nectar-vault        # 34 tests (incl. cap + cooldown + share-math edges)
+cargo test -p nectar-vault        # 37 tests (incl. cap + cooldown + share-math + partial-return edges)
 cargo test -p liquidation-lab     # 12 tests
 cargo test -p mock-token          # 5 tests
 
@@ -353,10 +394,12 @@ Required env vars in the Railway dashboard (mark `KEEPER_SECRET` as secret):
 ```
 KEEPER_SECRET       S...                                                         # operator key (mark as secret)
 KEEPER_NAME         keeper-alpha
-REGISTRY_CONTRACT   CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW
-VAULT_CONTRACT      CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU
+REGISTRY_CONTRACT   CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
+VAULT_CONTRACT      CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
 USDC_CONTRACT       CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
 BLEND_POOL          CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF      # Blend testnet V2 pool
+SOROSWAP_ROUTER     CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD      # collateral→USDC swaps
+SLIPPAGE_BPS        100
 SOROBAN_RPC         https://soroban-testnet.stellar.org:443
 HORIZON_URL         https://horizon-testnet.stellar.org
 POLL_INTERVAL       10
