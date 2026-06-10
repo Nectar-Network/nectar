@@ -138,7 +138,7 @@ export default function Hero() {
               How It Works
             </a>
             <a
-              href="https://github.com/nectar-network/nectar-poc"
+              href="https://github.com/Nectar-Network/nectar"
               target="_blank"
               rel="noopener noreferrer"
               className="px-5 py-2.5 text-sm font-mono border transition-all duration-200"

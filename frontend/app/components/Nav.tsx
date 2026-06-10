@@ -17,7 +17,7 @@ const isActive = (pathname: string, href: string) =>
 
 const EXTERNAL_LINKS = [
   { label: "Twitter", href: "https://x.com/nectar_xlm" },
-  { label: "GitHub", href: "https://github.com/nectar-network/nectar-poc" },
+  { label: "GitHub", href: "https://github.com/Nectar-Network/nectar" },
 ];
 
 export default function Nav() {
