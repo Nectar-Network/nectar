@@ -39,12 +39,12 @@ export default function Nav() {
           {/* Nectar mark — "the hive": six hairline keeper cells around one lit
               cell carrying the nectar drop. Compact variant for nav-scale (<=24px). */}
           <svg width="24" height="24" viewBox="0 0 48 48" fill="none" aria-label="Nectar">
-            <polygon points="36.82,16.6 43.23,20.3 43.23,27.7 36.82,31.4 30.41,27.7 30.41,20.3" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
-            <polygon points="11.18,16.6 17.59,20.3 17.59,27.7 11.18,31.4 4.77,27.7 4.77,20.3" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
-            <polygon points="30.41,27.7 36.82,31.4 36.82,38.8 30.41,42.5 24,38.8 24,31.4" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
-            <polygon points="30.41,5.5 36.82,9.2 36.82,16.6 30.41,20.3 24,16.6 24,9.2" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
-            <polygon points="17.59,27.7 24,31.4 24,38.8 17.59,42.5 11.18,38.8 11.18,31.4" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
-            <polygon points="17.59,5.5 24,9.2 24,16.6 17.59,20.3 11.18,16.6 11.18,9.2" stroke="var(--border)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="36.82,16.6 43.23,20.3 43.23,27.7 36.82,31.4 30.41,27.7 30.41,20.3" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="11.18,16.6 17.59,20.3 17.59,27.7 11.18,31.4 4.77,27.7 4.77,20.3" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="30.41,27.7 36.82,31.4 36.82,38.8 30.41,42.5 24,38.8 24,31.4" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="30.41,5.5 36.82,9.2 36.82,16.6 30.41,20.3 24,16.6 24,9.2" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="17.59,27.7 24,31.4 24,38.8 17.59,42.5 11.18,38.8 11.18,31.4" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+            <polygon points="17.59,5.5 24,9.2 24,16.6 17.59,20.3 11.18,16.6 11.18,9.2" stroke="var(--text-mute)" strokeWidth="2" strokeLinejoin="round" fill="none" />
             <polygon points="24,16.6 30.41,20.3 30.41,27.7 24,31.4 17.59,27.7 17.59,20.3" fill="var(--accent)" />
             <path d="M20.9 26.84 a3.1 3.1 0 1 0 6.2 0 C27.1 24.36 25.24 21.88 24 20.02 C22.76 21.88 20.9 24.36 20.9 26.84 Z" fill="var(--bg)" />
           </svg>
