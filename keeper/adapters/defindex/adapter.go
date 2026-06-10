@@ -389,18 +389,10 @@ func scSymbol(v xdr.ScVal) string {
 }
 
 func scI128(v xdr.ScVal) int64 {
-	if v.Type != xdr.ScValTypeScvI128 || v.I128 == nil {
-		return 0
-	}
-	hi := int64(v.I128.Hi)
-	lo := uint64(v.I128.Lo)
-	// Accept only values that fit int64 (Hi is the sign-extension of Lo). The
-	// rebalance math is int64; out-of-range amounts return 0 so the asset is
+	// The rebalance math is int64; out-of-range amounts return 0 so the asset is
 	// skipped (total<=0 guard) rather than driving the planner with a wrapped value.
-	if (hi == 0 && lo>>63 == 0) || (hi == -1 && lo>>63 == 1) {
-		return int64(lo)
-	}
-	return 0
+	n, _ := soroban.I128ToInt64(v)
+	return n
 }
 
 func scBool(v xdr.ScVal) bool {
