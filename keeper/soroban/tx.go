@@ -38,6 +38,9 @@ func (c *Client) Invoke(horizonURL string, kp *keypair.Full, passphrase, contrac
 	if err != nil {
 		return nil, err
 	}
+	// AwaitTx already classifies post-send poll failures/timeouts as
+	// TxStatusUnknownError; InvokeWithRetry refuses to retry those unless the
+	// caller opts in with RetryAmbiguous (never set for draws/swaps).
 	return c.AwaitTx(hash, 30*1e9) // 30s
 }
 

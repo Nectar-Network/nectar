@@ -136,9 +136,13 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 
 	bidAmt := int64(0)
 	for _, amt := range auction.Bid {
-		if amt != nil {
-			bidAmt += amt.Int64()
+		if amt == nil {
+			continue
 		}
+		if !amt.IsInt64() {
+			return &adapters.Result{Block: ledger, Note: "bid amount exceeds int64 range — skipping"}, nil
+		}
+		bidAmt += amt.Int64()
 	}
 
 	res := &adapters.Result{Block: ledger, Drew: bidAmt}
@@ -203,6 +207,9 @@ func (a *Adapter) swapCollateral(kp *keypair.Full, pool *core.PoolState, auction
 	for asset, amt := range auction.Lot {
 		if amt == nil {
 			continue
+		}
+		if !amt.IsInt64() {
+			continue // implausibly large lot amount — skip rather than truncate
 		}
 		v := amt.Int64()
 		if v <= 0 {

@@ -335,14 +335,39 @@ func parseAssetMap(val xdr.ScVal) map[string]*big.Int {
 	return m
 }
 
+// Blend pool contract error codes. Matched on the parsed Error(Contract, #N)
+// integer code rather than a loose substring, so a "#42" id or a base64 result
+// blob can't accidentally match and an adversarial RPC message is far harder to
+// spoof. The variant-name checks remain only as a fallback for RPCs that surface
+// the name when no numeric code is present. (Codes inferred from Blend v2's
+// PoolError ordering; the structural matching itself is the fix.)
+const (
+	blendErrAuctionNotFound uint32 = 4 // auction absent: never created, or already filled/consumed
+	blendErrAuctionExists   uint32 = 5 // creating an auction that already exists
+)
+
 func isNotFound(s string) bool {
-	return contains(s, "AuctionNotFound") || contains(s, "NotFound") || contains(s, "#4")
+	if code, ok := soroban.ParseContractCode(s); ok {
+		return code == blendErrAuctionNotFound
+	}
+	return contains(s, "AuctionNotFound") || contains(s, "NotFound")
 }
+
+// isAlreadyFilled reports that the auction is no longer fillable. At fill time a
+// missing auction (code #4) means another keeper consumed it first — the safe
+// "lost the race" outcome, where drawn capital is returned unspent. It shares
+// code #4 with isNotFound by design; the two differ only in call-site intent.
 func isAlreadyFilled(s string) bool {
-	return contains(s, "AuctionNotFound") || contains(s, "AlreadyFilled") || contains(s, "#4")
+	if code, ok := soroban.ParseContractCode(s); ok {
+		return code == blendErrAuctionNotFound
+	}
+	return contains(s, "AuctionNotFound") || contains(s, "AlreadyFilled")
 }
 func isAuctionExists(s string) bool {
-	return contains(s, "AuctionExists") || contains(s, "#5")
+	if code, ok := soroban.ParseContractCode(s); ok {
+		return code == blendErrAuctionExists
+	}
+	return contains(s, "AuctionExists")
 }
 
 func contains(s, sub string) bool {
