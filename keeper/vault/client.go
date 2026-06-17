@@ -24,8 +24,11 @@ type BalanceResult struct {
 }
 
 // Draw requests capital from NectarVault for a liquidation. Retries on
-// transient infra failures (sequence/fee/timeout); does not retry on
-// deterministic contract errors (insufficient balance, draw limit, etc.).
+// transient pre-send failures (sequence/fee/simulation); does not retry on
+// deterministic contract errors (insufficient balance, draw limit, etc.) and
+// — because the vault ACCUMULATES per-keeper draws — never re-broadcasts after
+// a post-send-ambiguous failure, where the first draw may still land and a
+// retry would double-draw. RetryAmbiguous stays false.
 func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64) error {
 	if amount <= 0 {
 		return fmt.Errorf("draw: amount must be > 0, got %d", amount)
@@ -36,7 +39,7 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 	}
 	amtVal := soroban.ScvI128(amount)
 	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "draw",
-		soroban.RetryConfig{MaxAttempts: 2, InitialDelay: time.Second, BackoffFactor: 2.0},
+		soroban.RetryConfig{MaxAttempts: 2, InitialDelay: time.Second, BackoffFactor: 2.0, RetryAmbiguous: false},
 		keeperVal, amtVal)
 	if err != nil {
 		return fmt.Errorf("vault draw: %w", err)
@@ -47,6 +50,12 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 // ReturnProceeds sends capital back to the vault after a liquidation. Higher
 // retry budget than Draw because returning capital is the safer side: the
 // keeper has the funds in hand and we want to ensure they reach the vault.
+//
+// Post-send-ambiguous failures are NOT retried: if the first return actually
+// landed it cleared the draw, and a re-broadcast would transfer the keeper's
+// funds again and book them as donated profit. The next keeper cycle's
+// stale-draw recovery is the safe retry path — it re-reads get_keeper_draw
+// first, so it is a no-op when the first return landed.
 //
 // responseTimeMs is the keeper-observed elapsed time from draw → fill → here.
 // Pass 0 when the keeper did not actually execute (e.g. another bot beat it
@@ -64,8 +73,10 @@ func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 		responseTimeMs = 0
 	}
 	respVal := soroban.ScvU64(uint64(responseTimeMs))
+	retry := soroban.DefaultRetry()
+	retry.RetryAmbiguous = false
 	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "return_proceeds",
-		soroban.DefaultRetry(),
+		retry,
 		keeperVal, amtVal, respVal)
 	if err != nil {
 		return fmt.Errorf("vault return_proceeds: %w", err)
@@ -126,6 +137,31 @@ func Balance(rpc *soroban.Client, passphrase, vaultAddr, userAddr string) (*Bala
 	}, nil
 }
 
+// GetKeeperDraw reads a keeper's outstanding (drawn-but-unreturned) capital, 0
+// when there is none. Returns an error on vaults deployed before the getter
+// existed, which the caller treats as "no recovery possible".
+func GetKeeperDraw(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, error) {
+	addrVal, err := soroban.ScvAddress(keeper)
+	if err != nil {
+		return 0, err
+	}
+	sim, err := rpc.SimulateRead(passphrase, vaultAddr, "get_keeper_draw", addrVal)
+	if err != nil {
+		return 0, fmt.Errorf("get_keeper_draw: %w", err)
+	}
+	if sim.Error != "" {
+		return 0, fmt.Errorf("get_keeper_draw: %s", sim.Error)
+	}
+	if len(sim.Results) == 0 {
+		return 0, nil
+	}
+	var val xdr.ScVal
+	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
+		return 0, err
+	}
+	return scI128(val), nil
+}
+
 func parseState(val xdr.ScVal) *VaultState {
 	s := &VaultState{}
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {
@@ -160,10 +196,8 @@ func scSymbol(val xdr.ScVal) string {
 }
 
 func scI128(val xdr.ScVal) int64 {
-	if val.Type != xdr.ScValTypeScvI128 || val.I128 == nil {
-		return 0
-	}
-	return int64(val.I128.Lo)
+	n, _ := soroban.I128ToInt64(val) // out-of-int64-range decodes as 0
+	return n
 }
 
 func scI128Big(val xdr.ScVal) *big.Int {

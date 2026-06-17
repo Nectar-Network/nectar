@@ -3,165 +3,87 @@
 import { useEffect, useState } from "react";
 import {
   PerformanceData,
+  KeeperStat,
   fetchPerformance,
   formatUSDC,
   shortAddress,
   successRate,
+  sharePriceSeries,
+  vaultReturn,
 } from "../../lib/api";
 import { queryKeeper } from "../../lib/stellar";
+import {
+  Btn,
+  Card,
+  CardHead,
+  StatTile,
+  StatusDot,
+  Pill,
+  LineChart,
+  MiniBars,
+  Eyebrow,
+  keeperColor,
+  successColor,
+} from "../components/ds";
 
 interface Props {
   initialData: PerformanceData | null;
 }
 
-// Real testnet depositors — on-chain deposits verified at CCXDLRE3IV5225LE3Z776KFB2VWD2MTXOJHAUKFA5RPYDJVOWCMHJ4U4
-// All 30 depositors with real on-chain deposits totaling $294,803 TVL
-const TESTNET_DEPOSITORS = [
-  { address: "GB7LFWKR5NRENKX7EPE7LG3DYHQDRWR5PB732AX63B6MVMZMC7CXX6H7", shares: 74820000000, usdc_value: 76399000000, pnl_pct: 2.11 },
-  { address: "GDRDWLE5A2TBTIVXDBJB5RH2CUVFNLUWSGPAZ32YBNWRKUDD4EOZWV5L", shares: 49500000000, usdc_value: 50545000000, pnl_pct: 2.11 },
-  { address: "GDO2TLZOJMQQJWHFGO5HIY4TAU7OXJKFDT6IOJZWPJZNRCPCPA36FUSJ", shares: 29870000000, usdc_value: 30501000000, pnl_pct: 2.11 },
-  { address: "GDCNLDY4BN3ULSCUD2CLODHPEW6D5G5DAZKVCSZB7MQTYGGFDZJWJKKT", shares: 19750000000, usdc_value: 20167000000, pnl_pct: 2.11 },
-  { address: "GDCRIGIAALM5WLT3UQFDRPQU7EVN2PBWR6YDNMVEYB2OHROTBFOLL2VN", shares: 15030000000, usdc_value: 15347000000, pnl_pct: 2.11 },
-  { address: "GBAVN7QBQKFRYBBCB57WT4GNMM4AAII7YMEUCIY3DB7FDGO6GKQEYN4A", shares: 42100000000, usdc_value: 42989000000, pnl_pct: 2.11 },
-  { address: "GC3PCHZHFRCB2ZASUZXRZH3OXVI4B5EYQ5TXHCDD2EEHHMW3TN6HDJZM", shares: 8410000000,  usdc_value: 8588000000,  pnl_pct: 2.11 },
-  { address: "GBPJRIJ5E43Z4IG7OTBWGQNOW5MY4RPTPYPAAB5ZKMVDBB2RXXQNZMQS", shares: 56200000000, usdc_value: 57386000000, pnl_pct: 2.11 },
-  { address: "GCYITE7MIJMIOGNERURJAKBO7ELA5PNKIXZRHSQSVCSFUKKH6QHDE6KX", shares: 12600000000, usdc_value: 12866000000, pnl_pct: 2.11 },
-  { address: "GDFLCTUHP5DW6AI2PC76PPBFEKYEPH2VCHSANDACO4JJCYTIKJ4SFSWS", shares: 35400000000, usdc_value: 36147000000, pnl_pct: 2.11 },
-  { address: "GD3NX537IIZRAHCHV7JUCXBVMT55IFGHOOHIIAXGR2VKYJQ55KFFXP27", shares: 5200000000,  usdc_value: 5310000000,  pnl_pct: 2.11 },
-  { address: "GAIN2XQ2VIIJBZ75P6TGEQR7HQMPBRUWNCDUO2HYZQAA5SRK4PAPPEVI", shares: 22300000000, usdc_value: 22771000000, pnl_pct: 2.11 },
-  { address: "GAWCQESM3DOV6MZAJYXSBCQLJO2HJ72Y3UYQEFL3KURKQBJ4HHZAF76M", shares: 67100000000, usdc_value: 68516000000, pnl_pct: 2.11 },
-  { address: "GDUD7QDYIM2H3GBKCJW7PD7PRFYSXOJLWWCZQW5JJMSBI4MCWLRWEMUX", shares: 3750000000,  usdc_value: 3829000000,  pnl_pct: 2.11 },
-  { address: "GCUBGYBXCNREDUN6ZMO2EADUHZSNF76ULMOWEI5CQVNJ6MHCZ5EVYIT2", shares: 10100000000, usdc_value: 10313000000, pnl_pct: 2.11 },
-  { address: "GASHYWLGY3XD4HSJWVV3COJKLT6WHQINC2J2FXO7C6AXQVWPW25RETUY", shares: 35000000000, usdc_value: 35739000000, pnl_pct: 2.11 },
-  { address: "GDJEBRSBIE3BAXAMTK2XKSKMTOYD45PSRC4F5FEJAYM4EL6Y4WO23CGS", shares: 42000000000, usdc_value: 42887000000, pnl_pct: 2.11 },
-  { address: "GAEUHW4ZVC656MRBJGN7B44UP6VYPAPI7HHYLGCRVP3E3GAPQG6ZZTDU", shares: 50900000000, usdc_value: 51974000000, pnl_pct: 2.11 },
-  { address: "GCHBVG4EBKD23J3O7TKCSMI3ABH7V7DOYNJHAJWALLAC4JGOIH75NRKN", shares: 62000000000, usdc_value: 63309000000, pnl_pct: 2.11 },
-  { address: "GAEKQYJPGRMGU25HLBZVOTF4XS5KDC7G2OVNCSDZW6VLRQ4ISEFZP2EI", shares: 38000000000, usdc_value: 38802000000, pnl_pct: 2.11 },
-  { address: "GBBXLDRBQ7QYALYTHKSMCG22V4UT7LU4ICKZLQJQNV4TUUFQMR74KL7G", shares: 125000000000, usdc_value: 127638000000, pnl_pct: 2.11 },
-  { address: "GB765L42E4HZYWWIARAYBUKQ7R5LT4QZONWNYUMIQ25ZL7DGNTFYBRNU", shares: 87500000000, usdc_value: 89347000000, pnl_pct: 2.11 },
-  { address: "GA4XCJ772QYTOPL6AJ7NWMLOA57PGRWWM6WUEXOC6RXAHNU6H5ISZXN4", shares: 152000000000, usdc_value: 155208000000, pnl_pct: 2.11 },
-  { address: "GADC3T3LGIT6JROZWESASDWQITPUAXGYCQ5OHU4RIRI45Y6RVO3TF4SZ", shares: 63000000000, usdc_value: 64330000000, pnl_pct: 2.11 },
-  { address: "GCXLYCNZNUOMANUMR4BLI3QIOOZCBBY556RXK5EZOEPUXSSGDHAXKYDZ", shares: 220000000000, usdc_value: 224643000000, pnl_pct: 2.11 },
-  { address: "GC4KKMCNLASXCHOJAZYZFEAACSNECYFDVNWVCEK3ZOTABO4F4AI7SAJM", shares: 48000000000, usdc_value: 49013000000, pnl_pct: 2.11 },
-  { address: "GAEYQQ6IOKI4Q5GM357KUR2JEMJBXG6CDWA4I4MJQFFP2KJATG6HWFPY", shares: 185000000000, usdc_value: 188905000000, pnl_pct: 2.11 },
-  { address: "GAQN2W2HL2VHRQD7OFQB7XZ5EHKV6ZHV43X54AKOIKQP4PAJBQZFJUNZ", shares: 110000000000, usdc_value: 112322000000, pnl_pct: 2.11 },
-  { address: "GAJ43R74I3BA3AVGVKPHJG3VFRV3WCJ4REFFTV5ZT4CRLJKVHEC3UFYC", shares: 76500000000, usdc_value: 78115000000, pnl_pct: 2.11 },
-  { address: "GCKNCJCAZXAN6EUK32K2ILETJLWKJIT424I5O2YMG26PSOYMDUMEYMO4", shares: 250000000000, usdc_value: 255276000000, pnl_pct: 2.11 },
-  { address: "GCUDY7MY6UZ4ZVT7MNNKGFBPILF2RCABJVLPM6TAKPAPAM7YJZTHOQBF", shares: 92000000000, usdc_value: 93942000000, pnl_pct: 2.11 },
-  { address: "GABDOGCPED7HWYDG7LW6W5CQALVVDLTGM3ZUQLLFIHXTUR4UYRSCUJPQ", shares: 134000000000, usdc_value: 136828000000, pnl_pct: 2.11 },
-];
-
-// Real on-chain vault state from NectarVault contract get_state()
-const TESTNET_VAULT = {
-  total_usdc: 2948030067100,   // $294,803.01 TVL
-  total_shares: 2603484075798, // share supply
-  total_profit: 245000008000,  // $24,500 cumulative profit
-  active_liq: 0,
+const EMPTY: PerformanceData = {
+  vault: null,
+  depositors: [],
+  keeper_stats: {},
+  liquidations: [],
 };
 
-const TESTNET_KEEPER_STATS: Record<string, {
-  name: string;
-  address: string;
-  liquidations: number;
+// On-chain keeper overrides read directly from KeeperRegistry. These are the
+// authoritative figures (stake, executions, fills, active draw, profit) and win
+// over whatever the keeper API reports.
+type ChainKeeper = {
+  stake: number;
+  total_executions: number;
+  successful_fills: number;
+  has_active_draw: boolean;
   total_profit: number;
-  stake?: number;
-  total_executions?: number;
-  successful_fills?: number;
-  has_active_draw?: boolean;
-}> = {
-  "keeper-alpha": {
-    name: "keeper-alpha",
-    address: "GCR36Y5AHRAMJGHJLA4EFORJKR3E4D4QVIMPFM26MWAP77DAQ463ZTGZ",
-    liquidations: 8,
-    total_profit: 135000000000, // $13,500 from alpha
-    stake: 1000_0000000,         // 100 USDC stake
-    total_executions: 9,
-    successful_fills: 8,
-    has_active_draw: false,
-  },
-  "keeper-beta": {
-    name: "keeper-beta",
-    address: "GBOE5QCNDXNSVSEMU3GJ3INAJITX44UOK5D5YXRIX523DYBSTPCS546F",
-    liquidations: 6,
-    total_profit: 110000000000, // $11,000 from beta
-    stake: 1000_0000000,
-    total_executions: 7,
-    successful_fills: 6,
-    has_active_draw: false,
-  },
-};
-
-// Recent real liquidations on testnet — all verifiable on Stellar Expert
-const TESTNET_LIQUIDATIONS = [
-  { user: "GAH4K34PTRE7T2B5UKYTF2LXLOYOAFCLBLPSFOGOIHJQD6ZOZKVON2QY", block: 1586908, drew: 22500000000, proceeds: 24750000000, ts: "2026-03-19T15:57:26Z" },
-  { user: "GC5SG3D4C5CBEGBELHRVQPMR5Q6TDPCP2KTEOL54WS5CNS64TDHPMMSL", block: 1586911, drew: 27000000000, proceeds: 29700000000, ts: "2026-03-19T15:57:57Z" },
-  { user: "GAH4K34PTRE7T2B5UKYTF2LXLOYOAFCLBLPSFOGOIHJQD6ZOZKVON2QY", block: 1587027, drew: 22500000000, proceeds: 24750000000, ts: "2026-03-19T16:07:33Z" },
-  { user: "GC5SG3D4C5CBEGBELHRVQPMR5Q6TDPCP2KTEOL54WS5CNS64TDHPMMSL", block: 1587032, drew: 27000000000, proceeds: 29700000000, ts: "2026-03-19T16:08:05Z" },
-  { user: "GDC6DMV6W2PZWUNDKNOWN266W5I37JXXSCLM5S5SS2LWWVFLJQITH7Z7", block: 1587085, drew: 15750000000, proceeds: 17325000000, ts: "2026-03-19T16:12:18Z" },
-  { user: "GA3DU635H3OCYI33ZGVHUI5BITM7XPRUR2OS7C3PPRSCZZJDCA2PTLFC", block: 1587122, drew: 20250000000, proceeds: 22275000000, ts: "2026-03-19T16:15:44Z" },
-  { user: "GCCON7AX52BHCKPTONLWEBRAAAYVTSWFTNH2J4MC6TGAEHEBHQWM45CB", block: 1587158, drew: 18000000000, proceeds: 19800000000, ts: "2026-03-19T16:19:02Z" },
-  { user: "GAH4K34PTRE7T2B5UKYTF2LXLOYOAFCLBLPSFOGOIHJQD6ZOZKVON2QY", block: 1587201, drew: 22500000000, proceeds: 24750000000, ts: "2026-03-19T16:22:48Z" },
-  { user: "GC5SG3D4C5CBEGBELHRVQPMR5Q6TDPCP2KTEOL54WS5CNS64TDHPMMSL", block: 1587245, drew: 27000000000, proceeds: 29700000000, ts: "2026-03-19T16:26:31Z" },
-  { user: "GDC6DMV6W2PZWUNDKNOWN266W5I37JXXSCLM5S5SS2LWWVFLJQITH7Z7", block: 1587289, drew: 15750000000, proceeds: 17325000000, ts: "2026-03-19T16:30:14Z" },
-  { user: "GA3DU635H3OCYI33ZGVHUI5BITM7XPRUR2OS7C3PPRSCZZJDCA2PTLFC", block: 1587334, drew: 20250000000, proceeds: 22275000000, ts: "2026-03-19T16:34:02Z" },
-  { user: "GCCON7AX52BHCKPTONLWEBRAAAYVTSWFTNH2J4MC6TGAEHEBHQWM45CB", block: 1587378, drew: 18000000000, proceeds: 19800000000, ts: "2026-03-19T16:37:48Z" },
-  { user: "GAH4K34PTRE7T2B5UKYTF2LXLOYOAFCLBLPSFOGOIHJQD6ZOZKVON2QY", block: 1587421, drew: 22500000000, proceeds: 24750000000, ts: "2026-03-19T16:41:23Z" },
-  { user: "GC5SG3D4C5CBEGBELHRVQPMR5Q6TDPCP2KTEOL54WS5CNS64TDHPMMSL", block: 1587465, drew: 27000000000, proceeds: 29700000000, ts: "2026-03-19T16:45:07Z" },
-];
-
-const FALLBACK_DATA: PerformanceData = {
-  vault: TESTNET_VAULT,
-  depositors: TESTNET_DEPOSITORS,
-  keeper_stats: TESTNET_KEEPER_STATS,
-  liquidations: TESTNET_LIQUIDATIONS,
 };
 
 export default function PerformanceDashboard({ initialData }: Props) {
-  const [data, setData] = useState<PerformanceData | null>(initialData);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [perf, setPerf] = useState<PerformanceData>(initialData ?? EMPTY);
   const [live, setLive] = useState(!!initialData);
-  // On-chain keeper data (stake, executions, has_active_draw) read directly
-  // from KeeperRegistry — overrides whatever the keeper API reports.
-  const [chainKeepers, setChainKeepers] = useState<
-    Record<string, { stake: number; total_executions: number; successful_fills: number; has_active_draw: boolean; total_profit: number }>
-  >({});
-  const hasLiveData = data && data.depositors && data.depositors.length > 0;
-  // Merge live data with fallback keeper stats (keeper-beta runs on a separate server)
-  const display = hasLiveData
-    ? {
-        ...data,
-        keeper_stats: { ...TESTNET_KEEPER_STATS, ...data.keeper_stats },
-      }
-    : FALLBACK_DATA;
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [chainKeepers, setChainKeepers] = useState<Record<string, ChainKeeper>>({});
 
+  // Poll the keeper performance API every 15s.
   useEffect(() => {
     const poll = async () => {
       const fresh = await fetchPerformance();
-      if (fresh && fresh.depositors && fresh.depositors.length > 0) {
-        setData(fresh);
-        setLastUpdate(new Date());
+      if (fresh) {
+        setPerf(fresh);
         setLive(true);
+        setLastUpdate(new Date());
       } else {
         setLive(false);
       }
     };
-
     poll();
-    const timer = setInterval(poll, 15_000);
-    return () => clearInterval(timer);
+    const t = setInterval(poll, 15_000);
+    return () => clearInterval(t);
   }, []);
 
-  // Pull authoritative keeper info from the registry contract directly.
+  const keeperStats = perf.keeper_stats ?? {};
+
+  // Pull authoritative keeper info from the registry contract directly (~30s).
   useEffect(() => {
     let cancelled = false;
     const refreshChain = async () => {
-      const keeperAddrs = Object.values(display.keeper_stats ?? {})
+      const keeperAddrs = Object.values(keeperStats)
         .map((k) => k.address)
         .filter(Boolean);
       if (!keeperAddrs.length) return;
       const results = await Promise.all(keeperAddrs.map((a) => queryKeeper(a)));
       if (cancelled) return;
-      const next: Record<string, { stake: number; total_executions: number; successful_fills: number; has_active_draw: boolean; total_profit: number }> = {};
+      const next: Record<string, ChainKeeper> = {};
       results.forEach((r, i) => {
         if (r) {
           next[keeperAddrs[i]] = {
@@ -182,335 +104,478 @@ export default function PerformanceDashboard({ initialData }: Props) {
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [display.keeper_stats]);
+  }, [JSON.stringify(Object.values(keeperStats).map((k) => k.address))]);
 
-  const vault = display.vault;
-  const depositors = display.depositors ?? [];
-  const keeperStats = display.keeper_stats ?? {};
-  const liquidations = display.liquidations ?? [];
+  const vault = perf.vault;
+  const depositors = perf.depositors ?? [];
+  const liquidations = perf.liquidations ?? [];
 
   const tvl = vault?.total_usdc ?? 0;
   const totalProfit = vault?.total_profit ?? 0;
-  const activeLiq = vault?.active_liq ?? 0;
-  const totalShares = vault?.total_shares ?? 0;
 
-  const cell: React.CSSProperties = {
-    padding: "8px 12px",
-    borderBottom: "1px solid var(--border)",
-    fontFamily: "monospace",
-    fontSize: "13px",
-    color: "var(--text)",
-  };
+  // Vault returns series (reconstructed from realized on-chain profit).
+  const series = sharePriceSeries(perf);
+  const ret = vaultReturn(series);
+  const hasSeries = series.length >= 2;
 
-  const headerCell: React.CSSProperties = {
-    ...cell,
-    color: "var(--text-dim)",
-    fontSize: "11px",
-    textTransform: "uppercase",
+  // Merge each keeper's on-chain figures over the API figures for display.
+  const mergedKeepers = Object.values(keeperStats).map((ks: KeeperStat) => {
+    const chain = chainKeepers[ks.address];
+    const stake = chain?.stake ?? ks.stake ?? 0;
+    const exec = chain?.total_executions ?? ks.total_executions ?? ks.liquidations;
+    const fills = chain?.successful_fills ?? ks.successful_fills ?? ks.liquidations;
+    const profit = chain?.total_profit ?? ks.total_profit;
+    const active = chain?.has_active_draw ?? ks.has_active_draw ?? false;
+    const rate = exec > 0 ? successRate(exec, fills) : null; // null when no executions
+    return { name: ks.name, address: ks.address, stake, exec, fills, profit, active, rate };
+  });
+
+  const sortedKeepers = [...mergedKeepers].sort((a, b) => b.profit - a.profit);
+
+  // Top depositors by USDC value (for the side panel summary).
+  const topDepositors = [...depositors]
+    .sort((a, b) => b.usdc_value - a.usdc_value)
+    .slice(0, 5);
+  const maxDepValue = topDepositors.reduce((m, d) => Math.max(m, d.usdc_value), 0);
+
+  const recentLiqs = [...liquidations]
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, 20);
+
+  const wrap: React.CSSProperties = { maxWidth: 1100, margin: "0 auto", padding: "32px 24px 8px" };
+  const th: React.CSSProperties = {
+    padding: "10px 16px",
+    textAlign: "left",
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
     letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    color: "var(--text-dim)",
     borderBottom: "1px solid var(--border)",
+    whiteSpace: "nowrap",
+  };
+  const td: React.CSSProperties = {
+    padding: "11px 16px",
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    color: "var(--text)",
+    borderBottom: "1px solid var(--border)",
+    fontVariantNumeric: "tabular-nums",
+  };
+  const emptyCell: React.CSSProperties = {
+    padding: "20px 16px",
+    fontFamily: "var(--font-mono)",
+    fontSize: 12,
+    color: "var(--text-mute)",
+    textAlign: "center",
   };
 
   return (
-    <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "32px 24px" }}>
-      {/* Header */}
+    <div style={wrap}>
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          flexWrap: "wrap",
+          gap: 16,
+          alignItems: "flex-end",
           justifyContent: "space-between",
-          marginBottom: "32px",
+          marginBottom: 28,
         }}
       >
         <div>
+          <Eyebrow style={{ marginBottom: 10 }}>
+            {live ? "LIVE — UPDATED EVERY 15s" : "VAULT PERFORMANCE"}
+          </Eyebrow>
           <h1
             style={{
-              fontFamily: "var(--font-syne)",
-              fontSize: "20px",
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(1.5rem, 3vw, 2rem)",
               fontWeight: 700,
-              letterSpacing: "0.15em",
+              letterSpacing: "-0.01em",
               color: "var(--text)",
-              textTransform: "uppercase",
-              marginBottom: "4px",
+              margin: 0,
             }}
           >
-            Vault Performance
+            Performance Dashboard
           </h1>
-          <p style={{ fontSize: "12px", color: "var(--text-dim)", fontFamily: "monospace" }}>
-            Live testnet data — 30 depositors, 2 keepers, on-chain verified
-          </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span
-            style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              background: live ? "var(--accent)" : "var(--amber)",
-              display: "inline-block",
-              boxShadow: live ? "0 0 6px var(--accent)" : "0 0 6px var(--amber)",
-              animation: "pulse2 2s ease-in-out infinite",
-            }}
-          />
-          <span style={{ fontSize: "11px", color: "var(--text-dim)", fontFamily: "monospace" }}>
-            {live ? `LIVE · ${lastUpdate.toLocaleTimeString()}` : "TESTNET · SOROBAN"}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <StatusDot color={live ? "var(--accent)" : "var(--amber)"} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+            {live ? `LIVE · ${lastUpdate.toLocaleTimeString()}` : "OFFLINE · awaiting keeper API"}
           </span>
         </div>
       </div>
 
-      {/* Vault Stats */}
+      {/* ── Summary stat tiles ─────────────────────────────────────────── */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "16px",
-          marginBottom: "32px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: 16,
+          marginBottom: 24,
         }}
       >
-        {[
-          { label: "TVL", value: `$${formatUSDC(tvl)}`, accent: false },
-          { label: "Total Profit", value: `+$${formatUSDC(totalProfit)}`, accent: totalProfit > 0 },
-          { label: "Active Deployed", value: `$${formatUSDC(activeLiq)}`, accent: false },
-          { label: "Depositors", value: `${depositors.length}`, accent: false },
-        ].map(({ label, value, accent }) => (
-          <div
-            key={label}
-            style={{
-              padding: "20px",
-              border: "1px solid var(--border)",
-              borderRadius: "4px",
-              background: "rgba(255,255,255,0.02)",
-            }}
-          >
-            <div style={{ fontSize: "11px", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>
-              {label}
-            </div>
-            <div
-              style={{
-                fontSize: "22px",
-                fontFamily: "monospace",
-                fontWeight: 600,
-                color: accent ? "var(--accent)" : "var(--text)",
-              }}
-            >
-              {value}
-            </div>
-          </div>
-        ))}
+        <StatTile label="TVL" value={`$${formatUSDC(tvl)}`} sub="total value locked" />
+        <StatTile
+          label="Cumulative Profit"
+          value={`${totalProfit >= 0 ? "+" : "-"}$${formatUSDC(Math.abs(totalProfit))}`}
+          accent={totalProfit > 0}
+          sub="realized to depositors"
+        />
+        <StatTile label="Depositors" value={`${depositors.length}`} sub="active accounts" />
+        <StatTile label="Liquidations" value={`${liquidations.length}`} sub="recorded fills" />
       </div>
 
-      {/* Depositors Table */}
-      <section style={{ marginBottom: "32px" }}>
-        <h2
-          style={{
-            fontSize: "12px",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "var(--text-dim)",
-            marginBottom: "12px",
-          }}
+      {/* ── Vault returns chart ────────────────────────────────────────── */}
+      <Card style={{ marginBottom: 24 }}>
+        <CardHead
+          right={
+            <span style={{ color: ret.pct >= 0 ? "var(--accent)" : "var(--red)", textTransform: "none", letterSpacing: 0 }}>
+              {ret.pct >= 0 ? "+" : ""}
+              {ret.pct.toFixed(2)}% {ret.annualized ? "APY" : "to date"}
+            </span>
+          }
         >
-          Depositors ({depositors.length})
-        </h2>
-        <div style={{ border: "1px solid var(--border)", borderRadius: "4px", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                <th style={{ ...headerCell, textAlign: "left" }}>#</th>
-                <th style={{ ...headerCell, textAlign: "left" }}>Address</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Shares</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>USDC Value</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>PnL</th>
-              </tr>
-            </thead>
-            <tbody>
-              {depositors.map((dep, idx) => {
-                const pnl = dep.pnl_pct;
-                return (
-                  <tr key={dep.address} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-                    <td style={{ ...cell, color: "var(--text-dim)" }}>{idx + 1}</td>
-                    <td style={cell}>
-                      <span
-                        title={dep.address}
-                        style={{ cursor: "pointer" }}
-                      >
-                        {shortAddress(dep.address)}
-                      </span>
-                    </td>
-                    <td style={{ ...cell, textAlign: "right" }}>{(dep.shares / 1e7).toFixed(2)}</td>
-                    <td style={{ ...cell, textAlign: "right" }}>${formatUSDC(dep.usdc_value)}</td>
-                    <td
-                      style={{
-                        ...cell,
-                        textAlign: "right",
-                        color: pnl > 0 ? "var(--accent)" : pnl < 0 ? "#ff6b6b" : "var(--text-dim)",
-                      }}
-                    >
-                      {pnl >= 0 ? "+" : ""}{pnl.toFixed(2)}%
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          Vault Returns
+        </CardHead>
+        <div style={{ padding: 16 }}>
+          {hasSeries ? (
+            <LineChart
+              data={series.map((p) => ({ value: p.sharePrice, label: p.label }))}
+              height={240}
+              variant="area"
+              label="sharePrice"
+              valueFmt={(v) => v.toFixed(4)}
+            />
+          ) : (
+            <div
+              style={{
+                height: 240,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--text-mute)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+              }}
+            >
+              Not enough liquidation history yet to chart returns.
+            </div>
+          )}
         </div>
-      </section>
+      </Card>
 
-      {/* Keeper Stats */}
-      <section style={{ marginBottom: "32px" }}>
-        <h2
-          style={{
-            fontSize: "12px",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "var(--text-dim)",
-            marginBottom: "12px",
-          }}
-        >
-          Keepers ({Object.keys(keeperStats).length})
-        </h2>
-        <div style={{ border: "1px solid var(--border)", borderRadius: "4px", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                <th style={{ ...headerCell, textAlign: "left" }}>Name</th>
-                <th style={{ ...headerCell, textAlign: "left" }}>Address</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Stake</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Executions</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Success</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Profit</th>
-                <th style={{ ...headerCell, textAlign: "center" }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(keeperStats).map(([, ks]) => {
-                const chain = chainKeepers[ks.address];
-                const stake = chain?.stake ?? ks.stake ?? 0;
-                const exec = chain?.total_executions ?? ks.total_executions ?? ks.liquidations;
-                const fills = chain?.successful_fills ?? ks.successful_fills ?? ks.liquidations;
-                const profit = chain?.total_profit ?? ks.total_profit;
-                const active = chain?.has_active_draw ?? ks.has_active_draw ?? false;
-                const rate = successRate(exec, fills);
-                return (
-                  <tr key={ks.address}>
-                    <td style={cell}>
-                      <span style={{ color: "var(--accent)" }}>{ks.name}</span>
-                    </td>
-                    <td style={cell}>
-                      <span title={ks.address}>{shortAddress(ks.address)}</span>
-                    </td>
-                    <td style={{ ...cell, textAlign: "right" }}>
-                      {stake > 0 ? `$${formatUSDC(stake)}` : "—"}
-                    </td>
-                    <td style={{ ...cell, textAlign: "right" }}>
-                      {fills}/{exec}
-                    </td>
-                    <td
-                      style={{
-                        ...cell,
-                        textAlign: "right",
-                        color: rate >= 0.9 ? "var(--accent)" : rate >= 0.5 ? "var(--text)" : "var(--amber)",
-                      }}
-                    >
-                      {(rate * 100).toFixed(1)}%
-                    </td>
-                    <td
-                      style={{
-                        ...cell,
-                        textAlign: "right",
-                        color: profit > 0 ? "var(--accent)" : "var(--text)",
-                      }}
-                    >
-                      ${formatUSDC(profit)}
-                    </td>
-                    <td style={{ ...cell, textAlign: "center" }}>
+      {/* ── Keepers + Top depositors (left) / Recent liquidations (right) ─ */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+          gap: 24,
+          marginBottom: 24,
+        }}
+      >
+        {/* left column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Keepers */}
+          <Card>
+            <CardHead
+              right={
+                Object.keys(keeperStats).length > 0 ? (
+                  <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--accent)", textTransform: "none", letterSpacing: 0 }}>
+                    <StatusDot size={6} />
+                    <span style={{ fontSize: 10 }}>
+                      {mergedKeepers.filter((k) => !k.active).length === mergedKeepers.length ? "all idle" : "active"}
+                    </span>
+                  </span>
+                ) : undefined
+              }
+            >
+              Keepers ({Object.keys(keeperStats).length})
+            </CardHead>
+            {sortedKeepers.length === 0 ? (
+              <div style={emptyCell}>No keepers registered yet.</div>
+            ) : (
+              sortedKeepers.map((k, i) => (
+                <div
+                  key={k.address}
+                  style={{
+                    padding: 16,
+                    borderBottom: i < sortedKeepers.length - 1 ? "1px solid var(--border)" : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: keeperColor(k.name) }}>{k.name}</span>
                       <span
+                        title={k.address}
+                        style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {shortAddress(k.address)}
+                      </span>
+                    </div>
+                    <Pill color={k.active ? "var(--amber)" : "var(--text-dim)"}>
+                      {k.active ? "ACTIVE DRAW" : "IDLE"}
+                    </Pill>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+                    <KeeperMetric label="Stake" value={k.stake > 0 ? `$${formatUSDC(k.stake)}` : "—"} />
+                    <KeeperMetric label="Fills" value={`${k.fills}/${k.exec}`} />
+                    <KeeperMetric
+                      label="Success"
+                      value={k.rate == null ? "—" : `${(k.rate * 100).toFixed(0)}%`}
+                      color={k.rate == null ? "var(--text-mute)" : successColor(k.rate * 100)}
+                    />
+                    <KeeperMetric label="Profit" value={`$${formatUSDC(k.profit)}`} color={k.profit > 0 ? "var(--accent)" : "var(--text)"} />
+                  </div>
+                </div>
+              ))
+            )}
+          </Card>
+
+          {/* Top depositors */}
+          <Card>
+            <CardHead>Top Depositors</CardHead>
+            {topDepositors.length === 0 ? (
+              <div style={emptyCell}>No depositors yet.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Address</th>
+                    <th style={{ ...th, textAlign: "right" }}>USDC Value</th>
+                    <th style={{ ...th, textAlign: "right", width: 90 }}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topDepositors.map((d, i) => (
+                    <tr key={d.address}>
+                      <td
+                        style={{ ...td, color: "var(--accent)", borderBottom: i < topDepositors.length - 1 ? td.borderBottom : "none" }}
+                        title={d.address}
+                      >
+                        {shortAddress(d.address)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: i < topDepositors.length - 1 ? td.borderBottom : "none" }}>
+                        ${formatUSDC(d.usdc_value)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: i < topDepositors.length - 1 ? td.borderBottom : "none" }}>
+                        <MiniBars value={d.usdc_value} max={maxDepValue} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </div>
+
+        {/* right column — recent liquidations */}
+        <Card>
+          <CardHead>Recent Liquidations</CardHead>
+          {recentLiqs.length === 0 ? (
+            <div style={emptyCell}>No liquidations recorded yet.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={th}>Time</th>
+                  <th style={th}>User</th>
+                  <th style={{ ...th, textAlign: "right" }}>Amount</th>
+                  <th style={{ ...th, textAlign: "right" }}>Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLiqs.map((l, i) => {
+                  const profit = l.proceeds - l.drew;
+                  const last = i === recentLiqs.length - 1;
+                  const bb = last ? "none" : td.borderBottom;
+                  return (
+                    <tr key={`${l.ts}-${l.block}-${i}`}>
+                      <td style={{ ...td, color: "var(--text-dim)", borderBottom: bb }}>
+                        {new Date(l.ts).toLocaleTimeString()}
+                      </td>
+                      <td style={{ ...td, color: "var(--accent)", borderBottom: bb }} title={l.user}>
+                        {shortAddress(l.user)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: bb }}>${formatUSDC(l.drew)}</td>
+                      <td
                         style={{
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          fontSize: "10px",
-                          fontFamily: "monospace",
-                          background: active
-                            ? "rgba(230, 172, 47, 0.12)"
-                            : "rgba(0, 229, 160, 0.08)",
-                          color: active ? "var(--amber)" : "var(--accent)",
-                          border: `1px solid ${active ? "var(--amber)" : "var(--accent)"}`,
+                          ...td,
+                          textAlign: "right",
+                          color: profit > 0 ? "var(--accent)" : profit < 0 ? "var(--red)" : "var(--text-dim)",
+                          borderBottom: bb,
                         }}
                       >
-                        {active ? "ACTIVE DRAW" : "IDLE"}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                        {profit >= 0 ? "+" : "-"}${formatUSDC(Math.abs(profit))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
 
-      {/* Recent Liquidations */}
-      <section>
-        <h2
-          style={{
-            fontSize: "12px",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "var(--text-dim)",
-            marginBottom: "12px",
-          }}
-        >
-          Recent Liquidations ({liquidations.length})
-        </h2>
-        <div style={{ border: "1px solid var(--border)", borderRadius: "4px", overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                <th style={{ ...headerCell, textAlign: "left" }}>User</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Block</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Drew</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Proceeds</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Profit</th>
-                <th style={{ ...headerCell, textAlign: "right" }}>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...liquidations].reverse().slice(0, 20).map((liq, idx) => {
-                const profit = liq.proceeds - liq.drew;
-                return (
-                  <tr key={idx} style={{ background: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}>
-                    <td style={cell}>
-                      <span title={liq.user}>{shortAddress(liq.user)}</span>
-                    </td>
-                    <td style={{ ...cell, textAlign: "right" }}>{liq.block.toLocaleString()}</td>
-                    <td style={{ ...cell, textAlign: "right" }}>${formatUSDC(liq.drew)}</td>
-                    <td
-                      style={{
-                        ...cell,
-                        textAlign: "right",
-                        color: liq.proceeds > liq.drew ? "var(--accent)" : "var(--text)",
-                      }}
-                    >
-                      ${formatUSDC(liq.proceeds)}
-                    </td>
-                    <td
-                      style={{
-                        ...cell,
-                        textAlign: "right",
-                        color: profit > 0 ? "var(--accent)" : "var(--text-dim)",
-                      }}
-                    >
-                      +${formatUSDC(profit)}
-                    </td>
-                    <td style={{ ...cell, textAlign: "right", color: "var(--text-dim)" }}>
-                      {new Date(liq.ts).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* ── Full depositors table ──────────────────────────────────────── */}
+      <Card style={{ marginBottom: 24 }}>
+        <CardHead>Depositors ({depositors.length})</CardHead>
+        <div style={{ overflowX: "auto" }}>
+          {depositors.length === 0 ? (
+            <div style={emptyCell}>No depositors yet.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  <th style={{ ...th, width: 40 }}>#</th>
+                  <th style={th}>Address</th>
+                  <th style={{ ...th, textAlign: "right" }}>Shares</th>
+                  <th style={{ ...th, textAlign: "right" }}>USDC Value</th>
+                  <th style={{ ...th, textAlign: "right" }}>PnL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depositors.map((d, i) => {
+                  const last = i === depositors.length - 1;
+                  const bb = last ? "none" : td.borderBottom;
+                  return (
+                    <tr key={d.address}>
+                      <td style={{ ...td, color: "var(--text-dim)", borderBottom: bb }}>{i + 1}</td>
+                      <td style={{ ...td, color: "var(--accent)", borderBottom: bb }} title={d.address}>
+                        {shortAddress(d.address)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: bb }}>{(d.shares / 1e7).toFixed(2)}</td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: bb }}>${formatUSDC(d.usdc_value)}</td>
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: "right",
+                          color: d.pnl_pct > 0 ? "var(--accent)" : d.pnl_pct < 0 ? "var(--red)" : "var(--text-dim)",
+                          borderBottom: bb,
+                        }}
+                      >
+                        {d.pnl_pct >= 0 ? "+" : ""}
+                        {d.pnl_pct.toFixed(2)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
-      </section>
+      </Card>
+
+      {/* ── Full keepers table ─────────────────────────────────────────── */}
+      <Card style={{ marginBottom: 24 }}>
+        <CardHead>Keeper Stats ({Object.keys(keeperStats).length})</CardHead>
+        <div style={{ overflowX: "auto" }}>
+          {sortedKeepers.length === 0 ? (
+            <div style={emptyCell}>No keepers registered yet.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Name</th>
+                  <th style={th}>Address</th>
+                  <th style={{ ...th, textAlign: "right" }}>Stake</th>
+                  <th style={{ ...th, textAlign: "right" }}>Fills</th>
+                  <th style={{ ...th, textAlign: "right" }}>Success</th>
+                  <th style={{ ...th, textAlign: "right" }}>Profit</th>
+                  <th style={{ ...th, textAlign: "center" }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedKeepers.map((k, i) => {
+                  const last = i === sortedKeepers.length - 1;
+                  const bb = last ? "none" : td.borderBottom;
+                  return (
+                    <tr key={k.address}>
+                      <td style={{ ...td, color: keeperColor(k.name), borderBottom: bb }}>{k.name}</td>
+                      <td style={{ ...td, color: "var(--accent)", borderBottom: bb }} title={k.address}>
+                        {shortAddress(k.address)}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: bb }}>
+                        {k.stake > 0 ? `$${formatUSDC(k.stake)}` : "—"}
+                      </td>
+                      <td style={{ ...td, textAlign: "right", borderBottom: bb }}>
+                        {k.fills}/{k.exec}
+                      </td>
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: "right",
+                          color: k.rate == null ? "var(--text-mute)" : successColor(k.rate * 100),
+                          borderBottom: bb,
+                        }}
+                      >
+                        {k.rate == null ? "—" : `${(k.rate * 100).toFixed(1)}%`}
+                      </td>
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: "right",
+                          color: k.profit > 0 ? "var(--accent)" : "var(--text)",
+                          borderBottom: bb,
+                        }}
+                      >
+                        ${formatUSDC(k.profit)}
+                      </td>
+                      <td style={{ ...td, textAlign: "center", borderBottom: bb }}>
+                        <Pill color={k.active ? "var(--amber)" : "var(--text-dim)"}>
+                          {k.active ? "ACTIVE DRAW" : "IDLE"}
+                        </Pill>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Card>
+
+      {/* ── CTAs ───────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Btn href="/dashboard" small primary>
+          Open full dashboard →
+        </Btn>
+        <Btn href="/dashboard/keepers" small>
+          Keeper leaderboard
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── small keeper metric cell ──────────────────────────────────────────────
+function KeeperMetric({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 10,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: "var(--text-dim)",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 15,
+          color: color ?? "var(--text)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }

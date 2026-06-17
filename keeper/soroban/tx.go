@@ -38,6 +38,9 @@ func (c *Client) Invoke(horizonURL string, kp *keypair.Full, passphrase, contrac
 	if err != nil {
 		return nil, err
 	}
+	// AwaitTx already classifies post-send poll failures/timeouts as
+	// TxStatusUnknownError; InvokeWithRetry refuses to retry those unless the
+	// caller opts in with RetryAmbiguous (never set for draws/swaps).
 	return c.AwaitTx(hash, 30*1e9) // 30s
 }
 
@@ -210,6 +213,36 @@ func ScvSymbol(s string) xdr.ScVal {
 func ScvString(s string) xdr.ScVal {
 	str := xdr.ScString(s)
 	return xdr.ScVal{Type: xdr.ScValTypeScvString, Str: &str}
+}
+
+// ScvVec wraps a slice of ScVals as a Soroban vector (e.g. Vec<Address> for a
+// swap path). xdr.ScVal.Vec is a pointer-to-pointer, so the double indirection
+// mirrors the hand-built vectors in blend/auction.go.
+func ScvVec(vals ...xdr.ScVal) xdr.ScVal {
+	vec := xdr.ScVec(vals)
+	vecPtr := &vec
+	return xdr.ScVal{Type: xdr.ScValTypeScvVec, Vec: &vecPtr}
+}
+
+// ScvVoid encodes the unit value, used for a Soroban Option::None argument.
+func ScvVoid() xdr.ScVal {
+	return xdr.ScVal{Type: xdr.ScValTypeScvVoid}
+}
+
+// I128ToInt64 decodes an i128 ScVal into an int64, returning ok=false when the
+// value does not fit (Hi must be the sign-extension of Lo). Callers decide what
+// an out-of-range value means — most treat it as 0/skip rather than driving
+// downstream math with a silently wrapped number.
+func I128ToInt64(val xdr.ScVal) (int64, bool) {
+	if val.Type != xdr.ScValTypeScvI128 || val.I128 == nil {
+		return 0, false
+	}
+	hi := int64(val.I128.Hi)
+	lo := uint64(val.I128.Lo)
+	if (hi == 0 && lo>>63 == 0) || (hi == -1 && lo>>63 == 1) {
+		return int64(lo), true
+	}
+	return 0, false
 }
 
 // ParseAddress extracts a string address from an xdr.ScAddress.

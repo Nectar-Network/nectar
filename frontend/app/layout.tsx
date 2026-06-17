@@ -14,8 +14,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="antialiased">{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased">
+        {/* Apply the persisted theme before paint to avoid a flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{document.documentElement.dataset.vibe=localStorage.getItem('nectar.vibe')||'terminal'}catch(e){document.documentElement.dataset.vibe='terminal'}",
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

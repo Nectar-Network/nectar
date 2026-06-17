@@ -51,6 +51,11 @@ export interface LiquidationRecord {
   drew: number;
   proceeds: number;
   ts: string;
+  response_time_ms?: number;
+  // Set by keepers that record the fill transaction + their own identity;
+  // optional so older keeper APIs still parse.
+  tx_hash?: string;
+  keeper?: string;
 }
 
 export interface PerformanceData {
@@ -126,4 +131,89 @@ export function sharePrice(totalUsdc: number, totalShares: number): number {
 export function successRate(executions: number, fills: number): number {
   if (!executions) return 0;
   return Math.min(1, fills / executions);
+}
+
+export interface SharePricePoint {
+  ts: number; // epoch ms
+  label: string; // formatted date for the x-axis
+  sharePrice: number; // USDC per share
+}
+
+/**
+ * Reconstruct a share-price time series from realized vault profit. The vault's
+ * principal (total_usdc minus realized total_profit) is the starting base; each
+ * liquidation's realized profit (proceeds - drew) raises the share price. This
+ * is derived entirely from real on-chain outcomes the keeper recorded — no
+ * figures are synthesized — so it reflects actual vault returns over time.
+ */
+export function sharePriceSeries(perf: PerformanceData): SharePricePoint[] {
+  const vault = perf.vault;
+  if (!vault || !vault.total_shares) return [];
+  const shares = vault.total_shares;
+  const current = vault.total_usdc / shares;
+  const base = Math.max(0, vault.total_usdc - vault.total_profit);
+
+  const liqs = (perf.liquidations ?? [])
+    .filter((l) => l.ts)
+    .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+  if (liqs.length === 0) {
+    return [{ ts: Date.now(), label: "now", sharePrice: current }];
+  }
+
+  const fmt = (t: number) =>
+    new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  // The keeper's in-memory liquidation list may not cover the vault's full
+  // history (it is stateless and resets on restart), so the raw realized-profit
+  // deltas need not sum to the authoritative on-chain total_profit. Scale the
+  // deltas so the curve's endpoint matches the true current share price — this
+  // keeps the chart consistent with the share price shown elsewhere while
+  // preserving the shape of when profit accrued. Losses are not clamped.
+  const deltas = liqs.map((l) => l.proceeds - l.drew);
+  const sum = deltas.reduce((a, b) => a + b, 0);
+  const scale = sum > 0 ? vault.total_profit / sum : 0;
+
+  let running = base;
+  const t0 = new Date(liqs[0].ts).getTime();
+  const pts: SharePricePoint[] = [{ ts: t0, label: fmt(t0), sharePrice: running / shares }];
+  liqs.forEach((l, i) => {
+    running += deltas[i] * scale;
+    const t = new Date(l.ts).getTime();
+    pts.push({ ts: t, label: fmt(t), sharePrice: running / shares });
+  });
+  // Anchor the final point to the authoritative current share price.
+  pts[pts.length - 1] = { ...pts[pts.length - 1], sharePrice: current };
+  return pts;
+}
+
+export interface VaultReturn {
+  pct: number; // APY when annualized, else cumulative return since the first point
+  annualized: boolean;
+  days: number;
+}
+
+const MIN_ANNUALIZE_DAYS = 7;
+
+/**
+ * Vault return from a share-price series. Annualizes to an APY only when the
+ * series spans a meaningful window (>= 7 days). For shorter windows it returns
+ * the raw cumulative return instead — annualizing a few minutes of data yields
+ * astronomically misleading (even Infinite) figures, so we never present those
+ * as an APY. Always finite.
+ */
+export function vaultReturn(series: SharePricePoint[]): VaultReturn {
+  if (series.length < 2) return { pct: 0, annualized: false, days: 0 };
+  const first = series[0];
+  const last = series[series.length - 1];
+  if (first.sharePrice <= 0) return { pct: 0, annualized: false, days: 0 };
+  const days = (last.ts - first.ts) / 86_400_000;
+  const growth = last.sharePrice / first.sharePrice;
+  const cumulative = (growth - 1) * 100;
+  if (days < MIN_ANNUALIZE_DAYS) {
+    return { pct: cumulative, annualized: false, days };
+  }
+  const apy = (Math.pow(growth, 365 / days) - 1) * 100;
+  if (!Number.isFinite(apy)) return { pct: cumulative, annualized: false, days };
+  return { pct: apy, annualized: true, days };
 }

@@ -70,6 +70,37 @@ func TestMinProfitDefault(t *testing.T) {
 	}
 }
 
+func TestSlippageBpsDefault(t *testing.T) {
+	setRequiredEnvs(t)
+	os.Unsetenv("SLIPPAGE_BPS")
+
+	cfg := LoadConfig()
+	if cfg.SlippageBps != 100 {
+		t.Fatalf("expected default 100, got %d", cfg.SlippageBps)
+	}
+}
+
+func TestSlippageBpsCustom(t *testing.T) {
+	setRequiredEnvs(t)
+	os.Setenv("SLIPPAGE_BPS", "250")
+	defer os.Unsetenv("SLIPPAGE_BPS")
+
+	cfg := LoadConfig()
+	if cfg.SlippageBps != 250 {
+		t.Fatalf("expected 250, got %d", cfg.SlippageBps)
+	}
+}
+
+func TestDriftBpsDefault(t *testing.T) {
+	setRequiredEnvs(t)
+	os.Unsetenv("DEFINDEX_DRIFT_BPS")
+
+	cfg := LoadConfig()
+	if cfg.DriftBps != 500 {
+		t.Fatalf("expected default 500, got %d", cfg.DriftBps)
+	}
+}
+
 // setRequiredEnvs sets the minimum env vars so LoadConfig doesn't os.Exit.
 func setRequiredEnvs(t *testing.T) {
 	t.Helper()

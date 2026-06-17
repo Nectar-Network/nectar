@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/signal"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -14,7 +15,10 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/stellar/go/keypair"
 
-	"github.com/nectar-network/keeper/blend"
+	"github.com/nectar-network/keeper/adapters"
+	blendadapter "github.com/nectar-network/keeper/adapters/blend"
+	defindexadapter "github.com/nectar-network/keeper/adapters/defindex"
+	"github.com/nectar-network/keeper/dex"
 	"github.com/nectar-network/keeper/registry"
 	"github.com/nectar-network/keeper/soroban"
 	"github.com/nectar-network/keeper/vault"
@@ -29,8 +33,15 @@ type LiquidationRecord struct {
 	Drew           int64     `json:"drew"`
 	Proceeds       int64     `json:"proceeds"`
 	ResponseTimeMs int64     `json:"response_time_ms"`
+	TxHash         string    `json:"tx_hash,omitempty"`
+	Keeper         string    `json:"keeper,omitempty"`
 	Timestamp      time.Time `json:"ts"`
 }
+
+// maxLiquidationRecords bounds the in-memory fill history (and the
+// /api/performance payload) on long-lived keepers; the chain remains the
+// authoritative full history.
+const maxLiquidationRecords = 200
 
 // KeeperStat tracks per-keeper performance metrics.
 type KeeperStat struct {
@@ -87,6 +98,15 @@ var (
 	state  = &State{KeeperStats: map[string]*KeeperStat{}}
 	appMet = &appMetrics{}
 )
+
+// Keeper runs a set of protocol adapters against shared vault capital each cycle.
+type Keeper struct {
+	rpc       *soroban.Client
+	kp        *keypair.Full
+	cfg       Config
+	vault     *vault.Client
+	protocols []adapters.ProtocolAdapter
+}
 
 // addEvent appends msg to the ring-buffer and broadcasts to SSE subscribers.
 // Subscriber channels are iterated outside the data lock to avoid deadlock.
@@ -166,6 +186,35 @@ func main() {
 	}
 	state.mu.Unlock()
 
+	// Build the protocol adapters this keeper runs each cycle. The DEX client is
+	// shared by adapters that convert collateral; nil when no router is set.
+	var dexc *dex.SwapClient
+	if cfg.SoroswapRouter != "" || cfg.PhoenixRouter != "" {
+		dexc = dex.NewSwapClient(rpc, dexConfig(cfg))
+	}
+	k := &Keeper{
+		rpc:   rpc,
+		kp:    kp,
+		cfg:   cfg,
+		vault: vault.NewClient(rpc, kp, cfg.HorizonURL, cfg.Passphrase, cfg.VaultID),
+	}
+	k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
+		PoolAddr:   cfg.BlendPool,
+		MinProfit:  cfg.MinProfit,
+		HorizonURL: cfg.HorizonURL,
+		Passphrase: cfg.Passphrase,
+		UsdcAddr:   cfg.UsdcAddr,
+	}, dexc))
+	if cfg.DeFindexVault != "" {
+		k.protocols = append(k.protocols, defindexadapter.NewAdapter(defindexadapter.Config{
+			VaultAddr:      cfg.DeFindexVault,
+			HorizonURL:     cfg.HorizonURL,
+			Passphrase:     cfg.Passphrase,
+			DriftThreshold: float64(cfg.DriftBps) / 10000.0,
+		}))
+	}
+	logInfo("adapters registered", "count", len(k.protocols))
+
 	go serveHTTP(cfg.APIPort)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -183,7 +232,7 @@ func main() {
 			return
 		case <-ticker.C:
 			appMet.cyclesTotal.Add(1)
-			if err := cycle(rpc, kp, cfg); err != nil {
+			if err := k.cycle(); err != nil {
 				logWarn("cycle error", "err", err)
 				state.addEvent(fmt.Sprintf("cycle error: %v", err))
 			}
@@ -191,62 +240,124 @@ func main() {
 	}
 }
 
-func cycle(rpc *soroban.Client, kp *keypair.Full, cfg Config) error {
-	// When BlendPool is configured, monitor positions and execute liquidations
-	if cfg.BlendPool != "" {
-		pool, err := blend.LoadPool(rpc, cfg.Passphrase, cfg.BlendPool)
-		if err != nil {
-			return fmt.Errorf("load pool: %w", err)
-		}
+// cycle runs every adapter once: scan tasks, execute them by priority, fold the
+// results into dashboard state, then refresh vault + depositor balances.
+// recoverStaleDraw makes the vault whole when a prior cycle left capital drawn
+// but unreturned (e.g. a transient ReturnProceeds failure after a fill). It
+// returns up to the outstanding draw from the keeper's USDC on hand, which clears
+// the draw and avoids a timeout slash. Safe: capped at the drawn amount (never
+// touches more of the keeper's float), and a no-op on vaults deployed before
+// get_keeper_draw existed.
+func (k *Keeper) recoverStaleDraw() {
+	if k.cfg.UsdcAddr == "" {
+		return
+	}
+	drawn, err := vault.GetKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
+	if err != nil || drawn <= 0 {
+		return // no outstanding draw, or the vault predates the getter
+	}
+	usdc, err := dex.TokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address())
+	if err != nil || usdc <= 0 {
+		logWarn("outstanding vault draw but no USDC on hand — holding collateral for manual recovery", "drawn", drawn)
+		return
+	}
+	ret := drawn
+	if usdc < ret {
+		ret = usdc
+	}
+	if err := k.vault.ReturnProceeds(ret, 0); err != nil {
+		logWarn("stale-draw recovery failed", "drawn", drawn, "return", ret, "err", err)
+		return
+	}
+	logInfo("recovered stale vault draw", "drawn", drawn, "returned", ret)
+	state.addEvent(fmt.Sprintf("recovered stale draw: returned %d to vault", ret))
+}
 
-		ledger, err := rpc.LatestLedger()
-		if err != nil {
-			return fmt.Errorf("latest ledger: %w", err)
-		}
+// plannedTask pairs a discovered task with the adapter that produced it, so
+// tasks from every protocol can be ordered by priority in one queue.
+type plannedTask struct {
+	ad   adapters.ProtocolAdapter
+	task adapters.Task
+}
 
-		positions, err := blend.GetPositions(rpc, cfg.Passphrase, cfg.BlendPool, ledger-1000)
-		if err != nil {
-			return fmt.Errorf("get positions: %w", err)
-		}
+func (k *Keeper) cycle() error {
+	k.recoverStaleDraw()
 
-		var rows []posRow
-		for i := range positions {
-			pos := &positions[i]
-			pos.HF = blend.CalcHealthFactor(*pos, pool)
-			rows = append(rows, posRow{Address: pos.Address, HF: pos.HF})
-
-			if pos.HF >= 1.0 {
-				continue
-			}
-
-			logInfo("underwater position", "user", short(pos.Address), "hf", fmt.Sprintf("%.4f", pos.HF))
-			state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f", short(pos.Address), pos.HF))
-
-			if err := handleLiquidation(rpc, kp, cfg, pool, pos.Address, ledger); err != nil {
-				logWarn("liquidation failed", "user", short(pos.Address), "err", err)
-				state.addEvent(fmt.Sprintf("liq failed: %s %v", short(pos.Address), err))
-			}
-		}
-
-		state.mu.Lock()
-		state.Positions = rows
-		state.mu.Unlock()
-	} else {
-		state.addEvent("vault monitor mode — no Blend pool configured")
+	// Read available vault capital once up front so EstimateCapital can gate
+	// tasks that cannot possibly be funded this cycle. available < 0 means the
+	// read failed and the gate is disabled.
+	available := int64(-1)
+	if vs, err := vault.GetState(k.rpc, k.cfg.Passphrase, k.cfg.VaultID); err == nil {
+		available = vs.TotalUSDC - vs.ActiveLiq
 	}
 
+	// Scan every protocol first, then execute across protocols in a single
+	// priority order — a critical Blend liquidation must not wait behind a
+	// routine DeFindex rebalance just because of adapter registration order.
+	var planned []plannedTask
+	var posRows []posRow
+	for _, ad := range k.protocols {
+		tasks, err := ad.GetTasks(k.rpc)
+		if err != nil {
+			logWarn("get tasks failed", "protocol", ad.Name(), "err", err)
+			state.addEvent(fmt.Sprintf("%s scan error: %v", ad.Name(), err))
+			continue
+		}
+		for _, task := range tasks {
+			// Surface liquidation targets (with their health factor) on the
+			// dashboard; rebalance/other task types are not positions and must
+			// not push a drift value into the HF field.
+			if task.Type == "liquidation" {
+				posRows = append(posRows, posRow{Address: task.Target, HF: task.Health})
+				if task.Health > 0 && task.Health < 1.0 {
+					state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f", short(task.Target), task.Health))
+				}
+			}
+			planned = append(planned, plannedTask{ad: ad, task: task})
+		}
+	}
+	sort.SliceStable(planned, func(i, j int) bool {
+		return planned[i].task.Priority > planned[j].task.Priority
+	})
+
+	for _, p := range planned {
+		task := p.task
+		if available >= 0 {
+			if est, err := p.ad.EstimateCapital(task); err == nil && est > 0 && est > available {
+				logInfo("task skipped: insufficient vault capital",
+					"protocol", task.Protocol, "target", short(task.Target), "est", est, "available", available)
+				state.addEvent(fmt.Sprintf("%s %s skipped: needs %d, vault has %d",
+					task.Protocol, task.Type, est, available))
+				continue
+			}
+		}
+		logInfo("executing task", "protocol", task.Protocol, "type", task.Type,
+			"target", short(task.Target), "priority", task.Priority)
+		res, err := p.ad.Execute(k.rpc, k.kp, task, k.vault)
+		if err != nil {
+			logWarn("execute failed", "protocol", task.Protocol, "type", task.Type,
+				"target", short(task.Target), "err", err)
+			state.addEvent(fmt.Sprintf("%s %s failed: %s %v", task.Protocol, task.Type, short(task.Target), err))
+			continue
+		}
+		k.recordResult(task, res)
+	}
+	state.mu.Lock()
+	state.Positions = posRows
+	state.mu.Unlock()
+
 	// refresh vault state
-	if vs, err := vault.GetState(rpc, cfg.Passphrase, cfg.VaultID); err == nil {
+	if vs, err := vault.GetState(k.rpc, k.cfg.Passphrase, k.cfg.VaultID); err == nil {
 		state.mu.Lock()
 		state.VaultState = vs
 		state.mu.Unlock()
 	}
 
 	// refresh depositor balances for the performance page
-	if len(cfg.KnownDepositors) > 0 {
+	if len(k.cfg.KnownDepositors) > 0 {
 		var depRows []DepositorRow
-		for _, addr := range cfg.KnownDepositors {
-			bal, err := vault.Balance(rpc, cfg.Passphrase, cfg.VaultID, addr)
+		for _, addr := range k.cfg.KnownDepositors {
+			bal, err := vault.Balance(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, addr)
 			if err != nil {
 				continue
 			}
@@ -264,102 +375,63 @@ func cycle(rpc *soroban.Client, kp *keypair.Full, cfg Config) error {
 	return nil
 }
 
-func handleLiquidation(rpc *soroban.Client, kp *keypair.Full, cfg Config, pool *blend.PoolState, user string, currentLedger int64) error {
-	if err := blend.CreateAuction(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.BlendPool, user, 50); err != nil {
-		return fmt.Errorf("create auction: %w", err)
+// recordResult folds an adapter Result into dashboard state and metrics.
+func (k *Keeper) recordResult(task adapters.Task, res *adapters.Result) {
+	if res == nil {
+		return
 	}
-
-	auction, err := blend.GetAuction(rpc, cfg.Passphrase, cfg.BlendPool, user)
-	if err != nil {
-		return fmt.Errorf("get auction: %w", err)
-	}
-	if auction == nil {
-		return nil
-	}
-
-	profit := blend.Profitability(*auction, pool, currentLedger)
-	logInfo("auction profitability", "user", short(user), "ratio", fmt.Sprintf("%.4f", profit))
-
-	if profit < cfg.MinProfit {
-		logInfo("skipping — not profitable yet", "ratio", fmt.Sprintf("%.4f", profit), "min", cfg.MinProfit)
-		return nil
-	}
-
-	// sum bid amounts to estimate capital needed from vault
-	bidAmt := int64(0)
-	for _, amt := range auction.Bid {
-		if amt != nil {
-			bidAmt += amt.Int64()
+	if !res.Success {
+		if res.Note != "" {
+			logInfo("task not executed", "protocol", task.Protocol, "target", short(task.Target), "note", res.Note)
 		}
+		return
 	}
 
-	// draw vault capital
-	drawStart := time.Now()
-	if bidAmt > 0 {
-		if err := vault.Draw(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, bidAmt); err != nil {
-			return fmt.Errorf("vault draw: %w", err)
-		}
-		logInfo("drew vault capital", "amount", bidAmt)
-		state.addEvent(fmt.Sprintf("drew %d from vault", bidAmt))
+	logInfo("task executed", "protocol", task.Protocol, "type", task.Type, "target", short(task.Target),
+		"drew", res.Drew, "proceeds", res.Proceeds, "profit", res.Profit, "response_ms", res.ResponseTimeMs)
+	state.addEvent(fmt.Sprintf("%s %s: %s drew=%d proceeds=%d", task.Protocol, task.Type, short(task.Target), res.Drew, res.Proceeds))
+
+	if res.Drew > 0 && res.Proceeds == 0 {
+		logWarn("fill succeeded but produced zero returnable proceeds — outstanding draw at slash risk",
+			"protocol", task.Protocol, "target", short(task.Target), "drew", res.Drew)
+		state.addEvent(fmt.Sprintf("zero proceeds, draw outstanding: %s", short(task.Target)))
 	}
 
-	// attempt fill — only return proceeds on success or AlreadyFilled
-	fillErr := blend.FillAuction(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.BlendPool, user)
-	shouldReturn := false
-	// Captured for the keeper performance metric (avg_response_time_ms).
-	// Forwarded to ReturnProceeds → vault.return_proceeds → registry.record_execution.
-	// Zero for the AlreadyFilled branch — we didn't actually execute.
-	responseMs := int64(0)
-
-	switch {
-	case fillErr == nil:
-		responseMs = time.Since(drawStart).Milliseconds()
-		logInfo("filled auction", "user", short(user), "response_ms", responseMs)
-		state.addEvent(fmt.Sprintf("filled auction: %s", short(user)))
-		shouldReturn = bidAmt > 0
+	// Liquidation-specific accounting; other task types (e.g. rebalance) only log.
+	if task.Type == "liquidation" {
 		appMet.liquidationsTotal.Add(1)
-		proceeds := int64(0)
-		if bidAmt > 0 {
-			proceeds = bidAmt + bidAmt/10
-		}
 		state.mu.Lock()
+		if len(state.Liquidations) >= maxLiquidationRecords {
+			state.Liquidations = state.Liquidations[1:]
+		}
 		state.Liquidations = append(state.Liquidations, LiquidationRecord{
-			User:           user,
-			Block:          currentLedger,
-			Drew:           bidAmt,
-			Proceeds:       proceeds,
-			ResponseTimeMs: responseMs,
+			User:           task.Target,
+			Block:          res.Block,
+			Drew:           res.Drew,
+			Proceeds:       res.Proceeds,
+			ResponseTimeMs: res.ResponseTimeMs,
+			TxHash:         res.TxHash,
+			Keeper:         k.cfg.KeeperName,
 			Timestamp:      time.Now().UTC(),
 		})
-		if ks := state.KeeperStats[cfg.KeeperName]; ks != nil {
+		if ks := state.KeeperStats[k.cfg.KeeperName]; ks != nil {
 			ks.Liquidations++
-			ks.TotalProfit += bidAmt / 10
+			ks.TotalProfit += res.Profit
 		}
 		state.mu.Unlock()
-
-	case fillErr == blend.ErrAlreadyFilled:
-		// Another keeper won. Return drawn capital to vault (it won't profit).
-		logInfo("auction already filled by another keeper", "user", short(user))
-		state.addEvent(fmt.Sprintf("already filled: %s", short(user)))
-		shouldReturn = bidAmt > 0
-
-	default:
-		// Hard fill failure — do not return proceeds; leave capital outstanding.
-		return fmt.Errorf("fill auction: %w", fillErr)
 	}
+}
 
-	if shouldReturn {
-		proceeds := bidAmt + bidAmt/10
-		if err := vault.ReturnProceeds(rpc, cfg.HorizonURL, kp, cfg.Passphrase, cfg.VaultID, proceeds, responseMs); err != nil {
-			logWarn("return proceeds failed", "err", err)
-			state.addEvent(fmt.Sprintf("return proceeds failed: %v", err))
-		} else {
-			logInfo("returned proceeds", "amount", proceeds, "response_ms", responseMs)
-			state.addEvent(fmt.Sprintf("returned %d to vault", proceeds))
-		}
+// dexConfig projects the keeper Config into the dex package's Config.
+func dexConfig(cfg Config) dex.Config {
+	return dex.Config{
+		HorizonURL:     cfg.HorizonURL,
+		Passphrase:     cfg.Passphrase,
+		UsdcAddr:       cfg.UsdcAddr,
+		SoroswapRouter: cfg.SoroswapRouter,
+		PhoenixRouter:  cfg.PhoenixRouter,
+		SlippageBps:    cfg.SlippageBps,
 	}
-
-	return nil
 }
 
 // ── HTTP handlers ─────────────────────────────────────────────────────────────
@@ -376,7 +448,15 @@ func serveHTTP(port string) {
 
 	addr := ":" + port
 	logInfo("API server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		// No WriteTimeout: /api/events is a long-lived SSE stream.
+		IdleTimeout: 120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		logErr("API server", "err", err)
 	}
 }

@@ -153,3 +153,48 @@ func TestDefaultRetry_HasReasonableValues(t *testing.T) {
 		t.Errorf("default BackoffFactor should be >1, got %f", c.BackoffFactor)
 	}
 }
+
+// Post-send ambiguity: the tx may still land, so a config that forbids
+// ambiguous retries must stop after the first attempt even though the error
+// string ("timed out") is otherwise retryable.
+func TestRetryWith_AmbiguousNotRetriedWhenDisabled(t *testing.T) {
+	attempts := 0
+	amb := &TxStatusUnknownError{Hash: "deadbeefcafe", Err: errors.New("tx deadbeef timed out")}
+	err := retryWith(RetryConfig{MaxAttempts: 3, InitialDelay: time.Millisecond, RetryAmbiguous: false}, func() error {
+		attempts++
+		return amb
+	})
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt (no ambiguous retry), got %d", attempts)
+	}
+	if !IsTxStatusUnknown(err) {
+		t.Fatalf("ambiguity must survive to the caller, got %v", err)
+	}
+}
+
+func TestRetryWith_AmbiguousRetriedWhenEnabled(t *testing.T) {
+	attempts := 0
+	err := retryWith(RetryConfig{MaxAttempts: 3, InitialDelay: time.Millisecond, RetryAmbiguous: true}, func() error {
+		attempts++
+		if attempts < 2 {
+			return &TxStatusUnknownError{Hash: "deadbeefcafe", Err: errors.New("tx deadbeef timed out")}
+		}
+		return nil
+	})
+	if err != nil || attempts != 2 {
+		t.Fatalf("expected success on attempt 2, got attempts=%d err=%v", attempts, err)
+	}
+}
+
+func TestIsTxStatusUnknown_Wrapping(t *testing.T) {
+	amb := &TxStatusUnknownError{Hash: "deadbeefcafe", Err: errors.New("poll failed")}
+	if !IsTxStatusUnknown(amb) {
+		t.Fatal("bare ambiguous error must classify")
+	}
+	if !IsTxStatusUnknown(errors.Join(errors.New("outer"), amb)) {
+		t.Fatal("joined ambiguous error must classify")
+	}
+	if IsTxStatusUnknown(errors.New("tx deadbeef timed out")) {
+		t.Fatal("a plain string error must not classify as ambiguous")
+	}
+}

@@ -404,6 +404,7 @@ export interface KeeperInfoOnchain {
   totalProfit: number;
   lastDrawTime: number;
   hasActiveDraw: boolean;
+  avgResponseTimeMs: number;
 }
 
 /** Internal helper: simulate a read-only contract call and return retval. */
@@ -509,6 +510,11 @@ export async function queryKeeper(
   if (!v) return null;
   try {
     const obj = StellarSdk.scValToNative(v) as Record<string, unknown>;
+    // KeeperInfo carries totals (total_response_time_ms, response_count) — the
+    // average is a separate contract function, not a struct field. Derive it
+    // here so the leaderboard's avg-response column reflects real data.
+    const totalResponseMs = Number(obj.total_response_time_ms ?? 0);
+    const responseCount = Number(obj.response_count ?? 0);
     return {
       addr: String(obj.addr ?? operatorAddress),
       name: String(obj.name ?? ""),
@@ -520,9 +526,23 @@ export async function queryKeeper(
       totalProfit: Number(obj.total_profit ?? 0),
       lastDrawTime: Number(obj.last_draw_time ?? 0),
       hasActiveDraw: Boolean(obj.has_active_draw ?? false),
+      avgResponseTimeMs: responseCount > 0 ? Math.round(totalResponseMs / responseCount) : 0,
     };
   } catch {
     return null;
+  }
+}
+
+/** Read all registered keeper addresses from the registry (get_keepers). */
+export async function queryKeepers(): Promise<string[]> {
+  const v = await simulateRead(REGISTRY_CONTRACT, "get_keepers", []);
+  if (!v) return [];
+  try {
+    const native = StellarSdk.scValToNative(v);
+    if (!Array.isArray(native)) return [];
+    return native.map((a) => String(a)).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 

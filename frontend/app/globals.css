@@ -11,9 +11,73 @@
   --accent: hsl(160, 90%, 52%);
   --amber: hsl(38, 95%, 55%);
   --red: hsl(0, 85%, 60%);
+  --info: hsl(200, 80%, 60%);
   --text: hsl(220, 20%, 75%);
   --text-dim: hsl(220, 10%, 45%);
+  --text-mute: hsl(220, 10%, 35%);
   --border: hsl(220, 15%, 16%);
+
+  /* tinted overlays */
+  --accent-glow: rgba(0, 229, 160, 0.04);
+  --accent-fill: rgba(0, 229, 160, 0.08);
+  --accent-soft: rgba(0, 229, 160, 0.15);
+  --red-fill: rgba(239, 68, 68, 0.04);
+  --amber-fill: rgba(245, 158, 11, 0.08);
+  --nav-bg: rgba(10, 11, 14, 0.85);
+
+  /* type families */
+  --font-display: "Syne", "Helvetica Neue", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", monospace;
+  /* legacy alias kept for existing components */
+  --font-syne: var(--font-display);
+
+  /* radii */
+  --r-sharp: 2px;
+  --r-soft: 4px;
+  --r-pill: 999px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* surface fills — themed per vibe so cards stay visible in light mode */
+  --card-fill: rgba(255, 255, 255, 0.02);
+  --card-fill-accent: rgba(0, 229, 160, 0.03);
+}
+
+/* ── Theme: Bloomberg (amber phosphor) ──────────────────────────────────── */
+[data-vibe="bloomberg"] {
+  --bg: hsl(0, 0%, 4%);
+  --surface: hsl(0, 0%, 7%);
+  --surface-2: hsl(0, 0%, 10%);
+  --border: hsl(38, 25%, 18%);
+  --accent: hsl(38, 100%, 60%);
+  --amber: hsl(38, 100%, 60%);
+  --red: hsl(0, 95%, 62%);
+  --info: hsl(180, 70%, 60%);
+  --text: hsl(38, 35%, 80%);
+  --text-dim: hsl(38, 18%, 52%);
+  --text-mute: hsl(38, 12%, 37%);
+  --accent-fill: rgba(255, 180, 51, 0.08);
+  --card-fill-accent: rgba(255, 180, 51, 0.05);
+  --nav-bg: rgba(8, 7, 4, 0.85);
+}
+
+/* ── Theme: Clinical (light) ────────────────────────────────────────────── */
+[data-vibe="clinical"] {
+  --bg: hsl(220, 20%, 97%);
+  --surface: hsl(220, 18%, 100%);
+  --surface-2: hsl(220, 16%, 95%);
+  --border: hsl(220, 14%, 85%);
+  --accent: hsl(160, 70%, 36%);
+  --amber: hsl(32, 90%, 46%);
+  --red: hsl(0, 75%, 50%);
+  --info: hsl(210, 80%, 46%);
+  --text: hsl(220, 25%, 18%);
+  --text-dim: hsl(220, 12%, 42%);
+  --text-mute: hsl(220, 10%, 60%);
+  --accent-fill: rgba(0, 160, 110, 0.08);
+  --card-fill: var(--surface);
+  --card-fill-accent: rgba(0, 160, 110, 0.06);
+  --nav-bg: rgba(255, 255, 255, 0.85);
 }
 
 * {
@@ -30,12 +94,30 @@ body {
   font-family: "DM Mono", monospace;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* Dot grid background utility */
 .dot-grid {
   background-image: radial-gradient(var(--border) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+/* Home page layout grids (from the redesign handoff) */
+.home-wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+.hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
+.net-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 880px) {
+  .hero-grid { grid-template-columns: 1fr; gap: 36px; }
+  .net-grid { grid-template-columns: 1fr; }
+}
+.vault-cta-grid { display: grid; grid-template-columns: 1.2fr 1fr; }
+@media (max-width: 820px) {
+  .vault-cta-grid { grid-template-columns: 1fr; }
+  .vault-cta-grid > div:nth-child(2) { border-left: none !important; border-top: 1px solid var(--border); }
+}
+@media (max-width: 920px) {
+  .liq-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 /* Noise overlay */
@@ -89,3 +171,30 @@ body {
 .status-dot.red {
   background: var(--red);
 }
+
+/* Log-stream line entrance (home hero keeper stream) */
+.logline {
+  opacity: 1;
+  animation: slidein 0.32s var(--ease-out, ease-out);
+}
+
+@keyframes slidein {
+  from { transform: translateX(-7px); }
+  to { transform: translateX(0); }
+}
+
+/* thin scrollbar for the live log panel */
+.thin-scroll::-webkit-scrollbar { width: 7px; height: 7px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* dashboard / table motion (value flashes, fade-in, hover rows) */
+@keyframes flash-up { 0% { background: rgba(0, 229, 160, 0.18); } 100% { background: transparent; } }
+@keyframes flash-down { 0% { background: rgba(239, 68, 68, 0.16); } 100% { background: transparent; } }
+.flash-up { animation: flash-up 700ms ease-out; }
+.flash-down { animation: flash-down 700ms ease-out; }
+@keyframes fadeUp { 0% { opacity: 0; transform: translateY(16px); } 100% { opacity: 1; transform: translateY(0); } }
+.fade-up { animation: fadeUp 0.6s var(--ease-out, ease-out) both; }
+.nrow { transition: background 150ms; }
+.nrow:hover { background: var(--surface); }
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }

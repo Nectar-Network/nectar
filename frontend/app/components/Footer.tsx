@@ -15,15 +15,18 @@ export default function Footer() {
         </p>
         <div className="flex items-center gap-6 text-xs font-mono">
           {[
-            { label: "Twitter", href: "https://x.com/nectar_xlm" },
-            { label: "GitHub", href: "https://github.com/nectar-network/nectar-poc" },
-            { label: "Blend Protocol", href: "https://blend.capital" },
+            { label: "Docs", href: "https://docs.nectar.monster", external: true },
+            { label: "Keeper SDK", href: "https://github.com/Nectar-Network/keeper-sdk", external: true },
+            { label: "Media Kit", href: "/media-kit", external: false },
+            { label: "Twitter", href: "https://x.com/nectar_xlm", external: true },
+            { label: "GitHub", href: "https://github.com/Nectar-Network/nectar", external: true },
+            { label: "Blend Protocol", href: "https://blend.capital", external: true },
           ].map((link) => (
             <a
               key={link.label}
               href={link.href}
-              target="_blank"
-              rel="noopener noreferrer"
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
               className="transition-colors duration-150"
               style={{ color: "var(--text-dim)" }}
               onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text)")}

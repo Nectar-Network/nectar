@@ -114,3 +114,21 @@ func TestParseAddress_RoundTrip(t *testing.T) {
 		t.Fatalf("round-trip mismatch: got %q, want %q", got, original)
 	}
 }
+
+func TestI128ToInt64_Range(t *testing.T) {
+	if n, ok := I128ToInt64(ScvI128(1_000_000_000)); !ok || n != 1_000_000_000 {
+		t.Fatalf("positive in-range: got (%d,%v)", n, ok)
+	}
+	if n, ok := I128ToInt64(ScvI128(-42)); !ok || n != -42 {
+		t.Fatalf("negative in-range: got (%d,%v)", n, ok)
+	}
+	// Hi=1 → value >= 2^64, does not fit int64.
+	big := xdr.ScVal{Type: xdr.ScValTypeScvI128, I128: &xdr.Int128Parts{Hi: 1, Lo: 0}}
+	if _, ok := I128ToInt64(big); ok {
+		t.Fatal("out-of-range i128 must report !ok")
+	}
+	// Non-i128 types must report !ok.
+	if _, ok := I128ToInt64(ScvU64(7)); ok {
+		t.Fatal("non-i128 must report !ok")
+	}
+}

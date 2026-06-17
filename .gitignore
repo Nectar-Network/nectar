@@ -63,3 +63,11 @@ lcov.info
 ._*
 .AppleDouble
 .LSOverride
+
+# Design handoff / reference bundles (local reference only — ~190MB, not production source)
+design_handoff_nectar_redesign/
+nectar-network-design-system/
+*.zip
+
+# Vercel local link metadata (machine-local; never commit)
+.vercel/
