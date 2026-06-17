@@ -2,7 +2,7 @@
 
 Multi-operator keeper infrastructure for Soroban DeFi. Distributed liquidation network for Blend Protocol on Stellar — no single point of failure.
 
-**Live:** [nectarnetwork.fun](https://nectarnetwork.fun) · [Twitter](https://x.com/nectar_xlm) · [GitHub](https://github.com/Nectar-Network/nectar-poc)
+**Live:** [nectarnetwork.fun](https://nectarnetwork.fun) · [Docs](https://docs.nectar.monster) · [Keeper SDK](https://github.com/Nectar-Network/keeper-sdk) · [Twitter](https://x.com/nectar_xlm) · [GitHub](https://github.com/Nectar-Network/nectar)
 
 ## The Problem
 
@@ -144,14 +144,14 @@ All protocol work runs through one minimal interface, [`adapters.ProtocolAdapter
 
 Four routes under `/dashboard` (see the Frontend table below): network overview with a share-price/APY chart derived only from realized on-chain profit (short windows render as cumulative return, never a fabricated annualized figure), a keeper leaderboard read from the on-chain registry (sortable by executions, win rate, avg response, stake, profit), a real-time liquidation feed with fill-tx explorer links and keeper attribution, and per-depositor analytics with clearly-labeled cost-basis estimates.
 
-### 4. Keeper SDK & Operator Documentation — not started
+### 4. Keeper SDK & Operator Documentation — complete
 
-Scheduled as the final Tranche 2 work package: extracting `adapters.ProtocolAdapter` + the `soroban`/`vault`/`dex` packages into a published, `go get`-able module with operator setup/strategy/risk documentation.
+Extracted into a standalone, `go get`-able module at [github.com/Nectar-Network/keeper-sdk](https://github.com/Nectar-Network/keeper-sdk): the `adapters.ProtocolAdapter` interface plus the `soroban`/`vault`/`dex`/`registry`/`blend` packages, a reference Blend adapter, runnable examples, and operator setup/strategy/risk docs. Hardened for funds-safety — non-retryable post-send transaction classification (no double-draw/double-fill), oracle-priced + overflow-guarded draw sizing, and structured `Error(Contract, #N)` matching — with CI and a race-clean test suite. Publishes on merge of the release PR plus a `v0.1.0` tag (the Go module proxy indexes on first fetch). Full operator guides live at [docs.nectar.monster](https://docs.nectar.monster).
 
 ## Repository Structure
 
 ```
-nectar-poc/
+nectar/
 ├── contracts/
 │   ├── keeper-registry/      # Soroban (Rust) — operator registration + stake + slash, 26 tests
 │   ├── nectar-vault/         # Soroban (Rust) — USDC vault + LP shares + cap + cooldown, 37 tests
