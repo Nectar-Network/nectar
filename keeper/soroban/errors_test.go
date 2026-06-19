@@ -1,6 +1,30 @@
 package soroban
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+// A JSON-RPC "error" field arrives in many shapes across nodes/proxies; only a
+// real, non-empty error should surface (an empty-string error must not fail an
+// otherwise-successful call — the live "cannot unmarshal string into .error" bug).
+func TestRPCErrorMessage(t *testing.T) {
+	cases := []struct{ raw, want string }{
+		{`""`, ""},
+		{`null`, ""},
+		{``, ""},
+		{`{}`, ""},
+		{`"  "`, ""},
+		{`{"code":-32601,"message":"method not found"}`, "method not found (code -32601)"},
+		{`{"message":"boom"}`, "boom"},
+		{`"plain string error"`, "plain string error"},
+	}
+	for _, c := range cases {
+		if got := rpcErrorMessage(json.RawMessage(c.raw)); got != c.want {
+			t.Errorf("rpcErrorMessage(%s) = %q, want %q", c.raw, got, c.want)
+		}
+	}
+}
 
 func TestParseContractCode(t *testing.T) {
 	cases := []struct {

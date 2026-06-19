@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -199,16 +200,49 @@ func (c *Client) call(method string, params any, out any) error {
 	defer resp.Body.Close()
 	var rr struct {
 		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-		} `json:"error"`
+		// Decoded loosely: the JSON-RPC spec says "error" is an {code,message}
+		// object, but some Soroban RPC nodes/proxies return it as a bare string —
+		// or even an empty string "" on success. Forcing it into a struct made
+		// every call crash with "cannot unmarshal string into Go struct field".
+		Error json.RawMessage `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&rr); err != nil {
 		return err
 	}
-	if rr.Error != nil {
-		return fmt.Errorf("rpc %s: %s", method, rr.Error.Message)
+	if msg := rpcErrorMessage(rr.Error); msg != "" {
+		return fmt.Errorf("rpc %s: %s", method, msg)
 	}
 	return json.Unmarshal(rr.Result, out)
+}
+
+// rpcErrorMessage extracts a human-readable error from the JSON-RPC "error"
+// field, which nodes return inconsistently: an {code,message} object, a bare
+// string, an empty string, null, or absent. Returns "" when there is no real
+// error so a successful response with `"error":""` is not treated as a failure.
+func rpcErrorMessage(raw json.RawMessage) string {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || s == "null" || s == `""` || s == "{}" {
+		return ""
+	}
+	var obj struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &obj) == nil && (obj.Message != "" || obj.Code != 0) {
+		if obj.Message == "" {
+			return fmt.Sprintf("code %d", obj.Code)
+		}
+		if obj.Code != 0 {
+			return fmt.Sprintf("%s (code %d)", obj.Message, obj.Code)
+		}
+		return obj.Message
+	}
+	var str string
+	if json.Unmarshal(raw, &str) == nil {
+		if strings.TrimSpace(str) == "" {
+			return ""
+		}
+		return str
+	}
+	return s
 }
