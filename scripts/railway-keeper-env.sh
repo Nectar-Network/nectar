@@ -14,25 +14,28 @@ set -euo pipefail
 
 NAME="${1:-keeper-alpha}"
 case "$NAME" in
-  keeper-alpha|keeper-beta) ;;
+  keeper-alpha|keeper-beta|keeper-gamma) ;;
   *)
-    echo "name must be keeper-alpha or keeper-beta" >&2
+    echo "name must be keeper-alpha, keeper-beta or keeper-gamma" >&2
     exit 1
     ;;
 esac
 
-# Tranche 1 contracts (testnet, redeployed 2026-05-13)
-# Deployed by ./scripts/tranche-1-e2e.sh on this branch — ABI now includes
-# response_time_ms plumbing (vault.return_proceeds → registry.record_execution).
-REGISTRY=CCQAW3HWZ4OSBVPOFJ7M64YEJD323SFSIGKEZMTRQI2IUWRNG7QE6RPW
-VAULT=CCHR5KXXPIFKQWDEWEPGDLTJMMVG36PCXUPKYSAF3HP3UV6C5Z2AFOZU
+# Tranche 1 hardened contracts (testnet, redeployed 2026-05-24) — current.
+# Source of truth: wallets.md. Earlier (May-13) addresses are deprecated.
+REGISTRY=CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
+VAULT=CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
 USDC=CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
+# Soroswap testnet router — enables collateral->USDC conversion after fills.
+SOROSWAP_ROUTER=CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD
 
 ARGS=(
   --set "KEEPER_NAME=${NAME}"
   --set "REGISTRY_CONTRACT=${REGISTRY}"
   --set "VAULT_CONTRACT=${VAULT}"
   --set "USDC_CONTRACT=${USDC}"
+  --set "SOROSWAP_ROUTER=${SOROSWAP_ROUTER}"
+  --set "SLIPPAGE_BPS=100"
   --set "SOROBAN_RPC=https://soroban-testnet.stellar.org:443"
   --set "HORIZON_URL=https://horizon-testnet.stellar.org"
   --set "POLL_INTERVAL=10"
@@ -57,4 +60,5 @@ echo
 case "$NAME" in
   keeper-alpha) echo "  KEEPER_SECRET → alpha's secret from deploy/keepers.json"  ;;
   keeper-beta)  echo "  KEEPER_SECRET → beta's secret from deploy/keepers.json"   ;;
+  keeper-gamma) echo "  KEEPER_SECRET → gamma's secret from deploy/keepers.json"  ;;
 esac
