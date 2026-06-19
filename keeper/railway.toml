@@ -14,13 +14,14 @@ healthcheckPath = "/healthz"
 healthcheckTimeout = 30
 
 # Environment variables — set these in the Railway dashboard, NOT here.
+# Addresses below are the Tranche 1 hardened deployment (2026-05-24, current).
 # Required:
 #   KEEPER_SECRET   (mark as secret) — operator's Stellar S... key
-#   KEEPER_NAME     keeper-alpha (or keeper-beta for the second instance)
-#   REGISTRY_CONTRACT  CAEHWZOOEP6YSU3EJDO7B2L7QJTG4YHXJIACRBWRTFRPMRVND56LTWAO
-#   VAULT_CONTRACT     CCSR5GT6BEZXCW5UWV4LOXC24L75YQ7JJ5Q3Q7WJKLCGSKOSWOELJJFQ
-#   USDC_CONTRACT      CD3YAGUK4SV67PIHRYKR5QAKTNVIGVDAXT6P426EO2E76DAXGMPLMSAH
-#   BLEND_POOL         (Blend testnet pool address you're monitoring)
+#   KEEPER_NAME     keeper-alpha (or keeper-beta / keeper-gamma per instance)
+#   REGISTRY_CONTRACT  CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
+#   VAULT_CONTRACT     CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
+#   USDC_CONTRACT      CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
+#   BLEND_POOL         CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF
 #   SOROBAN_RPC        https://soroban-testnet.stellar.org:443
 #   HORIZON_URL        https://horizon-testnet.stellar.org
 #   POLL_INTERVAL      10
@@ -28,4 +29,6 @@ healthcheckTimeout = 30
 #   API_PORT           8080
 #
 # Optional:
+#   SOROSWAP_ROUTER    CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD (enables collateral->USDC swaps)
+#   SLIPPAGE_BPS       100 (max swap slippage; default 100 = 1%)
 #   KNOWN_DEPOSITORS   comma-separated list of depositor addresses to display
