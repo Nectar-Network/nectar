@@ -47,6 +47,10 @@ type Event struct {
 	Topic      []string `json:"topic"`
 	Value      string   `json:"value"`
 	Ledger     int64    `json:"ledger"`
+	// TxHash and LedgerClosedAt are present on getEvents results; older callers
+	// that only read topics/value ignore them. LedgerClosedAt is RFC3339.
+	TxHash         string `json:"txHash,omitempty"`
+	LedgerClosedAt string `json:"ledgerClosedAt,omitempty"`
 }
 
 func (c *Client) Simulate(txXDR string) (*SimulateResult, error) {

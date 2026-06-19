@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   PerformanceData,
+  HistoryEvent,
   fetchPerformance,
   formatUSDC,
   shortAddress,
@@ -27,6 +28,20 @@ import {
 
 const STROOPS = 1e7;
 const G_ADDR = /^G[A-Z2-7]{55}$/;
+const EXPLORER_TX = "https://stellar.expert/explorer/testnet/tx/";
+
+function historyDateLabel(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t) || t <= 0) return "—";
+  return new Date(t).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// 5-col grid: date · type · amount · shares · tx
+const HIST_COLS = "1.1fr 0.8fr 1fr 1fr 60px";
 
 interface Position {
   address: string;
@@ -170,6 +185,17 @@ export default function DepositorAnalytics({
       value: (shares * p.sharePrice) / STROOPS,
     }));
   }, [perf, shares]);
+
+  // Deposit/withdraw history for the looked-up address, indexed from vault
+  // events by the keeper (newest first). Sourced from the performance payload's
+  // matching depositor row; absent when the keeper has not indexed this address.
+  const history = useMemo<HistoryEvent[]>(() => {
+    if (!perf || !pos) return [];
+    const row = perf.depositors.find(
+      (d) => d.address.toUpperCase() === pos.address.toUpperCase(),
+    );
+    return row?.history ?? [];
+  }, [perf, pos]);
 
   const hasPosition = !!pos && shares > 0;
   const joined = pos ? joinedLabel(pos.depositedAt) : null;
@@ -404,14 +430,85 @@ export default function DepositorAnalytics({
             </div>
           </Card>
 
+          {/* Deposit / withdraw history — indexed from vault events by the keeper */}
+          <Card style={{ padding: 0, marginBottom: 20 }}>
+            <CardHead>Deposit / withdraw history</CardHead>
+            <div style={{ overflowX: "auto" }}>
+              <div style={{ minWidth: 520 }}>
+                {/* Column header */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: HIST_COLS,
+                    padding: "10px 20px",
+                    ...mono(10, "var(--text-dim)"),
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <span>Date</span>
+                  <span>Type</span>
+                  <span style={{ textAlign: "right" }}>Amount</span>
+                  <span style={{ textAlign: "right" }}>Shares</span>
+                  <span style={{ textAlign: "right" }}>Tx</span>
+                </div>
+
+                {history.length === 0 ? (
+                  <div style={{ padding: "32px 20px", textAlign: "center", ...mono(12, "var(--text-mute)") }}>
+                    No deposit/withdraw events in the indexed window.
+                  </div>
+                ) : (
+                  history.map((h, i) => (
+                    <div
+                      key={`${h.tx_hash ?? h.ledger}-${h.type}-${i}`}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: HIST_COLS,
+                        padding: "9px 20px",
+                        ...mono(12, "var(--text-dim)"),
+                        alignItems: "center",
+                        borderBottom: i < history.length - 1 ? "1px solid var(--border)" : "none",
+                      }}
+                    >
+                      <span>{historyDateLabel(h.ts)}</span>
+                      <span style={{ color: h.type === "deposit" ? "var(--accent)" : "var(--text)" }}>
+                        {h.type}
+                      </span>
+                      <span style={{ textAlign: "right", color: "var(--text)" }}>
+                        ${formatUSDC(h.amount)}
+                      </span>
+                      <span style={{ textAlign: "right" }}>{(h.shares / STROOPS).toFixed(2)}</span>
+                      {h.tx_hash ? (
+                        <a
+                          href={`${EXPLORER_TX}${h.tx_hash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={h.tx_hash}
+                          style={{ textAlign: "right", color: "var(--accent)", textDecoration: "none" }}
+                        >
+                          tx ↗
+                        </a>
+                      ) : (
+                        <span style={{ textAlign: "right", color: "var(--text-mute)" }}>—</span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </Card>
+
           {/* Estimate note + deposit/withdraw history honesty */}
           <Card style={{ padding: 0, marginBottom: 20 }}>
             <CardHead>Cost-basis note</CardHead>
             <div style={{ padding: "16px 20px", ...mono(12, "var(--text-dim)"), lineHeight: 1.55 }}>
               Yield and return are <strong style={{ color: "var(--text)" }}>estimates assuming a 1.0
-              entry price</strong>. Per-depositor cost basis and a deposit/withdrawal ledger are not
-              tracked on-chain, so a depositor who entered above par may see an overstated gain.
-              Shares and current value are read directly from the vault contract.
+              entry price</strong>. Per-depositor cost basis is not tracked on-chain, so a depositor
+              who entered above par may see an overstated gain. The history above is indexed from
+              recent vault events (deposits and withdrawals within the RPC retention window); events
+              older than that window are not reconstructable from the keeper. Shares and current
+              value are read directly from the vault contract.
             </div>
           </Card>
 

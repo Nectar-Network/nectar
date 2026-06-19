@@ -34,12 +34,17 @@ WHICH="${1:-alpha}"
 case "$WHICH" in
   --alpha|alpha) KEEPER_SECRET="$KEEPER_A_SECRET"; KEEPER_NAME="keeper-alpha" ;;
   --beta|beta)   KEEPER_SECRET="$KEEPER_B_SECRET"; KEEPER_NAME="keeper-beta"  ;;
-  *) echo "usage: $0 [alpha|beta]" >&2; exit 1 ;;
+  --gamma|gamma) KEEPER_SECRET="$KEEPER_G_SECRET"; KEEPER_NAME="keeper-gamma" ;;
+  *) echo "usage: $0 [alpha|beta|gamma]" >&2; exit 1 ;;
 esac
 
 export KEEPER_SECRET KEEPER_NAME
-export REGISTRY_CONTRACT VAULT_CONTRACT
+export REGISTRY_CONTRACT VAULT_CONTRACT USDC_CONTRACT
 export BLEND_POOL="${BLEND_POOL:-CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF}"
+# Soroswap testnet router — enables collateral->USDC conversion after a fill.
+# Empty disables the DEX (vault then only accepts USDC proceeds directly).
+export SOROSWAP_ROUTER="${SOROSWAP_ROUTER:-CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD}"
+export SLIPPAGE_BPS="${SLIPPAGE_BPS:-100}"
 export SOROBAN_RPC="${SOROBAN_RPC:-https://soroban-testnet.stellar.org:443}"
 export HORIZON_URL="${HORIZON_URL:-https://horizon-testnet.stellar.org}"
 export API_PORT="${API_PORT:-8090}"

@@ -25,11 +25,26 @@ export interface AppState {
   vault: VaultState | null;
 }
 
+export interface HistoryEvent {
+  type: "deposit" | "withdraw";
+  address: string;
+  amount: number; // USDC stroops moved (deposited or paid out)
+  shares: number; // shares minted (deposit) or burned (withdraw)
+  ledger: number;
+  ts: string;
+  // Set when the indexer captured the event's fill transaction; optional so
+  // events from older keeper APIs (no tx hash) still parse.
+  tx_hash?: string;
+}
+
 export interface DepositorRow {
   address: string;
   shares: number;
   usdc_value: number;
   pnl_pct: number;
+  // Recent on-chain deposit/withdraw events, newest first. Optional: older
+  // keeper APIs and addresses with no events in the indexed window omit it.
+  history?: HistoryEvent[];
 }
 
 export interface KeeperStat {

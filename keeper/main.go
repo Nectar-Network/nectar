@@ -57,6 +57,10 @@ type DepositorRow struct {
 	Shares    int64   `json:"shares"`
 	USDCValue int64   `json:"usdc_value"`
 	PnLPct    float64 `json:"pnl_pct"`
+	// History is the depositor's recent on-chain deposit/withdraw events,
+	// newest first, indexed from vault events. omitempty: older keeper APIs and
+	// depositors with no events in the indexed window omit it entirely.
+	History []vault.HistoryEvent `json:"history,omitempty"`
 }
 
 // appMetrics are updated atomically to avoid lock contention.
@@ -105,6 +109,7 @@ type Keeper struct {
 	kp        *keypair.Full
 	cfg       Config
 	vault     *vault.Client
+	history   *vault.HistoryIndexer
 	protocols []adapters.ProtocolAdapter
 }
 
@@ -193,10 +198,11 @@ func main() {
 		dexc = dex.NewSwapClient(rpc, dexConfig(cfg))
 	}
 	k := &Keeper{
-		rpc:   rpc,
-		kp:    kp,
-		cfg:   cfg,
-		vault: vault.NewClient(rpc, kp, cfg.HorizonURL, cfg.Passphrase, cfg.VaultID),
+		rpc:     rpc,
+		kp:      kp,
+		cfg:     cfg,
+		vault:   vault.NewClient(rpc, kp, cfg.HorizonURL, cfg.Passphrase, cfg.VaultID),
+		history: vault.NewHistoryIndexer(),
 	}
 	k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
 		PoolAddr:   cfg.BlendPool,
@@ -353,6 +359,13 @@ func (k *Keeper) cycle() error {
 		state.mu.Unlock()
 	}
 
+	// Accumulate vault deposit/withdraw events for the per-depositor history.
+	// Errors are logged, not fatal: the balance refresh below still runs and the
+	// indexer keeps whatever it gathered on prior cycles.
+	if err := k.history.Update(k.rpc, k.cfg.VaultID); err != nil {
+		logWarn("history index update failed", "err", err)
+	}
+
 	// refresh depositor balances for the performance page
 	if len(k.cfg.KnownDepositors) > 0 {
 		var depRows []DepositorRow
@@ -365,6 +378,7 @@ func (k *Keeper) cycle() error {
 				Address:   addr,
 				Shares:    bal.Shares,
 				USDCValue: bal.USDCValue,
+				History:   k.history.History(addr),
 			})
 		}
 		state.mu.Lock()
