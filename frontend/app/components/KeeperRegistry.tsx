@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchState, KeeperRow } from "../../lib/api";
+import { KeeperRow } from "../../lib/api";
+import { queryKeeper, queryKeepers } from "../../lib/stellar";
 
+// Correct registered operators — used only until the on-chain read returns.
 const FALLBACK: KeeperRow[] = [
-  { address: "GCR36Y5AHRAMJGHJLA4EFORJKR3E4D4QVIMPFM26MWAP77DAQ463ZTGZ", name: "keeper-alpha", active: true },
-  { address: "GBOE5QCNDXNSVSEMU3GJ3INAJITX44UOK5D5YXRIX523DYBSTPCS546F", name: "keeper-beta", active: true },
+  { address: "GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF", name: "keeper-alpha", active: true },
+  { address: "GDQ7VA37AB7YRQ6CNNKFFWTR2QQ5Z232GPHX5U6IQCQFENTASBAV6DCV", name: "keeper-beta", active: true },
+  { address: "GA472SZPEXVDKEN7BAGJAFVBDB74G37GOAHYFWUPC4Q62DDPTAGIQQXT", name: "keeper-gamma", active: true },
 ];
 
 function shortAddr(addr: string): string {
@@ -17,15 +20,28 @@ export default function KeeperRegistry() {
   const [keepers, setKeepers] = useState<KeeperRow[]>(FALLBACK);
 
   useEffect(() => {
-    fetchState().then((s) => {
-      if (s?.keepers && s.keepers.length > 0) setKeepers(s.keepers);
-    });
-    const id = setInterval(() => {
-      fetchState().then((s) => {
-        if (s?.keepers && s.keepers.length > 0) setKeepers(s.keepers);
-      });
-    }, 15000);
-    return () => clearInterval(id);
+    let cancelled = false;
+    // Read the full operator set straight from the registry on-chain so every
+    // registered keeper shows (the keeper API only reports its own identity).
+    const refresh = async () => {
+      const addrs = await queryKeepers();
+      if (cancelled || addrs.length === 0) return;
+      const infos = await Promise.all(addrs.map((a) => queryKeeper(a)));
+      if (cancelled) return;
+      setKeepers(
+        addrs.map((address, i) => ({
+          address,
+          name: infos[i]?.name || `keeper-${address.slice(0, 4).toLowerCase()}`,
+          active: infos[i]?.active ?? true,
+        })),
+      );
+    };
+    refresh();
+    const id = setInterval(refresh, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   return (
