@@ -5,7 +5,7 @@ mod types;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Map, Symbol, TryFromVal, Val, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Map, Symbol, TryFromVal, Val, Vec};
 use types::{AuctionData, DataKey, LabError, ReserveConfig, UserPositions};
 
 #[contract]
@@ -232,8 +232,29 @@ impl LiquidationLab {
         let user = liquidated_user.ok_or(LabError::AuctionNotFound)?;
         let auction_key = DataKey::Auction(user.clone());
 
-        if !env.storage().persistent().has(&auction_key) {
-            return Err(LabError::AuctionNotFound);
+        let auction: AuctionData = env
+            .storage()
+            .persistent()
+            .get(&auction_key)
+            .ok_or(LabError::AuctionNotFound)?;
+
+        // Move real tokens like a Blend auction would: the filler pays the bid
+        // assets to the lab and receives the lot (seized collateral). The lab
+        // must hold the lot assets (pre-funded by the admin). This makes the
+        // harness exercise the keeper's full draw -> fill -> swap -> return
+        // value cycle end-to-end, not just the auction-lifecycle plumbing.
+        let lab = env.current_contract_address();
+        for asset in auction.bid.keys() {
+            let amt = auction.bid.get(asset.clone()).unwrap_or(0);
+            if amt > 0 {
+                token::Client::new(&env, &asset).transfer(&from, &lab, &amt);
+            }
+        }
+        for asset in auction.lot.keys() {
+            let amt = auction.lot.get(asset.clone()).unwrap_or(0);
+            if amt > 0 {
+                token::Client::new(&env, &asset).transfer(&lab, &from, &amt);
+            }
         }
 
         // Remove auction (it's been filled)
