@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, Env, IntoVal, Map};
+use soroban_sdk::{testutils::Address as _, token, Address, Env, IntoVal, Map};
 
 use crate::{LiquidationLab, LiquidationLabClient};
 use crate::types::{LabError, ReserveConfig, UserPositions};
@@ -181,8 +181,19 @@ fn test_get_auction_not_found() {
 #[test]
 fn test_submit_fills_auction() {
     let (env, client, admin) = setup();
-    let asset0 = Address::generate(&env);
-    let asset1 = Address::generate(&env);
+    let lab_id = client.address.clone();
+
+    // Real SAC tokens back the lot (collateral) and bid (debt) assets so the
+    // fill moves real value, like a Blend auction.
+    let xlm_sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let usdc_sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let asset0 = xlm_sac.address();
+    let asset1 = usdc_sac.address();
+    let xlm = token::TokenClient::new(&env, &asset0);
+    let usdc = token::TokenClient::new(&env, &asset1);
+    let xlm_admin = token::StellarAssetClient::new(&env, &asset0);
+    let usdc_admin = token::StellarAssetClient::new(&env, &asset1);
+
     let user = Address::generate(&env);
     let keeper = Address::generate(&env);
 
@@ -199,6 +210,11 @@ fn test_submit_fills_auction() {
     });
 
     client.new_liquidation_auction(&user, &500_000_000u64);
+    // lot = 25_000_000_000 XLM, bid = 4_250_000_000 USDC
+
+    // Fund the lab with the lot to pay out, and the keeper with the bid to pay.
+    xlm_admin.mint(&lab_id, &25_000_000_000i128);
+    usdc_admin.mint(&keeper, &4_250_000_000i128);
 
     // Build fill request: [{request_type: 6, address: user, amount: 0}]
     let mut req_map: Map<soroban_sdk::Symbol, soroban_sdk::Val> = Map::new(&env);
@@ -223,6 +239,10 @@ fn test_submit_fills_auction() {
     // Position should be cleared
     assert_eq!(result.collateral.len(), 0);
     assert_eq!(result.liabilities.len(), 0);
+
+    // Tokens moved: keeper received the lot, lab received the bid.
+    assert_eq!(xlm.balance(&keeper), 25_000_000_000i128);
+    assert_eq!(usdc.balance(&lab_id), 4_250_000_000i128);
 
     // Auction should be gone
     let res = client.try_get_auction(&0u64, &user);
@@ -260,8 +280,14 @@ fn test_submit_already_filled() {
 #[test]
 fn test_full_flow() {
     let (env, client, admin) = setup();
-    let xlm = Address::generate(&env);
-    let usdc = Address::generate(&env);
+    let lab_id = client.address.clone();
+    let xlm_sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let usdc_sac = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let xlm = xlm_sac.address();
+    let usdc = usdc_sac.address();
+    let xlm_tok = token::TokenClient::new(&env, &xlm);
+    let xlm_admin = token::StellarAssetClient::new(&env, &xlm);
+    let usdc_admin = token::StellarAssetClient::new(&env, &usdc);
     let borrower = Address::generate(&env);
     let keeper = Address::generate(&env);
 
@@ -288,6 +314,11 @@ fn test_full_flow() {
     assert!(auction.lot.len() > 0);
     assert!(auction.bid.len() > 0);
 
+    // Fund the lab with the lot and the keeper with the bid so the fill can
+    // move real tokens.
+    xlm_admin.mint(&lab_id, &25_000_000_000i128);
+    usdc_admin.mint(&keeper, &4_250_000_000i128);
+
     // 5. Fill auction
     let mut req_map: Map<soroban_sdk::Symbol, soroban_sdk::Val> = Map::new(&env);
     req_map.set(soroban_sdk::Symbol::new(&env, "request_type"), 6u64.into_val(&env));
@@ -306,4 +337,7 @@ fn test_full_flow() {
     let cleared = client.get_positions(&borrower);
     assert_eq!(cleared.collateral.len(), 0);
     assert_eq!(cleared.liabilities.len(), 0);
+
+    // Keeper received the seized collateral (the lot).
+    assert_eq!(xlm_tok.balance(&keeper), 25_000_000_000i128);
 }
