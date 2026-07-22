@@ -6,36 +6,48 @@ pub use types::{DataKey, Error, KeeperInfo, RegistryConfig};
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, IntoVal, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, vec, Address, Env, IntoVal, String, Symbol,
+    Vec,
+};
 
 #[contract]
 pub struct KeeperRegistry;
 
 #[contractimpl]
 impl KeeperRegistry {
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        config: RegistryConfig,
-        vault: Address,
-    ) -> Result<(), Error> {
-        let store = env.storage().instance();
-        if store.has(&DataKey::Admin) {
-            return Err(Error::AlreadyInit);
-        }
-        // Only the intended admin may claim the contract — prevents front-running
-        // the deployer's init to seize admin (NEW-init).
-        admin.require_auth();
+    /// Constructor — runs atomically at deploy, closing the initialize
+    /// front-run (NEW-init): admin is claimed in the deploy tx itself, so there
+    /// is no separate init tx an attacker could race to seize admin.
+    ///
+    /// The paired vault address is set once, post-deploy, via `set_vault`
+    /// (admin-gated) because the vault and registry reference each other and
+    /// cannot both learn the other's address at construction time.
+    pub fn __constructor(env: Env, admin: Address, config: RegistryConfig) {
         // A slash rate above 100% would let slash() drive a keeper's stake
-        // negative — reject it at config time (REG hardening).
+        // negative — reject it at construction time (REG hardening).
         if config.slash_rate_bps > 10_000 {
-            return Err(Error::InvalidConfig);
+            panic_with_error!(&env, Error::InvalidConfig);
         }
+        let store = env.storage().instance();
         store.set(&DataKey::Admin, &admin);
         store.set(&DataKey::KeeperCount, &0u32);
         store.set(&DataKey::Config, &config);
-        store.set(&DataKey::VaultAddr, &vault);
         store.extend_ttl(1000, 1000);
+    }
+
+    /// Link the vault to this registry. Admin-gated and one-time: the vault
+    /// address is the trust anchor for `require_vault` (mark_draw/clear_draw/
+    /// record_execution/reconcile), so it can be set exactly once and never
+    /// re-pointed. Called after both contracts are deployed.
+    pub fn set_vault(env: Env, admin: Address, vault: Address) -> Result<(), Error> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        Self::require_admin(&env, &admin)?;
+        let store = env.storage().instance();
+        if store.has(&DataKey::VaultAddr) {
+            return Err(Error::AlreadyInit);
+        }
+        store.set(&DataKey::VaultAddr, &vault);
         Ok(())
     }
 

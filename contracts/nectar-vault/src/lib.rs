@@ -29,20 +29,18 @@ pub struct NectarVault;
 
 #[contractimpl]
 impl NectarVault {
-    pub fn initialize(
+    /// Constructor — runs atomically at deploy, so admin/token/registry/config
+    /// are set in the same transaction that creates the contract. This closes
+    /// the initialize front-run (NEW-init): there is no separate init tx for an
+    /// attacker to race, and the deployer alone chooses the constructor args.
+    pub fn __constructor(
         env: Env,
         admin: Address,
         usdc_token: Address,
         registry: Address,
         config: VaultConfig,
-    ) -> Result<(), VaultError> {
+    ) {
         env.storage().instance().extend_ttl(1000, 1000);
-        if env.storage().instance().has(&VaultKey::Admin) {
-            return Err(VaultError::AlreadyInit);
-        }
-        // Only the intended admin may claim the contract — prevents an attacker
-        // front-running the deployer's init to seize admin (NEW-init).
-        admin.require_auth();
         env.storage().instance().set(&VaultKey::Admin, &admin);
         env.storage().instance().set(&VaultKey::Usdc, &usdc_token);
         env.storage()
@@ -60,7 +58,6 @@ impl NectarVault {
                 active_liq: 0,
             },
         );
-        Ok(())
     }
 
     /// Deposit USDC into the vault and receive shares proportional to current ratio.

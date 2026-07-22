@@ -52,7 +52,7 @@ implemented fixes were adversarially reviewed again (which surfaced NEW‑drain,
 | NEW‑cap | Per-keeper draw cap was per-call, not cumulative | **High** | ✅ **Fixed** — `draw` enforces `outstanding + amount ≤ max_draw_per_keeper`. |
 | NEW‑reconcile | Slash didn't reconcile the vault (registry/vault drift) | **High** | ✅ **Fixed** — `slash` cross-calls `vault.reconcile_default` (atomic) to write off the defaulted draw. |
 | NEW‑drain | Slashed keeper could re-draw the full cap each window | **High** | ✅ **Fixed** (surfaced by fix-review) — `slash` now **deactivates** the keeper (`active=false`); it must re-register to draw. |
-| NEW‑init | `initialize` front-run (attacker self-seizes admin) | Medium | ⚠️ **Partial** — `admin.require_auth()` added (blocks assigning a non-consenting admin). Full fix = an atomic soroban-sdk 22 `__constructor`; **scheduled for the mainnet redeploy** (Tranche 3), since the window is deploy-time only and current testnet contracts are already safely initialized. |
+| NEW‑init | `initialize` front-run (attacker self-seizes admin) | Medium | ✅ **Fixed** — both contracts converted to an atomic soroban-sdk 22 `__constructor` (admin/config set in the deploy tx itself, no separate init tx to race). The registry↔vault circular reference is resolved by a one-time, admin-gated `set_vault`. Deploy script + all test setups updated; 80/80 pass. |
 | REG‑1 | Permissionless `slash` | Info | By design & safe (timeout + active-draw gated); `slash_rate_bps ≤ 10000` now validated. |
 | ORA‑1 | Oracle manipulation | Med/High | Tranche 3 circuit breaker. |
 | DEX‑1 | Swap slippage / sandwich | Low/Med | Mitigated (oracle-anchored min-out). |

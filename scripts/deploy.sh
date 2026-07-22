@@ -59,37 +59,39 @@ else
   stellar contract optimize --wasm "$VAULT_WASM"
 fi
 
-# ── 2. Deploy both contracts (NO init — they need each other's addresses) ────
+# ── 2. Deploy KeeperRegistry — admin + config set atomically in the deploy tx
+#      via the contract constructor (closes the init front-run, NEW-init). The
+#      registry's vault is linked afterwards (they reference each other).
 echo "Deploying KeeperRegistry..."
 REGISTRY_ID=$(stellar contract deploy \
   --wasm "$REGISTRY_OPT" \
   --source "$ADMIN_SECRET" \
   --rpc-url "$RPC_URL" \
-  --network-passphrase "$PASSPHRASE")
+  --network-passphrase "$PASSPHRASE" \
+  -- \
+  --admin "$ADMIN_ADDRESS" \
+  --config "{\"min_stake\":\"$MIN_STAKE\",\"slash_timeout\":$SLASH_TIMEOUT,\"slash_rate_bps\":$SLASH_RATE_BPS,\"usdc_token\":\"$USDC_CONTRACT\"}")
 echo "KeeperRegistry: $REGISTRY_ID"
 
+# ── 3. Deploy NectarVault — admin + usdc + registry + config via constructor.
 echo "Deploying NectarVault..."
 VAULT_ID=$(stellar contract deploy \
   --wasm "$VAULT_OPT" \
   --source "$ADMIN_SECRET" \
   --rpc-url "$RPC_URL" \
-  --network-passphrase "$PASSPHRASE")
-echo "NectarVault:    $VAULT_ID"
-
-# ── 3. Initialize KeeperRegistry with vault address + RegistryConfig ─────────
-echo "Initializing KeeperRegistry..."
-invoke "$REGISTRY_ID" -- initialize \
-  --admin "$ADMIN_ADDRESS" \
-  --config "{\"min_stake\":\"$MIN_STAKE\",\"slash_timeout\":$SLASH_TIMEOUT,\"slash_rate_bps\":$SLASH_RATE_BPS,\"usdc_token\":\"$USDC_CONTRACT\"}" \
-  --vault "$VAULT_ID"
-
-# ── 4. Initialize NectarVault with registry address + VaultConfig ────────────
-echo "Initializing NectarVault..."
-invoke "$VAULT_ID" -- initialize \
+  --network-passphrase "$PASSPHRASE" \
+  -- \
   --admin "$ADMIN_ADDRESS" \
   --usdc_token "$USDC_CONTRACT" \
   --registry "$REGISTRY_ID" \
-  --config "{\"deposit_cap\":\"$DEPOSIT_CAP\",\"withdraw_cooldown\":$WITHDRAW_COOLDOWN,\"max_draw_per_keeper\":\"$MAX_DRAW_PER_KEEPER\"}"
+  --config "{\"deposit_cap\":\"$DEPOSIT_CAP\",\"withdraw_cooldown\":$WITHDRAW_COOLDOWN,\"max_draw_per_keeper\":\"$MAX_DRAW_PER_KEEPER\"}")
+echo "NectarVault:    $VAULT_ID"
+
+# ── 4. Link the vault into the registry (one-time, admin-gated set_vault) ─────
+echo "Linking vault to registry (set_vault)..."
+invoke "$REGISTRY_ID" -- set_vault \
+  --admin "$ADMIN_ADDRESS" \
+  --vault "$VAULT_ID"
 
 update_env "REGISTRY_CONTRACT" "$REGISTRY_ID"
 update_env "VAULT_CONTRACT" "$VAULT_ID"

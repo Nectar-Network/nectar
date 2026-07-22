@@ -68,9 +68,11 @@ mod tests {
         let admin = Address::generate(env);
         let usdc = setup_token(env, &admin);
         let registry_id = env.register(MockRegistry, ());
-        let vault_id = env.register(NectarVault, ());
+        let vault_id = env.register(
+            NectarVault,
+            (admin.clone(), usdc.clone(), registry_id.clone(), cfg.clone()),
+        );
         let client = NectarVaultClient::new(env, &vault_id);
-        client.initialize(&admin, &usdc, &registry_id, &cfg);
         (client, admin, usdc, vault_id)
     }
 
@@ -275,14 +277,17 @@ mod tests {
     }
 
     #[test]
-    fn test_double_init_fails() {
+    fn test_constructor_initializes_atomically() {
+        // Init now happens in the deploy (constructor), so there is no separate
+        // initialize tx an attacker could front-run to seize admin (NEW-init).
+        // Confirm the constructor set the config and zeroed the vault state.
         let env = Env::default();
         env.mock_all_auths();
-        let (client, admin, usdc, vault_id) = setup(&env);
-        let dummy_reg = Address::generate(&env);
-        let result = client.try_initialize(&admin, &usdc, &dummy_reg, &default_config());
-        assert_eq!(result, Err(Ok(VaultError::AlreadyInit)));
-        let _ = vault_id;
+        let (client, _admin, _usdc, _vault_id) = setup(&env);
+        assert_eq!(client.get_config().deposit_cap, default_config().deposit_cap);
+        let state = client.get_state();
+        assert_eq!(state.total_usdc, 0);
+        assert_eq!(state.total_shares, 0);
     }
 
     #[test]
@@ -977,27 +982,30 @@ mod tests {
             .address();
         let usdc_admin_client = token::StellarAssetClient::new(&env, &usdc);
 
-        // Deploy both contracts so we know their addresses up front.
-        let registry_id = env.register(KeeperRegistry, ());
-        let vault_id = env.register(NectarVault, ());
-
-        let registry = KeeperRegistryClient::new(&env, &registry_id);
-        let vault = NectarVaultClient::new(&env, &vault_id);
-
+        // Deploy the registry first (its constructor needs no vault), then the
+        // vault (whose constructor references the registry), then link them via
+        // the one-time admin-gated set_vault — breaking the circular reference.
         let reg_cfg = RegistryConfig {
             min_stake: 100_0000000,
             slash_timeout: 3600,
             slash_rate_bps: 1000,
             usdc_token: usdc.clone(),
         };
-        registry.initialize(&admin, &reg_cfg, &vault_id);
+        let registry_id = env.register(KeeperRegistry, (admin.clone(), reg_cfg.clone()));
 
         let vault_cfg = VaultConfig {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 1000_0000000,
         };
-        vault.initialize(&admin, &usdc, &registry_id, &vault_cfg);
+        let vault_id = env.register(
+            NectarVault,
+            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+        );
+
+        let registry = KeeperRegistryClient::new(&env, &registry_id);
+        let vault = NectarVaultClient::new(&env, &vault_id);
+        registry.set_vault(&admin, &vault_id);
 
         // Mint USDC to keeper for stake; register.
         let keeper = Address::generate(&env);
@@ -1056,24 +1064,25 @@ mod tests {
             .address();
         let usdc_admin_client = token::StellarAssetClient::new(&env, &usdc);
 
-        let registry_id = env.register(KeeperRegistry, ());
-        let vault_id = env.register(NectarVault, ());
-        let registry = KeeperRegistryClient::new(&env, &registry_id);
-        let vault = NectarVaultClient::new(&env, &vault_id);
-
         let reg_cfg = RegistryConfig {
             min_stake: 100_0000000,
             slash_timeout: 3600,
             slash_rate_bps: 1000, // 10%
             usdc_token: usdc.clone(),
         };
-        registry.initialize(&admin, &reg_cfg, &vault_id);
+        let registry_id = env.register(KeeperRegistry, (admin.clone(), reg_cfg.clone()));
         let vault_cfg = VaultConfig {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 1000_0000000,
         };
-        vault.initialize(&admin, &usdc, &registry_id, &vault_cfg);
+        let vault_id = env.register(
+            NectarVault,
+            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+        );
+        let registry = KeeperRegistryClient::new(&env, &registry_id);
+        let vault = NectarVaultClient::new(&env, &vault_id);
+        registry.set_vault(&admin, &vault_id);
 
         let keeper = Address::generate(&env);
         usdc_admin_client.mint(&keeper, &100_0000000);

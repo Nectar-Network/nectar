@@ -40,9 +40,6 @@ mod tests {
 
     fn setup<'a>() -> Setup<'a> {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
         let vault = env.register(MockVault, ());
         let usdc_admin = Address::generate(&env);
@@ -57,7 +54,9 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc.clone(),
         };
-        client.initialize(&admin, &cfg, &vault);
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
+        client.set_vault(&admin, &vault);
 
         let usdc_client = token::Client::new(&env, &usdc);
 
@@ -195,12 +194,8 @@ mod tests {
     #[test]
     fn test_unauthorized_pause() {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
         let intruder = Address::generate(&env);
-        let vault = Address::generate(&env);
         let usdc_admin = Address::generate(&env);
         let usdc = env.register_stellar_asset_contract_v2(usdc_admin).address();
 
@@ -211,7 +206,8 @@ mod tests {
             usdc_token: usdc,
         };
         env.mock_all_auths();
-        client.initialize(&admin, &cfg, &vault);
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
         // Intruder != stored admin → require_admin returns Unauthorized via the
         // identity check before it ever reaches require_auth.
         let result = client.try_pause(&intruder);
@@ -219,11 +215,13 @@ mod tests {
     }
 
     #[test]
-    fn test_double_init_fails() {
+    fn test_set_vault_is_one_time() {
+        // setup() already linked the vault via set_vault; the vault address is
+        // the trust anchor for require_vault, so a second set_vault (even by the
+        // admin) is rejected — it can never be re-pointed.
         let s = setup();
-        let admin2 = Address::generate(&s.env);
-        let cfg = s.client.get_config();
-        let result = s.client.try_initialize(&admin2, &cfg, &s.vault);
+        let other = Address::generate(&s.env);
+        let result = s.client.try_set_vault(&s.admin, &other);
         assert_eq!(result, Err(Ok(Error::AlreadyInit)));
     }
 
@@ -304,11 +302,7 @@ mod tests {
     #[test]
     fn test_register_zero_min_stake_rejected() {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
-        let vault = Address::generate(&env);
         let usdc_admin = Address::generate(&env);
         let usdc = env.register_stellar_asset_contract_v2(usdc_admin).address();
         let cfg = RegistryConfig {
@@ -318,7 +312,8 @@ mod tests {
             usdc_token: usdc,
         };
         env.mock_all_auths();
-        client.initialize(&admin, &cfg, &vault);
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
 
         let op = Address::generate(&env);
         let result = client.try_register(&op, &String::from_str(&env, "alpha"));
