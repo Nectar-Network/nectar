@@ -37,17 +37,32 @@ In the interim, the **manual STRIDE review** (THREAT-MODEL.md) is the substantiv
 
 ## Findings & remediation status (from THREAT-MODEL.md)
 
+Findings were adversarially re-verified by an independent review pass, then remediated; the
+implemented fixes were adversarially reviewed again (which surfaced NEW‑drain, fixed below). All
+80 contract tests pass and both contracts compile to deployable `wasm32v1-none`.
+
 | ID | Finding | Severity | Status |
 |---|---|---|---|
-| VLT‑1 | Share-inflation / first-depositor attack | **High** | Open — fix before mainnet (virtual-shares offset + dead-shares + min first deposit) |
-| VLT‑2 | `return_proceeds` not gated to registered keepers | Medium | Open — gate to keeper with `KeeperDraw > 0` |
-| VLT‑3 | `require_registered_keeper` discards result, no `active` check | Medium | Open — bind result, assert active |
-| VLT‑4 | No emergency pause on the vault | Medium | Open — Tranche 3 hardening |
-| VLT‑5 | Single admin key (no multisig) | Medium | Open — Tranche 3 (2-of-3 multisig + timelock) |
-| VLT‑6 | CEI ordering in `draw` | Low | Mitigated (trusted SAC) — reorder for defense in depth |
-| REG‑1 | Permissionless `slash` | Info | By design & safe (timeout + active-draw gated) |
-| ORA‑1 | Oracle manipulation | Med/High | Tranche 3 circuit breaker |
-| DEX‑1 | Swap slippage / sandwich | Low/Med | Mitigated (oracle-anchored min-out) |
-| INT‑1 | Integer overflow in share math | Low | Mitigated (i128 + pool-favoring floors) |
+| VLT‑1 | Share-inflation / first-depositor attack | **High** | ✅ **Fixed** — symmetric virtual-offset share math (`VIRTUAL_OFFSET=1_000_000` in `to_shares`/`to_assets`) + reject-zero-share deposits. (Also structurally hard: `total_usdc` is internal, so a bare token donation can't move price.) 5 regression tests. |
+| VLT‑2 | `return_proceeds` books arbitrary donations as profit | Medium | ✅ **Fixed** — `return_proceeds` rejects `drawn == 0` (`NoDraw`); only a keeper with an outstanding draw can settle. |
+| VLT‑3 | Keeper verification discards result, no `active`/stake check | Medium | ✅ **Fixed** — `draw` → `registry.verify_keeper` which asserts `active == true` **and** `stake ≥ min_stake`. |
+| VLT‑4 | No emergency pause on the vault | Medium | ✅ **Fixed** — admin `pause`/`unpause` gating `deposit`+`draw` (withdraw + return stay open). |
+| VLT‑5 | Single admin key (no multisig) | Medium | Open — Tranche 3 (2-of-3 admin multisig, account-level). |
+| VLT‑6 | CEI ordering in `draw` | Low | ✅ **Fixed** — effects committed before the token transfer. |
+| NEW‑cap | Per-keeper draw cap was per-call, not cumulative | **High** | ✅ **Fixed** — `draw` enforces `outstanding + amount ≤ max_draw_per_keeper`. |
+| NEW‑reconcile | Slash didn't reconcile the vault (registry/vault drift) | **High** | ✅ **Fixed** — `slash` cross-calls `vault.reconcile_default` (atomic) to write off the defaulted draw. |
+| NEW‑drain | Slashed keeper could re-draw the full cap each window | **High** | ✅ **Fixed** (surfaced by fix-review) — `slash` now **deactivates** the keeper (`active=false`); it must re-register to draw. |
+| NEW‑init | `initialize` front-run (attacker self-seizes admin) | Medium | ⚠️ **Partial** — `admin.require_auth()` added (blocks assigning a non-consenting admin). Full fix = an atomic soroban-sdk 22 `__constructor`; **scheduled for the mainnet redeploy** (Tranche 3), since the window is deploy-time only and current testnet contracts are already safely initialized. |
+| REG‑1 | Permissionless `slash` | Info | By design & safe (timeout + active-draw gated); `slash_rate_bps ≤ 10000` now validated. |
+| ORA‑1 | Oracle manipulation | Med/High | Tranche 3 circuit breaker. |
+| DEX‑1 | Swap slippage / sandwich | Low/Med | Mitigated (oracle-anchored min-out). |
+| INT‑1 | Integer overflow in share math | Low | Reviewed — safe (i128 traps on overflow; products stay < i128::MAX at realistic caps). |
 
-**Remediation plan:** VLT‑1 and VLT‑2 are logic fixes we will land (with regression tests) **before** the mainnet deployment, independent of audit timing. VLT‑3/4/5 fold into the Tranche 3 "Security Hardening" deliverable. The audit will validate the fixes.
+**Known design limitations (documented, not bugs):** `withdraw` sizes payout from `total_usdc`
+(which counts drawn-but-unreturned capital), so a withdrawal can revert on insufficient *liquid*
+balance while utilization is high — a liveness limitation, never fund loss. Every deposit resets
+the withdraw cooldown on the depositor's whole balance (minor, self-inflicted).
+
+**Remaining before mainnet:** VLT‑5 (admin multisig), NEW‑init (`__constructor`), and ORA‑1
+(oracle circuit breaker) are the Tranche 3 "Mainnet Deployment" + "Security Hardening" items. The
+audit will validate all fixes.

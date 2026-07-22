@@ -12,6 +12,13 @@ Reflector). Prepared for the SCF Audit Bank and the Tranche 3 mainnet launch.
 > references are to `contracts/keeper-registry/src/lib.rs` (REG) and
 > `contracts/nectar-vault/src/lib.rs` (VLT).
 
+> **Remediation status (2026-06-22):** the findings below were adversarially re-verified, then
+> remediated in code; the fixes were adversarially reviewed again (which surfaced and closed an
+> additional High, NEW‑drain). **VLT‑1, VLT‑2, VLT‑3, VLT‑4, VLT‑6 and NEW‑cap / NEW‑reconcile /
+> NEW‑drain are FIXED** (80/80 tests pass, both contracts build to deployable wasm). Still open
+> for Tranche 3: **VLT‑5** (admin multisig), **NEW‑init** (atomic `__constructor`), **ORA‑1**
+> (oracle circuit breaker). See [SCOUT-REPORT.md](./SCOUT-REPORT.md) for the per-finding status.
+
 ---
 
 ## 1. System Overview

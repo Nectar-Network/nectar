@@ -2,9 +2,26 @@
 mod tests {
     use crate::{Error, KeeperRegistry, KeeperRegistryClient, RegistryConfig};
     use soroban_sdk::{
+        contract, contractimpl,
         testutils::{Address as _, Ledger, LedgerInfo},
         token, Address, Env, String,
     };
+
+    // Mock vault: reconcile_default is a no-op stub so slash() can cross-call it
+    // (the real accounting is covered by the vault's own tests + the integration
+    // test in nectar-vault). Its address is registered as the registry's vault.
+    #[contract]
+    pub struct MockVault;
+    #[contractimpl]
+    impl MockVault {
+        pub fn reconcile_default(
+            _env: Env,
+            _caller: Address,
+            _keeper: Address,
+            _recovered: i128,
+        ) {
+        }
+    }
 
     const MIN_STAKE: i128 = 100_0000000; // 100 USDC
     const SLASH_TIMEOUT: u64 = 3600; // 1 hour
@@ -27,7 +44,7 @@ mod tests {
         let client = KeeperRegistryClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
-        let vault = Address::generate(&env);
+        let vault = env.register(MockVault, ());
         let usdc_admin = Address::generate(&env);
         let usdc_sac = env.register_stellar_asset_contract_v2(usdc_admin.clone());
         let usdc = usdc_sac.address();
@@ -193,8 +210,10 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc,
         };
+        env.mock_all_auths();
         client.initialize(&admin, &cfg, &vault);
-        // No mock_all_auths — admin mismatch should short-circuit before require_auth.
+        // Intruder != stored admin → require_admin returns Unauthorized via the
+        // identity check before it ever reaches require_auth.
         let result = client.try_pause(&intruder);
         assert_eq!(result, Err(Ok(Error::Unauthorized)));
     }
@@ -298,8 +317,8 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc,
         };
-        client.initialize(&admin, &cfg, &vault);
         env.mock_all_auths();
+        client.initialize(&admin, &cfg, &vault);
 
         let op = Address::generate(&env);
         let result = client.try_register(&op, &String::from_str(&env, "alpha"));
@@ -454,6 +473,12 @@ mod tests {
         assert_eq!(info.stake, MIN_STAKE - expected);
         assert!(!info.has_active_draw);
         assert_eq!(s.usdc_client.balance(&s.vault) - vault_before, expected);
+
+        // A slashed keeper is DEACTIVATED — it cannot re-draw the cap after
+        // reconcile_default re-arms the per-keeper draw limit. verify_keeper
+        // (the gate draw() uses) must now reject it. It must re-register to draw.
+        assert!(!info.active);
+        assert_eq!(s.client.try_verify_keeper(&op), Err(Ok(Error::Unauthorized)));
     }
 
     #[test]
