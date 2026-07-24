@@ -1,6 +1,8 @@
 # Rust
 target/
-Cargo.lock
+# Cargo.lock is committed for reproducible / audit-grade builds (pins the exact
+# dependency graph so CI resolves the same versions the contracts were tested
+# against — a fresh resolve otherwise pulls an incompatible rand_core/ed25519).
 
 # Node
 node_modules/

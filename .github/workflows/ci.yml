@@ -28,20 +28,23 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # --locked enforces the committed Cargo.lock: CI builds the exact dependency
+      # graph the contracts were tested against, and fails loudly if the lock is
+      # stale rather than silently re-resolving to incompatible versions.
       - name: Test keeper-registry
-        run: cargo test -p keeper-registry
+        run: cargo test --locked -p keeper-registry
 
       - name: Test nectar-vault
-        run: cargo test -p nectar-vault
+        run: cargo test --locked -p nectar-vault
 
       - name: Test mock-token
-        run: cargo test -p mock-token
+        run: cargo test --locked -p mock-token
 
       - name: Test liquidation-lab
-        run: cargo test -p liquidation-lab
+        run: cargo test --locked -p liquidation-lab
 
       - name: Build contracts (release + wasm32)
-        run: cargo build --target wasm32-unknown-unknown --release
+        run: cargo build --locked --target wasm32-unknown-unknown --release
 
   keeper:
     name: Go Keeper
@@ -150,4 +153,4 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Coverage (keeper-registry + nectar-vault)
-        run: cargo llvm-cov -p keeper-registry -p nectar-vault --summary-only
+        run: cargo llvm-cov --locked -p keeper-registry -p nectar-vault --summary-only
