@@ -1113,4 +1113,79 @@ mod tests {
         // Registry cleared the active draw (keeper may now deregister).
         assert!(!registry.get_keeper(&keeper).has_active_draw);
     }
+
+    #[test]
+    fn test_withdraw_after_loss_cannot_underflow_total_usdc() {
+        // SCOUT-total_usdc-underflow (surfaced by the audit-prep Scout triage):
+        // after a reconcile_default loss write-off the vault enters the S > U
+        // regime (total_shares > total_usdc). There to_assets(shares) can exceed
+        // total_usdc by virtual-offset dust; because total_usdc is a *signed*
+        // i128 the `total_usdc -= usdc_out` would NOT trap on going negative, and
+        // a permissionless raw-token donation lets the over-payment transfer
+        // succeed and persist a negative total_usdc. The withdraw clamp keeps
+        // total_usdc >= 0 and caps the payout at the pool's accounted USDC.
+        use keeper_registry::{KeeperRegistry, KeeperRegistryClient, RegistryConfig};
+        use soroban_sdk::String as SorString;
+
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let usdc_admin = Address::generate(&env);
+        let usdc = env
+            .register_stellar_asset_contract_v2(usdc_admin.clone())
+            .address();
+        let usdc_admin_client = token::StellarAssetClient::new(&env, &usdc);
+
+        let reg_cfg = RegistryConfig {
+            min_stake: 100_0000000,
+            slash_timeout: 3600,
+            slash_rate_bps: 1000, // 10%
+            usdc_token: usdc.clone(),
+        };
+        let registry_id = env.register(KeeperRegistry, (admin.clone(), reg_cfg.clone()));
+        let vault_cfg = VaultConfig {
+            deposit_cap: 0,
+            withdraw_cooldown: 0,
+            max_draw_per_keeper: 1000_0000000,
+        };
+        let vault_id = env.register(
+            NectarVault,
+            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+        );
+        let registry = KeeperRegistryClient::new(&env, &registry_id);
+        let vault = NectarVaultClient::new(&env, &vault_id);
+        registry.set_vault(&admin, &vault_id);
+
+        let keeper = Address::generate(&env);
+        usdc_admin_client.mint(&keeper, &100_0000000);
+        registry.register(&keeper, &SorString::from_str(&env, "k1"));
+        let depositor = Address::generate(&env);
+        usdc_admin_client.mint(&depositor, &1000_0000000);
+        vault.deposit(&depositor, &1000_0000000);
+
+        // Keeper draws 400 and absconds; slash writes off the loss → S > U.
+        vault.draw(&keeper, &400_0000000);
+        set_time(&env, 4000, 100);
+        registry.slash(&keeper);
+        let state = vault.get_state();
+        assert_eq!(state.total_usdc, 610_0000000); // U = 610
+        assert!(state.total_shares > state.total_usdc); // S > U regime confirmed
+
+        // Permissionless raw-token donation: inflate the vault's liquid balance so
+        // an over-payment transfer would otherwise succeed. Not credited to books.
+        usdc_admin_client.mint(&vault_id, &5_0000000);
+
+        // Full withdrawal by the sole depositor: without the clamp this drives
+        // total_usdc negative; with it, payout is capped at the accounted 610.
+        let (shares, _) = vault.balance(&depositor);
+        let out = vault.withdraw(&depositor, &shares);
+
+        let state = vault.get_state();
+        assert!(state.total_usdc >= 0, "total_usdc underflowed to {}", state.total_usdc);
+        assert!(out <= 610_0000000, "withdrew {} > accounted 610 USDC", out);
+        // The donation is NOT extractable by the withdrawer — it stays in the
+        // contract (recoverable by later depositors), never over-paid out.
+        assert!(token::Client::new(&env, &usdc).balance(&vault_id) >= 5_0000000);
+    }
 }

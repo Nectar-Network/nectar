@@ -166,7 +166,17 @@ impl NectarVault {
 
         // Virtual-offset redemption (VLT-1). Floors toward zero — the withdrawer
         // gets at most the proportional USDC, never more, which protects the pool.
-        let usdc_out = to_assets(shares, state.total_shares, state.total_usdc);
+        //
+        // Clamp to total_usdc (SCOUT-total_usdc-underflow): for total_shares <=
+        // total_usdc the clamp is a proven no-op (to_assets(sh,S,U) <= U iff
+        // S <= U). It only bites in the S > U regime reachable after a
+        // reconcile_default loss write-off, where the +VIRTUAL_OFFSET numerator
+        // can make to_assets exceed total_usdc by offset-scale dust. Since
+        // total_usdc is a *signed* i128, the later `total_usdc -= usdc_out` would
+        // NOT trap on going negative — combined with a permissionless raw-token
+        // donation (which lets the over-payment transfer succeed) it would persist
+        // a negative total_usdc. The clamp keeps the invariant total_usdc >= 0.
+        let usdc_out = to_assets(shares, state.total_shares, state.total_usdc).min(state.total_usdc);
 
         // Effects before interaction (CEI, VLT-6 defense-in-depth): commit the
         // share burn and state before moving tokens out.

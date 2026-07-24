@@ -57,12 +57,18 @@ mitigation is the keeper's off-chain oracle-anchored slippage floor + on-chain
 built.**
 
 ## Assurance evidence in this tag
-- **72 unit/integration tests** across the two in-scope contracts (nectar-vault 46,
-  keeper-registry 26, incl. real cross-contract cycle + slash-reconcile), plus 17
-  in the test-harness crates — all passing under `cargo test`.
+- **73 tests** across the two in-scope contracts (nectar-vault 47, keeper-registry 26),
+  including a real cross-contract draw→return cycle, slash→`reconcile_default`, and a
+  post-loss withdraw-underflow regression; plus 17 in the test-harness crates — all
+  passing under `cargo test --locked`.
 - **4 property-based invariants** (`contracts/nectar-vault/src/prop_test.rs`,
-  2000 cases each) proving: deposit→withdraw never profits (solvency), the inverse,
-  share monotonicity, and the first-depositor inflation attack is unprofitable.
-- **`go test -race`** clean on the keeper.
-- **cargo-scout-audit** report generated on a clean CI runner (artifact `scout-report`), plus a **contract coverage** summary — both in CI.
+  2000 cases each, counted in the 47) proving: deposit→withdraw never profits
+  (solvency), the inverse, share monotonicity, and the first-depositor inflation
+  attack is unprofitable.
+- **cargo-scout-audit** run on a clean CI runner (artifact `scout-report`); every
+  finding class triaged and adversarially re-checked in
+  [SCOUT-REPORT.md](./SCOUT-REPORT.md) — all false-positive or accepted, with one
+  latent accounting edge (`SCOUT-total_usdc-underflow`) hardened via a `withdraw`
+  clamp + regression test.
+- **`go test -race`** clean on the keeper; a **contract coverage** summary runs in CI.
 - Both contracts build to deployable `wasm32v1-none` and are **live on testnet**.
