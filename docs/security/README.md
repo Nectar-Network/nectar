@@ -4,9 +4,10 @@ Prepared for the SCF Audit Bank and the Tranche 3 mainnet launch.
 
 | Document | What it covers |
 |---|---|
-| [THREAT-MODEL.md](./THREAT-MODEL.md) | STRIDE threat model grounded in the contract code: system overview, trust boundaries, per-component STRIDE analysis, a 12-row findings table, and residual risks. |
+| [AUDIT-SCOPE.md](./AUDIT-SCOPE.md) | What the audit covers: in-scope contracts (registry + vault), out-of-scope components, trust assumptions, the frozen tag, and the explicit VLT‑5 / ORA‑1 scope decisions. |
+| [THREAT-MODEL.md](./THREAT-MODEL.md) | STRIDE threat model grounded in the contract code: system overview, trust boundaries, per-component STRIDE analysis, findings table, and residual risks. |
 | [DATAFLOW.md](./DATAFLOW.md) | Five annotated data-flow diagrams (deposit, liquidation, withdrawal, registration, slashing) with trust boundaries and data entities. |
-| [SCOUT-REPORT.md](./SCOUT-REPORT.md) | Security tooling + static analysis results (tests, clippy, Scout status) and the finding-by-finding remediation plan. |
+| [SCOUT-REPORT.md](./SCOUT-REPORT.md) | Security tooling + static analysis results (tests, property invariants, clippy, Scout) and the finding-by-finding remediation plan. |
 
 ## Scope
 Two Soroban contracts — `KeeperRegistry` and `NectarVault` (~933 functional LOC, excl. tests) —

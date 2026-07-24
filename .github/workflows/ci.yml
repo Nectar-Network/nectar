@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, tranche-2]
+    branches: [main, tranche-2, tranche-3]
   pull_request:
-    branches: [main, tranche-2]
+    branches: [main, tranche-2, tranche-3]
 
 jobs:
   contracts:
@@ -108,3 +108,46 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: "http://localhost:8080"
+
+  # Soroban security linter. Informational for audit prep — it produces a report
+  # artifact and never gates the merge (continue-on-error), since Scout findings
+  # are advisory. Runs on a clean Ubuntu toolchain because cargo-scout-audit does
+  # not install reliably on mixed local toolchains.
+  scout:
+    name: Scout (Soroban security scan)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install cargo-scout-audit
+        run: cargo install cargo-scout-audit --locked
+      - name: Run Scout on the audited contracts
+        run: |
+          mkdir -p scout-out
+          for c in keeper-registry nectar-vault; do
+            echo "### Scout: $c" | tee "scout-out/$c.txt"
+            ( cd "contracts/$c" && cargo scout-audit 2>&1 ) | tee -a "scout-out/$c.txt" || true
+          done
+      - name: Upload Scout report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-report
+          path: scout-out/
+
+  # Test-coverage summary for the two audited contracts (informational).
+  coverage:
+    name: Contract coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Coverage (keeper-registry + nectar-vault)
+        run: cargo llvm-cov -p keeper-registry -p nectar-vault --summary-only

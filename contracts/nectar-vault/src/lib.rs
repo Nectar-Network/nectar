@@ -594,3 +594,6 @@ fn registry_record_execution(
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod prop_test;
