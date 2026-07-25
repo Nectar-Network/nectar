@@ -49,4 +49,5 @@ pub enum Error {
     InsufficientStake = 7,
     ActiveDraw = 8,
     SlashTimeout = 9,
+    InvalidConfig = 10,
 }

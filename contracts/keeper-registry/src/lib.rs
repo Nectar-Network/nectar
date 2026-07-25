@@ -6,28 +6,48 @@ pub use types::{DataKey, Error, KeeperInfo, RegistryConfig};
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, vec, Address, Env, IntoVal, String, Symbol,
+    Vec,
+};
 
 #[contract]
 pub struct KeeperRegistry;
 
 #[contractimpl]
 impl KeeperRegistry {
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        config: RegistryConfig,
-        vault: Address,
-    ) -> Result<(), Error> {
-        let store = env.storage().instance();
-        if store.has(&DataKey::Admin) {
-            return Err(Error::AlreadyInit);
+    /// Constructor — runs atomically at deploy, closing the initialize
+    /// front-run (NEW-init): admin is claimed in the deploy tx itself, so there
+    /// is no separate init tx an attacker could race to seize admin.
+    ///
+    /// The paired vault address is set once, post-deploy, via `set_vault`
+    /// (admin-gated) because the vault and registry reference each other and
+    /// cannot both learn the other's address at construction time.
+    pub fn __constructor(env: Env, admin: Address, config: RegistryConfig) {
+        // A slash rate above 100% would let slash() drive a keeper's stake
+        // negative — reject it at construction time (REG hardening).
+        if config.slash_rate_bps > 10_000 {
+            panic_with_error!(&env, Error::InvalidConfig);
         }
+        let store = env.storage().instance();
         store.set(&DataKey::Admin, &admin);
         store.set(&DataKey::KeeperCount, &0u32);
         store.set(&DataKey::Config, &config);
-        store.set(&DataKey::VaultAddr, &vault);
         store.extend_ttl(1000, 1000);
+    }
+
+    /// Link the vault to this registry. Admin-gated and one-time: the vault
+    /// address is the trust anchor for `require_vault` (mark_draw/clear_draw/
+    /// record_execution/reconcile), so it can be set exactly once and never
+    /// re-pointed. Called after both contracts are deployed.
+    pub fn set_vault(env: Env, admin: Address, vault: Address) -> Result<(), Error> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        Self::require_admin(&env, &admin)?;
+        let store = env.storage().instance();
+        if store.has(&DataKey::VaultAddr) {
+            return Err(Error::AlreadyInit);
+        }
+        store.set(&DataKey::VaultAddr, &vault);
         Ok(())
     }
 
@@ -160,6 +180,33 @@ impl KeeperRegistry {
             .persistent()
             .get(&DataKey::Keeper(operator))
             .ok_or(Error::NotRegistered)
+    }
+
+    /// Reverts unless `operator` is a registered, ACTIVE keeper. The vault calls
+    /// this before a draw so the check is explicit — not just record existence
+    /// (VLT-3, future-proof against a deactivation path).
+    pub fn verify_keeper(env: Env, operator: Address) -> Result<(), Error> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        let info: KeeperInfo = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Keeper(operator))
+            .ok_or(Error::NotRegistered)?;
+        if !info.active {
+            return Err(Error::Unauthorized);
+        }
+        // Defense in depth: a keeper whose stake has been slashed below the
+        // minimum bond is no longer sufficiently collateralized to draw, even
+        // if some future path left it active.
+        let cfg: RegistryConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInit)?;
+        if info.stake < cfg.min_stake {
+            return Err(Error::InsufficientStake);
+        }
+        Ok(())
     }
 
     pub fn avg_response_time_ms(env: Env, operator: Address) -> Result<u64, Error> {
@@ -313,9 +360,31 @@ impl KeeperRegistry {
             info.stake -= slash_amt;
         }
         info.has_active_draw = false;
+        // Deactivate a defaulted keeper: reconcile_default clears its KeeperDraw
+        // in the vault (re-arming the per-keeper draw cap), so without this a
+        // slashed keeper could re-draw the full cap every timeout window while
+        // losing only slash_rate of stake — draining depositors. A slashed
+        // operator must re-register (re-stake) to draw again.
+        info.active = false;
 
         pstore.set(&DataKey::Keeper(keeper.clone()), &info);
         pstore.extend_ttl(&DataKey::Keeper(keeper.clone()), 535680, 535680);
+
+        // Reconcile the vault: write off the defaulted draw and book the
+        // recovered slash amount (already transferred above) so vault and
+        // registry never drift — the keeper cannot keep drawn capital while the
+        // vault still counts it as a live asset (NEW-slash-reconcile). Traps and
+        // reverts the whole slash if the vault rejects, keeping them atomic.
+        let _: soroban_sdk::Val = env.invoke_contract(
+            &vault,
+            &Symbol::new(&env, "reconcile_default"),
+            vec![
+                &env,
+                env.current_contract_address().into_val(&env),
+                keeper.clone().into_val(&env),
+                slash_amt.into_val(&env),
+            ],
+        );
 
         env.events().publish(
             (Symbol::new(&env, "slashed"), keeper),
@@ -328,6 +397,9 @@ impl KeeperRegistry {
     pub fn set_config(env: Env, admin: Address, config: RegistryConfig) -> Result<(), Error> {
         env.storage().instance().extend_ttl(1000, 1000);
         Self::require_admin(&env, &admin)?;
+        if config.slash_rate_bps > 10_000 {
+            return Err(Error::InvalidConfig);
+        }
         env.storage().instance().set(&DataKey::Config, &config);
         Ok(())
     }

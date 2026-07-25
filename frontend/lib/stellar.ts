@@ -1,8 +1,24 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 
-const TESTNET_RPC = "https://soroban-testnet.stellar.org";
-const TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
-const HORIZON_TESTNET = "https://horizon-testnet.stellar.org";
+// Network selection: NEXT_PUBLIC_NETWORK = "testnet" (default) | "mainnet".
+// Drives RPC / Horizon / passphrase so the same build serves both
+// testnet.nectar.monster (testnet) and nectarnetwork.fun (mainnet).
+const IS_MAINNET =
+  (process.env.NEXT_PUBLIC_NETWORK ?? "testnet").toLowerCase() === "mainnet";
+
+const RPC_URL =
+  process.env.NEXT_PUBLIC_SOROBAN_RPC ??
+  (IS_MAINNET
+    ? "https://mainnet.sorobanrpc.com"
+    : "https://soroban-testnet.stellar.org");
+const NETWORK_PASSPHRASE = IS_MAINNET
+  ? StellarSdk.Networks.PUBLIC
+  : StellarSdk.Networks.TESTNET;
+const HORIZON_URL =
+  process.env.NEXT_PUBLIC_HORIZON_URL ??
+  (IS_MAINNET
+    ? "https://horizon.stellar.org"
+    : "https://horizon-testnet.stellar.org");
 
 // Vault contract address — set via env or fallback
 const VAULT_CONTRACT =
@@ -72,7 +88,7 @@ async function getKit() {
         new HanaModule(),
         new RabetModule(),
       ],
-      network: Networks.TESTNET,
+      network: IS_MAINNET ? Networks.PUBLIC : Networks.TESTNET,
       selectedWalletId: previouslySelected,
     });
     kitInitialized = true;
@@ -106,7 +122,7 @@ export async function connectWallet(): Promise<WalletState | null> {
     }
     if (!address) return null; // user closed the modal without picking
 
-    // We initialized the kit with Networks.TESTNET, so we know the network
+    // We initialized the kit with the configured network, so we know it
     // without asking the wallet — Albedo doesn't implement getNetwork() and
     // throws code -3, so we skip the call entirely.
     const walletId =
@@ -116,7 +132,7 @@ export async function connectWallet(): Promise<WalletState | null> {
     let xlmBalance = "0";
     let usdcBalance = "0";
     try {
-      const server = new StellarSdk.Horizon.Server(HORIZON_TESTNET);
+      const server = new StellarSdk.Horizon.Server(HORIZON_URL);
       const account = await server.loadAccount(address);
       const native = account.balances.find(
         (b: StellarSdk.Horizon.HorizonApi.BalanceLine) => b.asset_type === "native"
@@ -136,7 +152,7 @@ export async function connectWallet(): Promise<WalletState | null> {
     return {
       connected: true,
       address,
-      network: "TESTNET",
+      network: IS_MAINNET ? "PUBLIC" : "TESTNET",
       balance: xlmBalance,
       usdcBalance,
       walletId,
@@ -185,7 +201,7 @@ async function signWithKit(
 ): Promise<{ signedTxXdr: string }> {
   const kit = await getKit();
   const { signedTxXdr } = await kit.signTransaction(xdr, {
-    networkPassphrase: TESTNET_PASSPHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
     address,
   });
   return { signedTxXdr };
@@ -200,14 +216,14 @@ export async function depositToVault(
     throw new Error("Vault contract address not configured. Set NEXT_PUBLIC_VAULT_CONTRACT.");
   }
 
-  const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+  const server = new StellarSdk.rpc.Server(RPC_URL);
   const account = await server.getAccount(userAddress);
 
   const contract = new StellarSdk.Contract(VAULT_CONTRACT);
 
   const tx = new StellarSdk.TransactionBuilder(account, {
     fee: "1000000",
-    networkPassphrase: TESTNET_PASSPHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(
       contract.call(
@@ -232,7 +248,7 @@ export async function depositToVault(
   const { signedTxXdr } = await signWithKit(xdr, userAddress);
   const signed = StellarSdk.TransactionBuilder.fromXDR(
     signedTxXdr,
-    TESTNET_PASSPHRASE
+    NETWORK_PASSPHRASE
   );
 
   const sendResult = await server.sendTransaction(signed);
@@ -263,14 +279,14 @@ export async function withdrawFromVault(
     throw new Error("Vault contract address not configured. Set NEXT_PUBLIC_VAULT_CONTRACT.");
   }
 
-  const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+  const server = new StellarSdk.rpc.Server(RPC_URL);
   const account = await server.getAccount(userAddress);
 
   const contract = new StellarSdk.Contract(VAULT_CONTRACT);
 
   const tx = new StellarSdk.TransactionBuilder(account, {
     fee: "1000000",
-    networkPassphrase: TESTNET_PASSPHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(
       contract.call(
@@ -293,7 +309,7 @@ export async function withdrawFromVault(
   const { signedTxXdr } = await signWithKit(xdr, userAddress);
   const signed = StellarSdk.TransactionBuilder.fromXDR(
     signedTxXdr,
-    TESTNET_PASSPHRASE
+    NETWORK_PASSPHRASE
   );
 
   const sendResult = await server.sendTransaction(signed);
@@ -321,13 +337,13 @@ export async function queryVaultBalance(
   if (!VAULT_CONTRACT) return null;
 
   try {
-    const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+    const server = new StellarSdk.rpc.Server(RPC_URL);
     const account = await server.getAccount(userAddress);
     const contract = new StellarSdk.Contract(VAULT_CONTRACT);
 
     const tx = new StellarSdk.TransactionBuilder(account, {
       fee: "100",
-      networkPassphrase: TESTNET_PASSPHRASE,
+      networkPassphrase: NETWORK_PASSPHRASE,
     })
       .addOperation(
         contract.call(
@@ -416,7 +432,7 @@ async function simulateRead(
 ): Promise<StellarSdk.xdr.ScVal | null> {
   if (!contractAddr) return null;
   try {
-    const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+    const server = new StellarSdk.rpc.Server(RPC_URL);
     const source = fromAddr ?? StellarSdk.Keypair.random().publicKey();
     let account: StellarSdk.Account;
     try {
@@ -428,7 +444,7 @@ async function simulateRead(
     const contract = new StellarSdk.Contract(contractAddr);
     const tx = new StellarSdk.TransactionBuilder(account, {
       fee: "100",
-      networkPassphrase: TESTNET_PASSPHRASE,
+      networkPassphrase: NETWORK_PASSPHRASE,
     })
       .addOperation(contract.call(fn, ...args))
       .setTimeout(30)
@@ -576,13 +592,13 @@ async function buildAndSubmit(
   fn: string,
   args: StellarSdk.xdr.ScVal[],
 ): Promise<{ txHash: string; success: boolean }> {
-  const server = new StellarSdk.rpc.Server(TESTNET_RPC);
+  const server = new StellarSdk.rpc.Server(RPC_URL);
   const account = await server.getAccount(userAddress);
   const contract = new StellarSdk.Contract(contractAddr);
 
   const tx = new StellarSdk.TransactionBuilder(account, {
     fee: "1000000",
-    networkPassphrase: TESTNET_PASSPHRASE,
+    networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(contract.call(fn, ...args))
     .setTimeout(60)
@@ -599,7 +615,7 @@ async function buildAndSubmit(
   const { signedTxXdr } = await signWithKit(xdr, userAddress);
   const signed = StellarSdk.TransactionBuilder.fromXDR(
     signedTxXdr,
-    TESTNET_PASSPHRASE,
+    NETWORK_PASSPHRASE,
   );
   const sendResult = await server.sendTransaction(signed);
   if (sendResult.status === "ERROR") {

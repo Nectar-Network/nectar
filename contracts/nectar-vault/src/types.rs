@@ -35,6 +35,7 @@ pub enum VaultKey {
     KeeperRegistry,
     VaultConfig,
     KeeperDraw(Address),
+    Paused,
 }
 
 #[contracterror]
@@ -49,4 +50,12 @@ pub enum VaultError {
     DepositCapExceeded = 8,
     WithdrawalCooldown = 9,
     DrawLimitExceeded = 10,
+    Paused = 11,
+    // A deposit so small (relative to the virtual-offset share price) that it
+    // would mint zero shares. Rejected so a depositor can never fund the pool
+    // for nothing (share-inflation defense, VLT-1).
+    ZeroShares = 12,
+    // return_proceeds called with no outstanding draw for the keeper. Blocks the
+    // anonymous donation-as-profit path (VLT-2).
+    NoDraw = 13,
 }

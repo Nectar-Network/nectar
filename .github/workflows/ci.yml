@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, tranche-2]
+    branches: [main, tranche-2, tranche-3]
   pull_request:
-    branches: [main, tranche-2]
+    branches: [main, tranche-2, tranche-3]
 
 jobs:
   contracts:
@@ -28,20 +28,23 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      # --locked enforces the committed Cargo.lock: CI builds the exact dependency
+      # graph the contracts were tested against, and fails loudly if the lock is
+      # stale rather than silently re-resolving to incompatible versions.
       - name: Test keeper-registry
-        run: cargo test -p keeper-registry
+        run: cargo test --locked -p keeper-registry
 
       - name: Test nectar-vault
-        run: cargo test -p nectar-vault
+        run: cargo test --locked -p nectar-vault
 
       - name: Test mock-token
-        run: cargo test -p mock-token
+        run: cargo test --locked -p mock-token
 
       - name: Test liquidation-lab
-        run: cargo test -p liquidation-lab
+        run: cargo test --locked -p liquidation-lab
 
       - name: Build contracts (release + wasm32)
-        run: cargo build --target wasm32-unknown-unknown --release
+        run: cargo build --locked --target wasm32-unknown-unknown --release
 
   keeper:
     name: Go Keeper
@@ -108,3 +111,46 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: "http://localhost:8080"
+
+  # Soroban security linter. Informational for audit prep — it produces a report
+  # artifact and never gates the merge (continue-on-error), since Scout findings
+  # are advisory. Runs on a clean Ubuntu toolchain because cargo-scout-audit does
+  # not install reliably on mixed local toolchains.
+  scout:
+    name: Scout (Soroban security scan)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install cargo-scout-audit
+        run: cargo install cargo-scout-audit --locked
+      - name: Run Scout on the audited contracts
+        run: |
+          mkdir -p scout-out
+          for c in keeper-registry nectar-vault; do
+            echo "### Scout: $c" | tee "scout-out/$c.txt"
+            ( cd "contracts/$c" && cargo scout-audit 2>&1 ) | tee -a "scout-out/$c.txt" || true
+          done
+      - name: Upload Scout report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-report
+          path: scout-out/
+
+  # Test-coverage summary for the two audited contracts (informational).
+  coverage:
+    name: Contract coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Coverage (keeper-registry + nectar-vault)
+        run: cargo llvm-cov --locked -p keeper-registry -p nectar-vault --summary-only

@@ -2,9 +2,26 @@
 mod tests {
     use crate::{Error, KeeperRegistry, KeeperRegistryClient, RegistryConfig};
     use soroban_sdk::{
+        contract, contractimpl,
         testutils::{Address as _, Ledger, LedgerInfo},
         token, Address, Env, String,
     };
+
+    // Mock vault: reconcile_default is a no-op stub so slash() can cross-call it
+    // (the real accounting is covered by the vault's own tests + the integration
+    // test in nectar-vault). Its address is registered as the registry's vault.
+    #[contract]
+    pub struct MockVault;
+    #[contractimpl]
+    impl MockVault {
+        pub fn reconcile_default(
+            _env: Env,
+            _caller: Address,
+            _keeper: Address,
+            _recovered: i128,
+        ) {
+        }
+    }
 
     const MIN_STAKE: i128 = 100_0000000; // 100 USDC
     const SLASH_TIMEOUT: u64 = 3600; // 1 hour
@@ -23,11 +40,8 @@ mod tests {
 
     fn setup<'a>() -> Setup<'a> {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
-        let vault = Address::generate(&env);
+        let vault = env.register(MockVault, ());
         let usdc_admin = Address::generate(&env);
         let usdc_sac = env.register_stellar_asset_contract_v2(usdc_admin.clone());
         let usdc = usdc_sac.address();
@@ -40,7 +54,9 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc.clone(),
         };
-        client.initialize(&admin, &cfg, &vault);
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
+        client.set_vault(&admin, &vault);
 
         let usdc_client = token::Client::new(&env, &usdc);
 
@@ -178,12 +194,8 @@ mod tests {
     #[test]
     fn test_unauthorized_pause() {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
         let intruder = Address::generate(&env);
-        let vault = Address::generate(&env);
         let usdc_admin = Address::generate(&env);
         let usdc = env.register_stellar_asset_contract_v2(usdc_admin).address();
 
@@ -193,18 +205,23 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc,
         };
-        client.initialize(&admin, &cfg, &vault);
-        // No mock_all_auths — admin mismatch should short-circuit before require_auth.
+        env.mock_all_auths();
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
+        // Intruder != stored admin → require_admin returns Unauthorized via the
+        // identity check before it ever reaches require_auth.
         let result = client.try_pause(&intruder);
         assert_eq!(result, Err(Ok(Error::Unauthorized)));
     }
 
     #[test]
-    fn test_double_init_fails() {
+    fn test_set_vault_is_one_time() {
+        // setup() already linked the vault via set_vault; the vault address is
+        // the trust anchor for require_vault, so a second set_vault (even by the
+        // admin) is rejected — it can never be re-pointed.
         let s = setup();
-        let admin2 = Address::generate(&s.env);
-        let cfg = s.client.get_config();
-        let result = s.client.try_initialize(&admin2, &cfg, &s.vault);
+        let other = Address::generate(&s.env);
+        let result = s.client.try_set_vault(&s.admin, &other);
         assert_eq!(result, Err(Ok(Error::AlreadyInit)));
     }
 
@@ -285,11 +302,7 @@ mod tests {
     #[test]
     fn test_register_zero_min_stake_rejected() {
         let env = Env::default();
-        let contract_id = env.register(KeeperRegistry, ());
-        let client = KeeperRegistryClient::new(&env, &contract_id);
-
         let admin = Address::generate(&env);
-        let vault = Address::generate(&env);
         let usdc_admin = Address::generate(&env);
         let usdc = env.register_stellar_asset_contract_v2(usdc_admin).address();
         let cfg = RegistryConfig {
@@ -298,8 +311,9 @@ mod tests {
             slash_rate_bps: SLASH_RATE_BPS,
             usdc_token: usdc,
         };
-        client.initialize(&admin, &cfg, &vault);
         env.mock_all_auths();
+        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+        let client = KeeperRegistryClient::new(&env, &contract_id);
 
         let op = Address::generate(&env);
         let result = client.try_register(&op, &String::from_str(&env, "alpha"));
@@ -454,6 +468,12 @@ mod tests {
         assert_eq!(info.stake, MIN_STAKE - expected);
         assert!(!info.has_active_draw);
         assert_eq!(s.usdc_client.balance(&s.vault) - vault_before, expected);
+
+        // A slashed keeper is DEACTIVATED — it cannot re-draw the cap after
+        // reconcile_default re-arms the per-keeper draw limit. verify_keeper
+        // (the gate draw() uses) must now reject it. It must re-register to draw.
+        assert!(!info.active);
+        assert_eq!(s.client.try_verify_keeper(&op), Err(Ok(Error::Unauthorized)));
     }
 
     #[test]
