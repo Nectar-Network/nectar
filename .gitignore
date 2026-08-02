@@ -73,3 +73,7 @@ nectar-network-design-system/
 
 # Vercel local link metadata (machine-local; never commit)
 .vercel/
+
+# Pinned reference clones (blend-contracts-v2, blend-utils) — we pin the
+# commit hash in docs/FACTS.md, not the clone itself
+reference/
