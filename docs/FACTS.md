@@ -102,9 +102,29 @@ With `t = block_dif = current_ledger − auction_data.block`:
 
 ## Auction asset flows
 
-| Auction type | Lot asset(s) | Bid asset(s) | Filler provides | Filler receives | Backstop LP involved? | Source |
+All verified 2026-08-03 @ blend-contracts-v2 `ba22b48`. `AuctionType`: `UserLiquidation = 0`, `BadDebtAuction = 1`, `InterestAuction = 2` (`pool/src/auctions/auction.rs:19-23`; `from_u32` panics `BadRequest` for >2, `:26-33`). Both `bid` and `lot` maps are keyed by the reserve's UNDERLYING asset address even when values are bToken/dToken amounts.
+
+| Auction type | Lot asset(s) | Bid asset(s) | Filler provides | Filler receives | Backstop LP involved? | Source (file:line @ ba22b48) |
 |---|---|---|---|---|---|---|
-| _to be filled by Gate 0.4_ | | | | | | |
+| User liquidation (0) | bTokens of the user's collateral (keyed by underlying) | dTokens of the user's liabilities (keyed by underlying) | Nothing transferred at fill — filler ASSUMES the dToken debt positions | The user's collateral bToken positions (plus the debt). Pure `Positions` bookkeeping; **no token transfers, no backstop involvement** | No | create: `user_liquidation_auction.rs:152-170`; fill: `:214-221`; position ops `pool/src/pool/user.rs:229-250` |
+| Bad debt (1) | Backstop LP tokens (`backstop_token`, BLND:USDC comet LP) — lot must be exactly `[backstop_token]`; `lot_amount = debt_value × 1.2 / token_spot_price`, capped at the pool's backstop balance | The backstop's dToken liabilities (keyed by underlying) | Nothing paid at fill — filler ASSUMES the backstop's dToken debt positions (repaid later via normal Repay) | Backstop LP tokens via `backstop.draw(pool, lot_amount, filler)` — transfer backstop contract → filler | **Yes — as the LOT** | create: `bad_debt_auction.rs:21-27, 50-58, 70-90`; fill: `:104-127`; draw transfer: `backstop/src/backstop/fund_management.rs:15-19` |
+| Interest (2) | Underlying tokens equal to each reserve's accrued `backstop_credit` (min total value 200 × oracle_scalar at creation) | Backstop LP tokens — bid must be exactly `[backstop_token]`; `bid_amount = interest_value × 1.2 / token_spot_price` | Backstop LP tokens via `backstop.donate(filler, pool, amount)` (`transfer_from` filler → backstop; **filler must pre-approve the backstop contract**) | Underlying tokens transferred pool contract → filler (`backstop_credit` decremented per reserve). Never touches filler `Positions` | **Yes — as the BID** | create: `backstop_interest_auction.rs:18-24, 46-67, 70-81`; fill: `:86-119`; donate transfer: `backstop/src/backstop/fund_management.rs:32-40` |
+
+Answers to the two special-attention questions:
+- **Bad-debt fills do NOT pay underlying debt.** The filler takes over the dToken liability positions (`bad_debt_auction.rs:107-111` — "bid only contains d_token asset amounts") and is paid in backstop LP tokens drawn to their address. They repay the assumed debt later through normal pool `Repay`.
+- **Interest fills DO require backstop LP as the bid.** Creation panics `InvalidBid` unless `bid == [backstop_token]` (`backstop_interest_auction.rs:72-74`); fill collects it via `backstop.donate` using `transfer_from`.
+
+Additional verified behavior:
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| Creation percent rules | User liquidation: percent 1..=100, but >95 with all positions ⇒ treated as full (100%) liquidation; bad debt and interest: `user` must be the backstop and `percent` must be exactly 100 | 2026-08-03 | `user_liquidation_auction.rs:25-27, 92-105`; `bad_debt_auction.rs:21-27`; `backstop_interest_auction.rs:18-24` |
+| User-liquidation lot embeds incentive | `est_incentive = (1 − avg_CF/avg_LF)/2 + 1`; partial liquidations must land HF in [1.03, 1.15] (`InvalidLiqTooSmall`/`InvalidLiqTooLarge`) | 2026-08-03 | `user_liquidation_auction.rs:108-139, 193-201` |
+| One auction per (type,user) | creation panics `AuctionInProgress` if one exists; bid/lot vectors must have unique addresses | 2026-08-03 | `user_liquidation_auction.rs:22-24`; `bad_debt_auction.rs:28-30`; `backstop_interest_auction.rs:25-27`; `auction.rs:83-84, 270-278` |
+| Fill guards | filler ≠ auctioned user (`InvalidLiquidation`); for bad-debt and interest fills, filler ≠ backstop (`BadRequest`) | 2026-08-03 | `auction.rs:148-150`; `bad_debt_auction.rs:104-106`; `backstop_interest_auction.rs:93-95` |
+| Full-fill side effects | user-liq full fill: leftover user debt → `check_and_handle_user_bad_debt` (fires only if liabilities remain AND collateral is zero); bad-debt full fill: remaining bad debt defaulted via `check_and_handle_backstop_bad_debt` only when backstop threshold < 0_0000003 (b_rate reduced — suppliers absorb loss) | 2026-08-03 | `user_liquidation_auction.rs:218-220`; `bad_debt_auction.rs:124-127`; `pool/src/pool/bad_debt.rs:59-75, 100+` |
+| Interest-auction free-lot edge | after block 400 (bid=0) an interest fill transfers the lot for free (corroborating test `test_fill_interest_auction_empty_bid`) | 2026-08-03 | `backstop_interest_auction.rs:86-119, 1347+` |
+| Donate/draw guards | `execute_donate`: `from` may not be the pool or the backstop itself; `execute_draw` requires pool auth + nonnegative amount | 2026-08-03 | `backstop/src/backstop/fund_management.rs:25-30, 44-50` |
 
 ## Testnet addresses
 
