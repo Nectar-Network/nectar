@@ -14,14 +14,18 @@ healthcheckPath = "/healthz"
 healthcheckTimeout = 30
 
 # Environment variables — set these in the Railway dashboard, NOT here.
-# Addresses below are the Tranche 1 hardened deployment (2026-05-24, current).
+# Addresses below are the Tranche 3 hardened deployment (2026-07-22, current
+# — see CLAUDE.md / docs/FACTS.md).
 # Required:
 #   KEEPER_SECRET   (mark as secret) — operator's Stellar S... key
 #   KEEPER_NAME     keeper-alpha (or keeper-beta / keeper-gamma per instance)
-#   REGISTRY_CONTRACT  CDT257SL2IYDZJIDXEVKI67MYLCKE73JY6WGUTGZOEFXJHG26FJHJDRB
-#   VAULT_CONTRACT     CDZR6VDCPQFOFFKKZ2KMVB67Z54LI5OY73NHBFVI6DR6RE6TL7NN7345
-#   USDC_CONTRACT      CD34YC6FFI2KIE2U4ZPCGQIRPH7UPG5YY2QBYNP25ATSFOQSG73J4VBW
-#   BLEND_POOL         CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF
+#   REGISTRY_CONTRACT  CD33A7IGNCOLVQ4EEINBVMVA7IHWXGN57R6YLE5AJEEKPA6VKC2E4IQD
+#   VAULT_CONTRACT     CDOGQY7NAE3BP4Q7RWBCBLW23Z36RNWNDNXX5DWNIEVMFEWP3GVEPXLR
+#   USDC_CONTRACT      CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA (Circle testnet USDC)
+#   BLEND_POOLS        comma-separated ADDR[:mode[:POOL_USDC]] entries, e.g.
+#     CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF:monitor:CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU,CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V:active
+#     (TestnetV2 settles Blend-USDC — conversion-guarded; Nectar Sandbox settles
+#     the vault's Circle USDC. Legacy BLEND_POOL still honored.)
 #   SOROBAN_RPC        https://soroban-testnet.stellar.org:443
 #   HORIZON_URL        https://horizon-testnet.stellar.org
 #   POLL_INTERVAL      10
@@ -29,6 +33,10 @@ healthcheckTimeout = 30
 #   API_PORT           8080
 #
 # Optional:
-#   SOROSWAP_ROUTER    CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD (enables collateral->USDC swaps)
-#   SLIPPAGE_BPS       100 (max swap slippage; default 100 = 1%)
+#   SOROSWAP_ROUTER    CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD (enables collateral->USDC swaps + USDC conversion)
+#   SLIPPAGE_BPS       100 (max swap slippage AND USDC-conversion par bound; default 100 = 1%)
+#   BLEND_EVENT_LOOKBACK  1000 (ledgers of pool events scanned for position discovery)
+#   FAUCET_SECRET      (mark as secret) testnet USDC faucet treasury key; empty disables
+#   FAUCET_AMOUNT      250000000 (stroops per claim; treasury-payment, NOT a mint)
+#   FAUCET_COOLDOWN_SECS  3600
 #   KNOWN_DEPOSITORS   comma-separated list of depositor addresses to display

@@ -76,5 +76,28 @@ RESULT: PASS — the keeper loads real reserve configs, rates, and live oracle
 prices from the canonical Blend testnet V2 pool, enumerates visible positions,
 and computes HFs, logging everything per-pool. No capital moved.
 
-[A4 ADDENDUM — appended after the Nectar Sandbox pool exists: see the second
-run at the bottom of this file showing BLEND_POOLS with two pools.]
+A4 ADDENDUM — TWO-POOL RUN (after Nectar Sandbox deploy + discovery fixes)
+--------------------------------------------------------------------------
+  BLEND_POOLS=CCEBVDYM…4HGF:monitor:CAQCFVLO…RCJU,CBUBTHATT…CK3V:monitor
+(TestnetV2 with its pool-USDC declared for the A2 conversion path; Nectar
+Sandbox settles the vault's own Circle USDC — no third field needed.)
+
+Two keeper-side bugs were found and fixed to make this pass honestly (see
+docs/evidence/a4-sandbox.md §"Keeper bugs"): user addresses sit at event
+topic[2] (events.rs @ ba22b48), and RPC getEvents requires cursor-following
+across ledger segments. Post-fix capture (XLM crashed to $0.15 on our oracle):
+
+01:49:13.320 [] INFO pool scan pool=CCEB..4HGF mode=monitor status=0 reserves=4 oracle_decimals=7 positions=11
+01:49:13.322 [] INFO position pool=CCEB..4HGF addr=CCTS..KYIT hf=+Inf
+01:49:13.322 [] INFO position pool=CCEB..4HGF addr=CCSL..L357 hf=+Inf
+01:49:13.322 [] INFO position pool=CCEB..4HGF addr=GADQ..IVG4 hf=+Inf
+   … (11 positions total, all healthy)
+01:49:17.937 [] INFO pool scan pool=CBUB..CK3V mode=monitor status=0 reserves=2 oracle_decimals=7 positions=2
+01:49:17.937 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+01:49:17.937 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.1500000
+01:49:17.937 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+01:49:17.937 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.5344
+
+RESULT: PASS — one keeper instance reads both real pools (the single official
+V2 pool + Nectar Sandbox), each with its own reserves, oracle prices and
+positions, and computes a correct underwater HF on the sandbox borrower.
