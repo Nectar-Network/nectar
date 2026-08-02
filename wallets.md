@@ -5,9 +5,18 @@
 > 1h cooldown). The previous (pre-hardening) addresses are listed at the
 > bottom for archive; new traffic should target the addresses in the
 > **Contracts** section.
+>
+> NOTE (2026-08-03): contract addresses below are STALE — the current
+> deployment is Tranche 3 hardened (see CLAUDE.md / docs/FACTS.md). This
+> file remains the roster of ACCOUNTS.
 
 ## Admin
 - admin: GATK27P6LOQBSXMVCYBBSKPUYKX5HVZ5AI4AAKF7UEYNKELSEBH53P7W
+
+## Nectar Sandbox (A4, 2026-08-03 — secrets in reference/blend-utils/.env, untracked)
+- sandbox-whale (backstop funder):  GD3Q7WTCN4T42XUCQTSENCN5BDPAWF6QD4CRFQNQAYTJQYZAEC4GFSYN
+- sandbox-borrower (100 XLM coll / 20 USDC debt on pool CBUBTHAT…): GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ
+- a3-fresh-wallet (trustline/faucet/deposit evidence): GCDCPWBS5PN2QS344JZI2LSBXAYW572IZRLNBRHR5Y4LXLTKZWFH3363
 
 ## Keepers (registered on the Tranche 1 registry, each staked 100 USDC)
 - keeper-alpha: GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF
