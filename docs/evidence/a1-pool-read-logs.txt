@@ -1,0 +1,80 @@
+A1 EVIDENCE — keeper read-only integration with official Blend testnet pool(s)
+================================================================================
+Date: 2026-08-03 (log timestamps are local)
+Keeper build: tranche-3 branch, commit "feat(keeper): multi-pool BLEND_POOLS
+config + real Blend V2 state parsing" + position-discovery filter fix.
+
+IMPORTANT SCOPE NOTE (verified, docs/FACTS.md "Testnet addresses"):
+The task named two official pools — "Blend TestnetV2" and "RegionalStarterPack
+Pool V2". FACTS.md (Gate 0.5, live-verified 2026-08-03) established these are
+THE SAME CONTRACT: blend-utils testnet.contracts.json has exactly one V2 pool
+entry, `TestnetV2` = CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF,
+and that contract's on-chain instance storage Name is "TestnetV2". There is no
+second official V2 testnet pool to read. The multi-pool config therefore runs
+against TestnetV2 here, and gains the Nectar Sandbox pool in Task A4 (see
+docs/evidence/a4-sandbox.md) for a total of two distinct real pools.
+
+RUN CONFIGURATION (read-only guaranteed)
+----------------------------------------
+  BLEND_POOLS=CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF:monitor
+  BLEND_EVENT_LOOKBACK=17000        # ~24h of pool events
+  KEEPER_SECRET=<keeper-alpha>      # GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF
+  REGISTRY_CONTRACT=CD33A7IGNCOLVQ4EEINBVMVA7IHWXGN57R6YLE5AJEEKPA6VKC2E4IQD
+  VAULT_CONTRACT=CDOGQY7NAE3BP4Q7RWBCBLW23Z36RNWNDNXX5DWNIEVMFEWP3GVEPXLR
+  USDC_CONTRACT=CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+  SOROBAN_RPC=https://soroban-testnet.stellar.org:443 (default)
+  POLL_INTERVAL=10
+
+`:monitor` mode: the adapter scans, prices, and computes HFs but emits no
+tasks, so no auction creation / fill / vault draw can occur. No capital moved;
+the only transaction of any kind was keeper-alpha's idempotent registry
+check-in on startup ("registered" below — keeper-alpha was already registered
+and staked since 2026-07-22; no new stake moved).
+
+CAPTURED LOG (run 2, after position-discovery filter fix)
+---------------------------------------------------------
+01:11:23.645 [] INFO parsing keypair key_len=56 prefix=S
+01:11:23.646 [] INFO registering keeper name=keeper-alpha
+01:11:25.506 [] INFO registered name=keeper-alpha
+01:11:25.507 [] INFO blend pool configured pool=CCEB..4HGF mode=monitor
+01:11:25.507 [] INFO adapters registered count=1
+01:11:25.507 [] INFO keeper started pools=1 interval=10
+01:11:44.570 [] INFO pool scan pool=CCEB..4HGF mode=monitor status=0 reserves=4 oracle_decimals=7 positions=1
+01:11:44.571 [] INFO reserve price pool=CCEB..4HGF asset=CAZA..Y3UE usd=4000.0000000
+01:11:44.571 [] INFO reserve price pool=CCEB..4HGF asset=CAP5..3UEI usd=100000.0000000
+01:11:44.571 [] INFO reserve price pool=CCEB..4HGF asset=CAQC..RCJU usd=1.0000000
+01:11:44.571 [] INFO reserve price pool=CCEB..4HGF asset=CDLZ..CYSC usd=0.4200000
+01:11:44.571 [] INFO position pool=CCEB..4HGF addr=CCSL..L357 hf=+Inf
+01:11:54.226 [] INFO pool scan pool=CCEB..4HGF mode=monitor status=0 reserves=4 oracle_decimals=7 positions=1
+01:11:54.226 [] INFO reserve price pool=CCEB..4HGF asset=CDLZ..CYSC usd=0.4200000
+01:11:54.226 [] INFO reserve price pool=CCEB..4HGF asset=CAZA..Y3UE usd=4000.0000000
+01:11:54.226 [] INFO reserve price pool=CCEB..4HGF asset=CAP5..3UEI usd=100000.0000000
+01:11:54.226 [] INFO reserve price pool=CCEB..4HGF asset=CAQC..RCJU usd=1.0000000
+01:11:54.226 [] INFO position pool=CCEB..4HGF addr=CCSL..L357 hf=+Inf
+
+CROSS-VERIFICATION AGAINST INDEPENDENTLY KNOWN GROUND TRUTH
+-----------------------------------------------------------
+- reserves=4 matches the live get_reserve_list in FACTS.md (XLM, wETH, wBTC,
+  Blend-USDC) — all four parsed from the real nested Reserve{config,data}
+  shape (the pre-A1 parser could not parse any of them).
+- oracle_decimals=7 matches the live `decimals` read on oraclemock CAZOKR2Y…
+- Prices are live SEP-40 lastprice() results and equal the oraclemock fixed
+  prices recorded in FACTS.md (oracle-setup.ts: USDC 1, XLM 0.42, wETH 4000,
+  wBTC 100000): CDLZ..CYSC (XLM SAC)=0.4200000, CAZA..Y3UE (wETH)=4000,
+  CAP5..3UEI (wBTC)=100000, CAQC..RCJU (Blend USDC)=1.0000000.
+- status=0 (Active) matches FACTS.md live get_config.
+- positions: over the last ~17,000 ledgers, event-topic discovery surfaced one
+  address holding a live position: CCSL..L357, collateral only, no
+  liabilities → HF = +Inf (correctly reported; nothing is underwater on
+  TestnetV2 in this window). Run 1 (a1-keeper-run.log, retained in session
+  scratchpad) additionally surfaced the pool's own reserve-asset SACs as
+  phantom "users" from event topics; the discovery filter now excludes the
+  pool's reserve assets and empty positions — that fix is part of this
+  evidence trail.
+
+RESULT: PASS — the keeper loads real reserve configs, rates, and live oracle
+prices from the canonical Blend testnet V2 pool, enumerates visible positions,
+and computes HFs, logging everything per-pool. No capital moved.
+
+[A4 ADDENDUM — appended after the Nectar Sandbox pool exists: see the second
+run at the bottom of this file showing BLEND_POOLS with two pools.]

@@ -18,7 +18,10 @@ type Position struct {
 }
 
 // GetPositions discovers users from pool events and loads their positions.
-func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger int64) ([]Position, error) {
+// Event topics carry asset addresses as well as user addresses, so anything in
+// exclude (the pool's reserve assets, the pool itself) is dropped before the
+// per-address get_positions round-trip; empty positions are dropped after.
+func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger int64, exclude map[string]bool) ([]Position, error) {
 	events, err := rpc.GetEvents(startLedger, poolAddr)
 	if err != nil {
 		return nil, fmt.Errorf("get events: %w", err)
@@ -35,7 +38,7 @@ func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger 
 		}
 		if val.Type == xdr.ScValTypeScvAddress && val.Address != nil {
 			addr, err := soroban.ParseAddress(*val.Address)
-			if err == nil {
+			if err == nil && addr != poolAddr && !exclude[addr] {
 				seen[addr] = struct{}{}
 			}
 		}
@@ -46,6 +49,9 @@ func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger 
 		pos, err := loadPosition(rpc, passphrase, poolAddr, addr)
 		if err != nil {
 			continue
+		}
+		if len(pos.Collateral) == 0 && len(pos.Liabilities) == 0 {
+			continue // address appeared in events but holds no position
 		}
 		positions = append(positions, *pos)
 	}

@@ -99,7 +99,11 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	if lookback <= 0 {
 		lookback = 1000
 	}
-	positions, err := core.GetPositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, ledger-lookback)
+	exclude := make(map[string]bool, len(pool.Reserves))
+	for asset := range pool.Reserves {
+		exclude[asset] = true
+	}
+	positions, err := core.GetPositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, ledger-lookback, exclude)
 	if err != nil {
 		return nil, fmt.Errorf("get positions: %w", err)
 	}
