@@ -66,9 +66,39 @@ Additional verified behavior:
 
 ## Auction fill price curve
 
-| Claim | Value | Date | Source (file:line @ commit) |
+**Contradiction resolved (2026-08-03):** the curve is a **400-ledger two-phase Dutch auction**, NOT a "200-block decay" with simultaneous lot-up/bid-down. The prior CLAUDE.md note "lot scales 0%→100% over 200 blocks, bid scales 100%→0%" conflates two sequential phases. Decisive source: `scale_auction`, `pool/src/auctions/auction.rs:189-264` @ `ba22b48`:
+
+```rust
+let per_block_scalar: i128 = 0_0050000; // modifier moves 0.5% every block
+let block_dif = i128(e.ledger().sequence() - auction_data.block);
+if block_dif > 200 {
+    // lot 100%, bid scaling down from 100% to 0%
+    lot_modifier = SCALAR_7;
+    if block_dif < 400 {
+        bid_modifier = SCALAR_7 - (block_dif - 200) * per_block_scalar;
+    } else {
+        bid_modifier = 0;
+    }
+} else {
+    // lot scaling from 0% to 100%, bid 100%
+    lot_modifier = block_dif * per_block_scalar;
+    bid_modifier = SCALAR_7;
+}
+```
+
+With `t = block_dif = current_ledger − auction_data.block`:
+
+| Claim | Value | Date | Source (file:line @ ba22b48) |
 |---|---|---|---|
-| _to be filled by Gate 0.3_ | | | |
+| Phase 1 (0 ≤ t ≤ 200) | `lot%(t) = t × 0.5%` (0→100%), `bid%(t) = 100%` | 2026-08-03 | `pool/src/auctions/auction.rs:222-225` |
+| Fair point (lot=100% AND bid=100%) | exactly `t = 200` (200×0_0050000 = SCALAR_7; corroborated by unit test at seq 1200 vs block 1000) | 2026-08-03 | `auction.rs:212-226`; test `auction.rs:2618-2638` |
+| Phase 2 (200 < t < 400) | `lot%(t) = 100%`, `bid%(t) = 100% − (t−200) × 0.5%` (100→0%) | 2026-08-03 | `auction.rs:214-219` |
+| t ≥ 400 | `lot = 100%`, `bid = 0` — filler pays nothing, receives full lot; auction persists indefinitely (no auto-expiry) | 2026-08-03 | `auction.rs:217-221` |
+| Total price-curve duration | 400 ledgers (~33 min at 5s ledgers); stale-DELETE allowed only after 500 blocks (`delete_stale_auction` panics if `auction.block + 500 > sequence`) | 2026-08-03 | `auction.rs:217`, `:103-106` |
+| Auction start block | `AuctionData.block = e.ledger().sequence() + 1` at creation (auction begins the NEXT ledger); `AuctionData { bid: Map<Address,i128>, lot: Map<Address,i128>, block: u32 }` | 2026-08-03 | `auction.rs:55-57`; `user_liquidation_auction.rs:32,37`; `bad_debt_auction.rs:35`; `backstop_interest_auction.rs:38` |
+| Fixed point + rounding | all modifiers 7-dec over `SCALAR_7 = 1_0000000`; bid amounts round UP twice (`fixed_mul_ceil` ×2), lot amounts round DOWN twice (`fixed_mul_floor` ×2) — always against the filler | 2026-08-03 | `auction.rs:229-257`; `pool/src/constants.rs:7` |
+| Partial fills don't shift the curve | `percent_filled` (u64, whole percents 1..=100) scales amounts BEFORE the block modifier; the remainder is stored back with the ORIGINAL `block`, so the clock never resets; full fill deletes the auction; zero-amount scaled entries are dropped from the maps | 2026-08-03 | `auction.rs:194-196, 203-207, 229-243, 254-263` |
+| Curve corroborated by unit test | t=0: bid 100%/lot empty; t=100: bid 100%/lot 50%; t=200: both 100%; t=300: bid 50%/lot 100%; t=400: bid empty/lot 100% | 2026-08-03 | test `test_scale_auction_100_fill_pct`, `auction.rs:2565-2680` |
 
 ## Auction asset flows
 
