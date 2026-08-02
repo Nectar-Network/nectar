@@ -100,6 +100,55 @@ export async function fetchPerformance(): Promise<PerformanceData | null> {
   }
 }
 
+export interface FaucetInfo {
+  enabled: boolean;
+  amount: string; // stroops per dispense
+  cooldownSecs: number;
+  asset: { code: string; issuer: string; contract: string };
+  treasuryBalance: string; // stroops
+}
+
+export async function fetchFaucetInfo(): Promise<FaucetInfo | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/faucet/info`, { cache: "no-store" });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export type FaucetResult =
+  | { ok: true; txHash: string }
+  | { ok: false; error: string; retryAfterSecs?: number };
+
+/**
+ * Request a faucet dispense for `address`. Unlike the read-only fetchers this
+ * surfaces the error body ("cooldown", "no_trustline", ...) so the UI can
+ * explain exactly why the dispense was refused.
+ */
+export async function requestFaucet(address: string): Promise<FaucetResult> {
+  try {
+    const res = await fetch(`${API_URL}/api/faucet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    });
+    const body = await res.json().catch(() => null);
+    if (res.ok && body?.txHash) {
+      return { ok: true, txHash: String(body.txHash) };
+    }
+    return {
+      ok: false,
+      error: String(body?.error ?? `http_${res.status}`),
+      retryAfterSecs:
+        typeof body?.retryAfterSecs === "number" ? body.retryAfterSecs : undefined,
+    };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
+
 export function apiUrl(): string {
   return API_URL;
 }

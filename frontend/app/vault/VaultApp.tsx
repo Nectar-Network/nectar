@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, type CSSProperties } from "react";
-import { formatUSDC, formatDuration, sharePrice, fetchPerformance } from "../../lib/api";
+import {
+  formatUSDC,
+  formatDuration,
+  sharePrice,
+  fetchPerformance,
+  fetchFaucetInfo,
+  requestFaucet,
+  type FaucetInfo,
+} from "../../lib/api";
 import {
   connectWallet,
   disconnectWallet,
@@ -15,12 +23,17 @@ import {
   queryRegistryConfig,
   registerKeeper,
   deregisterKeeper,
+  getUsdcTrustline,
+  addUsdcTrustline,
+  fundWithFriendbot,
   shortAddr,
+  USDC_ISSUER,
   type WalletState,
   type VaultConfig,
   type VaultStateOnchain,
   type DepositorOnchain,
   type KeeperInfoOnchain,
+  type TrustlineStatus,
 } from "../../lib/stellar";
 import { Card, Btn, Pill, StatusDot, Eyebrow } from "../components/ds";
 
@@ -85,6 +98,11 @@ export default function VaultApp() {
   const [keeperBusy, setKeeperBusy] = useState(false);
   const [keeperError, setKeeperError] = useState("");
   const [depositorCount, setDepositorCount] = useState<number | null>(null);
+  const [trustline, setTrustline] = useState<{ status: TrustlineStatus; balance: string } | null>(null);
+  const [faucetInfo, setFaucetInfo] = useState<FaucetInfo | null>(null);
+  const [fundingBusy, setFundingBusy] = useState<"" | "friendbot" | "trustline" | "faucet">("");
+  const [fundingError, setFundingError] = useState("");
+  const [fundingTx, setFundingTx] = useState("");
   const [now, setNow] = useState<number>(() => Math.floor(Date.now() / 1000));
 
   // Tick once a second so the cooldown countdown updates without re-querying chain.
@@ -123,6 +141,27 @@ export default function VaultApp() {
     const perf = await fetchPerformance();
     setDepositorCount(perf ? perf.depositors.length : null);
   }, []);
+
+  // Wallet funding status: trustline + faucet availability. When the trustline
+  // is live this also refreshes the wallet's displayed USDC balance straight
+  // from Horizon — no wallet-modal re-connect needed.
+  const refreshFunding = useCallback(async () => {
+    if (!wallet?.address) return;
+    const [tl, info] = await Promise.all([
+      getUsdcTrustline(wallet.address).catch(() => null),
+      fetchFaucetInfo(),
+    ]);
+    setTrustline(tl);
+    setFaucetInfo(info);
+    if (tl?.status === "ok") {
+      const bal = parseFloat(tl.balance).toFixed(2);
+      setWallet((w) => (w ? { ...w, usdcBalance: bal } : w));
+    }
+  }, [wallet?.address]);
+
+  useEffect(() => {
+    refreshFunding();
+  }, [refreshFunding]);
 
   // Read registry minStake once if registry is configured.
   useEffect(() => {
@@ -174,7 +213,62 @@ export default function VaultApp() {
     setVaultUsdcValue(0);
     setDepositor(null);
     setKeeperInfo(null);
+    setTrustline(null);
+    setFaucetInfo(null);
+    setFundingError("");
+    setFundingTx("");
     resetTx();
+  };
+
+  const handleFriendbot = async () => {
+    if (!wallet) return;
+    setFundingError("");
+    setFundingBusy("friendbot");
+    try {
+      await fundWithFriendbot(wallet.address);
+      await refreshFunding();
+    } catch (err) {
+      setFundingError(err instanceof Error ? err.message : "Friendbot funding failed");
+    } finally {
+      setFundingBusy("");
+    }
+  };
+
+  const handleAddTrustline = async () => {
+    if (!wallet) return;
+    setFundingError("");
+    setFundingBusy("trustline");
+    try {
+      const hash = await addUsdcTrustline(wallet.address);
+      setFundingTx(hash);
+      await refreshFunding();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Trustline transaction failed";
+      // User closed the wallet dialog — not an error worth shouting about.
+      if (msg !== "cancelled") setFundingError(msg);
+    } finally {
+      setFundingBusy("");
+    }
+  };
+
+  const handleFaucet = async () => {
+    if (!wallet) return;
+    setFundingError("");
+    setFundingBusy("faucet");
+    try {
+      const res = await requestFaucet(wallet.address);
+      if (res.ok) {
+        setFundingTx(res.txHash);
+        await refreshFunding();
+      } else if (res.error === "cooldown") {
+        const mins = Math.max(1, Math.ceil((res.retryAfterSecs ?? 0) / 60));
+        setFundingError(`Faucet cooldown — retry in ${mins}m`);
+      } else {
+        setFundingError(faucetErrorText(res.error));
+      }
+    } finally {
+      setFundingBusy("");
+    }
   };
 
   const handleRegisterKeeper = async () => {
@@ -248,8 +342,8 @@ export default function VaultApp() {
 
       if (result.success) {
         setTxStatus("confirmed");
-        // Refresh balances
-        await Promise.all([refreshVaultBalance(), refreshVaultMeta()]);
+        // Refresh balances (incl. trustline/faucet panel state)
+        await Promise.all([refreshVaultBalance(), refreshVaultMeta(), refreshFunding()]);
         // Refresh wallet balances
         const updated = await connectWallet();
         if (updated) setWallet(updated);
@@ -295,6 +389,17 @@ export default function VaultApp() {
   const isKeeper = !!keeperInfo;
   const stakeUsdc = (keeperInfo?.stake ?? 0) / 1e7;
   const minStakeUsdc = (registryMinStake ?? 0) / 1e7;
+
+  // ── Wallet funding (account → trustline → faucet) ───────────────────
+  const tlStatus = trustline?.status ?? null;
+  const tlBalance = trustline ? parseFloat(trustline.balance) : 0;
+  // Deposits need spendable USDC. Prefer the authoritative trustline read;
+  // before it lands, fall back to the balance connectWallet fetched.
+  const usdcReady = trustline
+    ? tlStatus === "ok" && tlBalance > 0
+    : parseFloat((wallet?.usdcBalance ?? "0").replace(/,/g, "")) > 0;
+  const depositGated = tab === "deposit" && !usdcReady;
+  const faucetAmountUsdc = faucetInfo ? Number(faucetInfo.amount) / 1e7 : 0;
 
   const explainCap = (() => {
     if (cap <= 0) return "Unlimited";
@@ -551,6 +656,149 @@ export default function VaultApp() {
 
         {/* Right column: Deposit/Withdraw Form + Contract Info */}
         <div>
+          {/* Wallet Funding — testnet onboarding: account → trustline → faucet */}
+          {connected && wallet && (
+            <Card style={{ padding: 20, marginBottom: 16 }}>
+              <PanelLabel
+                right={
+                  <Pill color={tlStatus === "ok" ? "var(--accent)" : tlStatus === null ? "var(--text-dim)" : "var(--amber)"}>
+                    <StatusDot
+                      color={tlStatus === "ok" ? "var(--accent)" : tlStatus === null ? "var(--text-mute)" : "var(--amber)"}
+                      glow={tlStatus === "ok"}
+                      size={5}
+                    />
+                    {tlStatus === null
+                      ? "Checking"
+                      : tlStatus === "no_account"
+                      ? "Unfunded"
+                      : tlStatus === "no_trustline"
+                      ? "No trustline"
+                      : "Ready"}
+                  </Pill>
+                }
+              >
+                Wallet Funding
+              </PanelLabel>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Step 1 — account exists on-chain */}
+                <FundingStep
+                  state={tlStatus === null ? "pending" : tlStatus === "no_account" ? "active" : "done"}
+                  title="1 · Account"
+                >
+                  {tlStatus === null && (
+                    <div style={{ ...mono, fontSize: 11, color: "var(--text-dim)" }}>
+                      Checking account on Horizon...
+                    </div>
+                  )}
+                  {tlStatus === "no_account" && (
+                    <>
+                      <div style={{ ...mono, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
+                        This wallet does not exist on-chain yet — it needs XLM before it can hold USDC.
+                      </div>
+                      {wallet.network !== "PUBLIC" ? (
+                        <button
+                          onClick={handleFriendbot}
+                          disabled={fundingBusy !== ""}
+                          style={fundingBtnStyle(fundingBusy !== "")}
+                        >
+                          {fundingBusy === "friendbot" ? "Funding..." : "Fund with Friendbot (testnet)"}
+                        </button>
+                      ) : (
+                        <div style={{ ...mono, fontSize: 11, color: "var(--amber)", marginTop: 6 }}>
+                          Send XLM to this address to activate it.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </FundingStep>
+
+                {/* Step 2 — USDC trustline */}
+                <FundingStep
+                  state={tlStatus === "ok" ? "done" : tlStatus === "no_trustline" ? "active" : "pending"}
+                  title="2 · USDC Trustline"
+                >
+                  {tlStatus === "no_trustline" && (
+                    <>
+                      <div style={{ ...mono, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>
+                        A trustline to USDC ({shortAddr(USDC_ISSUER)}) lets this wallet hold the
+                        vault&apos;s settlement asset.
+                      </div>
+                      <button
+                        onClick={handleAddTrustline}
+                        disabled={fundingBusy !== ""}
+                        style={fundingBtnStyle(fundingBusy !== "")}
+                      >
+                        {fundingBusy === "trustline"
+                          ? `Sign in ${walletDisplayName(wallet.walletId)}...`
+                          : "Add USDC Trustline"}
+                      </button>
+                    </>
+                  )}
+                  {tlStatus === "ok" && (
+                    <div style={{ ...mono, fontSize: 11, color: "var(--text-dim)" }}>
+                      USDC · {shortAddr(USDC_ISSUER)}
+                    </div>
+                  )}
+                </FundingStep>
+
+                {/* Step 3 — USDC balance via faucet */}
+                <FundingStep
+                  state={tlStatus === "ok" ? (tlBalance > 0 ? "done" : "active") : "pending"}
+                  title="3 · USDC Balance"
+                >
+                  {tlStatus === "ok" && (
+                    <>
+                      <div style={{ ...mono, fontSize: 13, color: tlBalance > 0 ? "var(--accent)" : "var(--text)", fontVariantNumeric: "tabular-nums" }}>
+                        {tlBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                      </div>
+                      {faucetInfo?.enabled ? (
+                        <button
+                          onClick={handleFaucet}
+                          disabled={fundingBusy !== ""}
+                          style={fundingBtnStyle(fundingBusy !== "")}
+                        >
+                          {fundingBusy === "faucet"
+                            ? "Requesting..."
+                            : `Get ${faucetAmountUsdc.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC`}
+                        </button>
+                      ) : (
+                        <div style={{ ...mono, fontSize: 10, color: "var(--text-dim)", marginTop: 4 }}>
+                          {faucetInfo === null
+                            ? "Faucet unavailable — keeper API offline."
+                            : "Faucet not configured on this keeper API."}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </FundingStep>
+              </div>
+
+              {fundingTx && (
+                <div style={{ ...mono, fontSize: 11, color: "var(--text-dim)", marginTop: 12 }}>
+                  tx:{" "}
+                  <a
+                    href={`https://stellar.expert/explorer/testnet/tx/${fundingTx}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--accent)", textDecoration: "underline" }}
+                  >
+                    {fundingTx.slice(0, 8)}…{fundingTx.slice(-8)}
+                  </a>
+                </div>
+              )}
+
+              {fundingError && (
+                <div style={{
+                  ...mono, fontSize: 11, color: "var(--red)", marginTop: 12,
+                  padding: 8, background: "var(--red-fill)", borderRadius: "var(--r-sharp)",
+                }}>
+                  {fundingError}
+                </div>
+              )}
+            </Card>
+          )}
+
           <Card style={{ padding: 0 }}>
             {/* Tabs */}
             <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
@@ -738,13 +986,13 @@ export default function VaultApp() {
                   {/* Submit */}
                   <button
                     onClick={handleSubmit}
-                    disabled={!amount || parseFloat(amount) <= 0 || txStatus !== "idle"}
+                    disabled={!amount || parseFloat(amount) <= 0 || depositGated || txStatus !== "idle"}
                     style={{
                       ...mono, width: "100%", padding: 14,
-                      background: !amount || parseFloat(amount) <= 0 ? "var(--surface)" : "var(--accent)",
-                      color: !amount || parseFloat(amount) <= 0 ? "var(--text-dim)" : "var(--bg)",
+                      background: !amount || parseFloat(amount) <= 0 || depositGated ? "var(--surface)" : "var(--accent)",
+                      color: !amount || parseFloat(amount) <= 0 || depositGated ? "var(--text-dim)" : "var(--bg)",
                       border: "none", borderRadius: "var(--r-sharp)", fontSize: 13, fontWeight: 600,
-                      cursor: !amount || parseFloat(amount) <= 0 ? "not-allowed" : "pointer",
+                      cursor: !amount || parseFloat(amount) <= 0 || depositGated ? "not-allowed" : "pointer",
                       letterSpacing: "0.05em", textTransform: "uppercase",
                     }}
                   >
@@ -758,6 +1006,12 @@ export default function VaultApp() {
                       ? "Deposit USDC"
                       : "Withdraw USDC"}
                   </button>
+
+                  {depositGated && (
+                    <div style={{ ...mono, fontSize: 10, color: "var(--amber)", marginTop: 8, textAlign: "center" }}>
+                      No USDC — use the faucet above.
+                    </div>
+                  )}
 
                   {!VAULT_CONTRACT && (
                     <div style={{ ...mono, fontSize: 10, color: "var(--amber)", marginTop: 8, textAlign: "center" }}>
@@ -793,6 +1047,53 @@ export default function VaultApp() {
 }
 
 // ── small helpers (presentation-only) ──────────────────────────────────────────
+function FundingStep({ state, title, children }: {
+  state: "done" | "active" | "pending";
+  title: string;
+  children?: React.ReactNode;
+}) {
+  const color = state === "done" ? "var(--accent)" : state === "active" ? "var(--amber)" : "var(--text-mute)";
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <StatusDot color={color} glow={state !== "pending"} size={6} style={{ marginTop: 4, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          ...mono, fontSize: 11, color: state === "pending" ? "var(--text-dim)" : "var(--text)",
+          letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2,
+        }}>
+          {title}
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Shared style for the funding-panel action buttons (mirrors the submit button).
+function fundingBtnStyle(busy: boolean): CSSProperties {
+  return {
+    ...mono, width: "100%", padding: 10, marginTop: 8,
+    background: busy ? "var(--surface)" : "var(--accent)",
+    color: busy ? "var(--text-dim)" : "var(--bg)",
+    border: "none", borderRadius: "var(--r-sharp)", fontSize: 12, fontWeight: 600,
+    cursor: busy ? "not-allowed" : "pointer",
+    letterSpacing: "0.05em", textTransform: "uppercase",
+  };
+}
+
+// Map faucet API error codes to human-readable inline messages.
+function faucetErrorText(code: string): string {
+  switch (code) {
+    case "no_trustline": return "Add the USDC trustline first.";
+    case "insufficient_treasury": return "Faucet treasury is empty — try again later.";
+    case "disabled": return "Faucet is not enabled on this keeper API.";
+    case "bad_address": return "Faucet rejected the address.";
+    case "payment_failed": return "Faucet payment failed — try again.";
+    case "network": return "Keeper API unreachable — is it running?";
+    default: return `Faucet error: ${code}`;
+  }
+}
+
 function SummaryLine({ label, value, accent, last }: { label: string; value: string; accent?: boolean; last?: boolean }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: last ? 0 : 4 }}>

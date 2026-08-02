@@ -20,6 +20,14 @@ const HORIZON_URL =
     ? "https://horizon.stellar.org"
     : "https://horizon-testnet.stellar.org");
 
+// Circle USDC issuer (classic asset). The vault settles the SAC that wraps
+// USDC:<issuer>, so trustline + balance checks must pin this exact issuer.
+export const USDC_ISSUER =
+  process.env.NEXT_PUBLIC_USDC_ISSUER ??
+  (IS_MAINNET
+    ? "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+    : "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5");
+
 // Vault contract address — set via env or fallback
 const VAULT_CONTRACT =
   process.env.NEXT_PUBLIC_VAULT_CONTRACT ?? "";
@@ -141,7 +149,14 @@ export async function connectWallet(): Promise<WalletState | null> {
         xlmBalance = parseFloat(native.balance).toFixed(2);
       }
       for (const b of account.balances) {
-        if ("asset_code" in b && b.asset_code === "USDC") {
+        // Pin the issuer — "USDC" tokens from any other issuer are not the
+        // asset the vault settles and must not show as spendable balance.
+        if (
+          "asset_code" in b &&
+          b.asset_code === "USDC" &&
+          "asset_issuer" in b &&
+          b.asset_issuer === USDC_ISSUER
+        ) {
           usdcBalance = parseFloat(b.balance).toFixed(2);
         }
       }
@@ -205,6 +220,111 @@ async function signWithKit(
     address,
   });
   return { signedTxXdr };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * USDC trustline + account funding (classic Stellar ops via Horizon)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export type TrustlineStatus = "no_account" | "no_trustline" | "ok";
+
+/**
+ * Check whether `address` exists on-chain and holds a trustline to the
+ * vault's USDC (exact code + issuer). Distinguishes unfunded accounts
+ * (Horizon 404) from funded accounts that haven't added the trustline yet.
+ */
+export async function getUsdcTrustline(
+  address: string
+): Promise<{ status: TrustlineStatus; balance: string }> {
+  const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+  try {
+    const account = await server.loadAccount(address);
+    const line = account.balances.find(
+      (b) =>
+        "asset_code" in b &&
+        b.asset_code === "USDC" &&
+        "asset_issuer" in b &&
+        b.asset_issuer === USDC_ISSUER
+    );
+    if (!line) return { status: "no_trustline", balance: "0" };
+    return { status: "ok", balance: line.balance };
+  } catch (err) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    const name = (err as { name?: string })?.name;
+    if (status === 404 || name === "NotFoundError") {
+      return { status: "no_account", balance: "0" };
+    }
+    throw err instanceof Error ? err : new Error("Failed to load account");
+  }
+}
+
+/**
+ * Add a USDC trustline to the connected wallet via a classic changeTrust op.
+ * Signed through the wallet kit, submitted to Horizon (NOT Soroban RPC).
+ * Returns the transaction hash. User-cancels throw Error("cancelled") so the
+ * UI can quietly ignore them — same normalization as connectWallet.
+ */
+export async function addUsdcTrustline(address: string): Promise<string> {
+  try {
+    const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+    const account = await server.loadAccount(address);
+    const tx = new StellarSdk.TransactionBuilder(account, {
+      fee: StellarSdk.BASE_FEE,
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+      .addOperation(
+        StellarSdk.Operation.changeTrust({
+          asset: new StellarSdk.Asset("USDC", USDC_ISSUER),
+        })
+      )
+      .setTimeout(120)
+      .build();
+
+    const { signedTxXdr } = await signWithKit(tx.toXDR(), address);
+    const signed = StellarSdk.TransactionBuilder.fromXDR(
+      signedTxXdr,
+      NETWORK_PASSPHRASE
+    );
+    const res = await server.submitTransaction(signed);
+    return res.hash;
+  } catch (err) {
+    // Albedo + xBull throw plain { code, message } objects, not Error
+    // instances — normalize like connectWallet and tag user-cancellations.
+    const obj = err as { code?: number; message?: string };
+    const code = typeof obj?.code === "number" ? obj.code : undefined;
+    const msg =
+      err instanceof Error ? err.message : obj?.message ?? String(err);
+    const userCancelled =
+      code === -4 ||
+      /closed/i.test(msg) ||
+      /cancell?ed/i.test(msg) ||
+      /user reject/i.test(msg) ||
+      /declined/i.test(msg);
+    if (userCancelled) throw new Error("cancelled");
+    // Surface Horizon result codes when present (e.g. op_low_reserve).
+    const extras = (
+      err as {
+        response?: { data?: { extras?: { result_codes?: Record<string, unknown> } } };
+      }
+    )?.response?.data?.extras;
+    if (extras?.result_codes) {
+      throw new Error(`Trustline failed: ${JSON.stringify(extras.result_codes)}`);
+    }
+    throw err instanceof Error ? err : new Error(msg || "Trustline transaction failed");
+  }
+}
+
+/** Create + fund an account via Friendbot. Only meaningful on testnet. */
+export async function fundWithFriendbot(address: string): Promise<void> {
+  if (IS_MAINNET) {
+    throw new Error("Friendbot is testnet-only — fund this account with XLM manually.");
+  }
+  const res = await fetch(
+    "https://friendbot.stellar.org?addr=" + encodeURIComponent(address)
+  );
+  if (!res.ok) {
+    throw new Error(`Friendbot funding failed (HTTP ${res.status})`);
+  }
 }
 
 /** Build and submit a vault deposit transaction via Soroban */
