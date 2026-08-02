@@ -18,9 +18,15 @@ type Position struct {
 }
 
 // GetPositions discovers users from pool events and loads their positions.
-// Event topics carry asset addresses as well as user addresses, so anything in
-// exclude (the pool's reserve assets, the pool itself) is dropped before the
-// per-address get_positions round-trip; empty positions are dropped after.
+//
+// Topic layouts verified at blend-contracts-v2 pool/src/events.rs @ ba22b48:
+// the user sits at topic[2] for position-changing events (["supply"|"withdraw"|
+// "supply_collateral"|"withdraw_collateral"|"borrow"|"repay", asset, from] and
+// [auction events, auction_type, user]) and at topic[1] for claim/bad_debt.
+// Both positions are scanned; asset addresses also appear in topics, so
+// anything in exclude (the pool's reserve assets, the pool itself) is dropped
+// before the per-address get_positions round-trip; empty positions are
+// dropped after.
 func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger int64, exclude map[string]bool) ([]Position, error) {
 	events, err := rpc.GetEvents(startLedger, poolAddr)
 	if err != nil {
@@ -29,17 +35,16 @@ func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger 
 
 	seen := make(map[string]struct{})
 	for _, ev := range events {
-		if len(ev.Topic) < 2 {
-			continue
-		}
-		var val xdr.ScVal
-		if err := xdr.SafeUnmarshalBase64(ev.Topic[1], &val); err != nil {
-			continue
-		}
-		if val.Type == xdr.ScValTypeScvAddress && val.Address != nil {
-			addr, err := soroban.ParseAddress(*val.Address)
-			if err == nil && addr != poolAddr && !exclude[addr] {
-				seen[addr] = struct{}{}
+		for i := 1; i < len(ev.Topic) && i <= 2; i++ {
+			var val xdr.ScVal
+			if err := xdr.SafeUnmarshalBase64(ev.Topic[i], &val); err != nil {
+				continue
+			}
+			if val.Type == xdr.ScValTypeScvAddress && val.Address != nil {
+				addr, err := soroban.ParseAddress(*val.Address)
+				if err == nil && addr != poolAddr && !exclude[addr] {
+					seen[addr] = struct{}{}
+				}
 			}
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -127,18 +128,69 @@ func (c *Client) AwaitTx(hash string, timeout time.Duration) (*TxResult, error) 
 	return nil, &TxStatusUnknownError{Hash: hash, Err: fmt.Errorf("tx %s timed out", short8(hash))}
 }
 
+// GetEvents fetches contract events from startLedger to the current ledger.
+//
+// getEvents scans a bounded ledger segment (~10k ledgers) per request and
+// returns a `cursor` for the next segment — a page with zero events does NOT
+// mean the window is empty (observed live on testnet: latest-17000 start →
+// first page empty + cursor, events sitting two segments later). We follow
+// the cursor until it reaches the RPC's latest ledger, an empty cursor, a
+// page cap, or an event cap.
 func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error) {
-	var r struct {
-		Events []Event `json:"events"`
+	const (
+		pageLimit = 200
+		maxPages  = 64
+		maxEvents = 2000
+	)
+	var all []Event
+	cursor := ""
+	for page := 0; page < maxPages; page++ {
+		var r struct {
+			Events       []Event `json:"events"`
+			Cursor       string  `json:"cursor"`
+			LatestLedger int64   `json:"latestLedger"`
+		}
+		params := map[string]any{
+			"filters": []map[string]any{
+				{"type": "contract", "contractIds": []string{contractID}},
+			},
+		}
+		if cursor == "" {
+			params["startLedger"] = startLedger
+			params["pagination"] = map[string]any{"limit": pageLimit}
+		} else {
+			// Per the RPC spec, startLedger must be omitted when paging.
+			params["pagination"] = map[string]any{"cursor": cursor, "limit": pageLimit}
+		}
+		if err := c.call("getEvents", params, &r); err != nil {
+			return nil, err
+		}
+		all = append(all, r.Events...)
+		if r.Cursor == "" || len(all) >= maxEvents {
+			break
+		}
+		// The cursor's first field is a TOID (ledger << 32 | tx << 12 | op);
+		// once it reaches the latest ledger we are caught up.
+		if lg := cursorLedger(r.Cursor); lg > 0 && r.LatestLedger > 0 && lg >= r.LatestLedger {
+			break
+		}
+		cursor = r.Cursor
 	}
-	params := map[string]any{
-		"startLedger": startLedger,
-		"filters": []map[string]any{
-			{"type": "contract", "contractIds": []string{contractID}},
-		},
-		"pagination": map[string]int{"limit": 200},
+	return all, nil
+}
+
+// cursorLedger extracts the ledger sequence from a getEvents cursor
+// ("<toid>-<eventIdx>"). Returns 0 when unparsable.
+func cursorLedger(cursor string) int64 {
+	dash := strings.IndexByte(cursor, '-')
+	if dash <= 0 {
+		return 0
 	}
-	return r.Events, c.call("getEvents", params, &r)
+	toid, err := strconv.ParseUint(cursor[:dash], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(toid >> 32)
 }
 
 func (c *Client) LatestLedger() (int64, error) {
