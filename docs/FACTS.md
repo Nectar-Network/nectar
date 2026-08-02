@@ -22,9 +22,47 @@ VERIFICATION-REPORT.md once complete).
 
 ## Request struct & RequestType integers
 
-| Variant | Integer | Date | Source (file:line @ commit) |
+All entries verified 2026-08-03 against blend-contracts-v2 @ `ba22b48` (paths repo-relative).
+
+`Request` struct (`pool/src/pool/actions.rs:12-18`):
+```rust
+#[derive(Clone)]
+#[contracttype]
+pub struct Request {
+    pub request_type: u32,
+    pub address: Address, // asset address or liquidatee
+    pub amount: i128,
+}
+```
+
+Complete `RequestType` enum — exactly 10 variants, `#[repr(u32)]`, no other fill/cancel variants exist (`pool/src/pool/actions.rs:21-34`):
+
+| Variant | Integer | Dispatcher action | Source (file:line @ ba22b48) |
 |---|---|---|---|
-| _to be filled by Gate 0.2_ | | | |
+| `Supply` | 0 | `apply_supply`: mint bTokens (floor), spender→pool transfer; supply-cap enforced | `actions.rs:24` (enum), `:143-152` (dispatch), `:288-305` |
+| `Withdraw` | 1 | `apply_withdraw`: burn bTokens (ceil, clamped to balance), pool→to transfer; no health check | `actions.rs:25`, `:153-163`, `:312-332` |
+| `SupplyCollateral` | 2 | `apply_supply_collateral`: like Supply but counts as collateral | `actions.rs:26`, `:164-174`, `:339-356` |
+| `WithdrawCollateral` | 3 | `apply_withdraw_collateral`: like Withdraw + triggers health check | `actions.rs:27`, `:175-185`, `:363-384` |
+| `Borrow` | 4 | `apply_borrow`: mint dTokens (ceil), pool→to transfer, max-util check, health check | `actions.rs:28`, `:186-195`, `:391-408` |
+| `Repay` | 5 | `apply_repay`: burn dTokens (floor); overpayment refunded | `actions.rs:29`, `:196-206`, `:415-441` |
+| `FillUserLiquidationAuction` | 6 | `auctions::fill(…, 0, request.address=liquidatee, amount as u64 = fill %)` + health check | `actions.rs:30`, `:207-226` |
+| `FillBadDebtAuction` | 7 | `auctions::fill(…, 1, request.address=backstop, amount as u64 = fill %)` + health check | `actions.rs:31`, `:227-247` |
+| `FillInterestAuction` | 8 | `auctions::fill(…, 2, request.address=backstop, amount as u64 = fill %)`; the ONLY fill without a health check | `actions.rs:32`, `:248-266` |
+| `DeleteLiquidationAuction` | 9 | deletes the SENDER's own user-liquidation auction; `request.address`/`amount` ignored | `actions.rs:33`, `:267-276` |
+
+Additional verified behavior:
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| Invalid `request_type` handling | `RequestType::from_u32` panics `PoolError::BadRequest` (=1200); no `Result`/`TryFrom` path exists | 2026-08-03 | `pool/src/pool/actions.rs:41-55` (panic at `:53`); `pool/src/errors.rs:20` |
+| Fill `amount` semantics | For request types 6/7/8, `Request.amount` is a fill PERCENTAGE cast `as u64`, must be 1..=100 (`scale_auction` panics `BadRequest` if `percent_filled > 100 \|\| == 0`) — not a token amount | 2026-08-03 | `pool/src/pool/actions.rs:214,235,255`; `pool/src/auctions/auction.rs:194-196` |
+| Pre-dispatch checks | Per request: `require_nonnegative(amount)` (panics `NegativeAmountError`=8), then `pool.require_action_allowed(raw u32)` BEFORE `from_u32` | 2026-08-03 | `pool/src/pool/actions.rs:131-142`; `pool/src/validator.rs:12-15`; `pool/src/errors.rs:15` |
+| Pool-status gating uses raw integers | status>1 blocks types 4,9 (Borrow, DeleteLiquidationAuction); status>3 blocks types 2,0 (SupplyCollateral, Supply); panics `InvalidPoolStatus`=1206 | 2026-08-03 | `pool/src/pool/pool.rs:75-82`; `pool/src/errors.rs:28` |
+| Disabled-reserve gating | disabled reserve blocks types 0,2,4 with `ReserveDisabled`=1223 | 2026-08-03 | `pool/src/pool/reserve.rs:146-156`; `pool/src/errors.rs:53` |
+| Health check enforcement | `validate_submit` runs HF check only `if check_health && from_state.has_liabilities()`; min HF 1_0000100 → `InvalidHf` | 2026-08-03 | `pool/src/pool/submit.rs:159-196` (check at `:188-191`) |
+| `submit` guard | panics `BadRequest` if `from`, `spender`, or `to` is the pool contract itself | 2026-08-03 | `pool/src/pool/submit.rs:33-38` |
+| Self-fill prohibited | `auctions::fill` panics `InvalidLiquidation` if auctioned user == filler | 2026-08-03 | `pool/src/auctions/auction.rs:148-150` |
+| `FlashLoan` struct (same file) | `{ contract: Address, asset: Address, amount: i128 }`; flash-loan path gates as Borrow-class action | 2026-08-03 | `pool/src/pool/actions.rs:58-63`; `pool/src/pool/submit.rs:87-91` |
 
 ## Auction fill price curve
 
