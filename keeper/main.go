@@ -96,6 +96,15 @@ type keeperRow struct {
 type posRow struct {
 	Address string  `json:"address"`
 	HF      float64 `json:"hf"`
+	Pool    string  `json:"pool,omitempty"`
+}
+
+// poolMode renders a BlendPoolConfig.Monitor flag for logs.
+func poolMode(monitor bool) string {
+	if monitor {
+		return "monitor"
+	}
+	return "active"
 }
 
 var (
@@ -204,13 +213,19 @@ func main() {
 		vault:   vault.NewClient(rpc, kp, cfg.HorizonURL, cfg.Passphrase, cfg.VaultID),
 		history: vault.NewHistoryIndexer(),
 	}
-	k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
-		PoolAddr:   cfg.BlendPool,
-		MinProfit:  cfg.MinProfit,
-		HorizonURL: cfg.HorizonURL,
-		Passphrase: cfg.Passphrase,
-		UsdcAddr:   cfg.UsdcAddr,
-	}, dexc))
+	// One Blend adapter per configured pool (BLEND_POOLS, or legacy BLEND_POOL).
+	for _, pc := range cfg.BlendPools {
+		k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
+			PoolAddr:      pc.Addr,
+			Monitor:       pc.Monitor,
+			MinProfit:     cfg.MinProfit,
+			HorizonURL:    cfg.HorizonURL,
+			Passphrase:    cfg.Passphrase,
+			UsdcAddr:      cfg.UsdcAddr,
+			EventLookback: cfg.EventLookback,
+		}, dexc))
+		logInfo("blend pool configured", "pool", short(pc.Addr), "mode", poolMode(pc.Monitor))
+	}
 	if cfg.DeFindexVault != "" {
 		k.protocols = append(k.protocols, defindexadapter.NewAdapter(defindexadapter.Config{
 			VaultAddr:      cfg.DeFindexVault,
@@ -229,7 +244,7 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
 	defer ticker.Stop()
 
-	logInfo("keeper started", "pool", short(cfg.BlendPool), "interval", cfg.PollInterval)
+	logInfo("keeper started", "pools", len(cfg.BlendPools), "interval", cfg.PollInterval)
 
 	for {
 		select {
@@ -309,16 +324,43 @@ func (k *Keeper) cycle() error {
 			state.addEvent(fmt.Sprintf("%s scan error: %v", ad.Name(), err))
 			continue
 		}
-		for _, task := range tasks {
-			// Surface liquidation targets (with their health factor) on the
-			// dashboard; rebalance/other task types are not positions and must
-			// not push a drift value into the HF field.
-			if task.Type == "liquidation" {
-				posRows = append(posRows, posRow{Address: task.Target, HF: task.Health})
-				if task.Health > 0 && task.Health < 1.0 {
-					state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f", short(task.Target), task.Health))
+
+		// Adapters that report scans (one Blend pool each) surface everything
+		// they saw — reserves, oracle prices, every position's HF — regardless
+		// of whether any task came out of it.
+		if sr, ok := ad.(adapters.ScanReporter); ok {
+			if rep := sr.LastScan(); rep != nil {
+				logInfo("pool scan", "pool", short(rep.Pool), "mode", poolMode(rep.Monitor),
+					"status", rep.Status, "reserves", rep.Reserves,
+					"oracle_decimals", rep.OracleDecimals, "positions", len(rep.Positions))
+				for asset, price := range rep.Prices {
+					logInfo("reserve price", "pool", short(rep.Pool), "asset", short(asset), "usd", fmt.Sprintf("%.7f", price))
+				}
+				if len(rep.Positions) == 0 {
+					logInfo("no positions visible", "pool", short(rep.Pool))
+				}
+				for _, ph := range rep.Positions {
+					logInfo("position", "pool", short(rep.Pool), "addr", short(ph.Address), "hf", fmt.Sprintf("%.4f", ph.HF))
+					posRows = append(posRows, posRow{Address: ph.Address, HF: ph.HF, Pool: rep.Pool})
+					if ph.HF > 0 && ph.HF < 1.0 {
+						state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f pool=%s", short(ph.Address), ph.HF, short(rep.Pool)))
+					}
 				}
 			}
+		} else {
+			for _, task := range tasks {
+				// Surface liquidation targets (with their health factor) on the
+				// dashboard; rebalance/other task types are not positions and must
+				// not push a drift value into the HF field.
+				if task.Type == "liquidation" {
+					posRows = append(posRows, posRow{Address: task.Target, HF: task.Health})
+					if task.Health > 0 && task.Health < 1.0 {
+						state.addEvent(fmt.Sprintf("underwater: %s hf=%.4f", short(task.Target), task.Health))
+					}
+				}
+			}
+		}
+		for _, task := range tasks {
 			planned = append(planned, plannedTask{ad: ad, task: task})
 		}
 	}

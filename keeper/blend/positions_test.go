@@ -10,10 +10,11 @@ func makeReserveAt(idx uint32, asset string, c, l, price float64) *Reserve {
 	return &Reserve{
 		Asset:            asset,
 		Index:            idx,
+		Decimals:         7,
 		CollateralFactor: c,
 		LiabilityFactor:  l,
-		BRate:            scalar,
-		DRate:            scalar,
+		BRate:            1.0, // plain multiplier (b_rate/1e12 on-chain)
+		DRate:            1.0,
 		OraclePrice:      price,
 	}
 }

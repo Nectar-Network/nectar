@@ -27,12 +27,22 @@ type Config struct {
 	HorizonURL string
 	Passphrase string
 	UsdcAddr   string
+	// Monitor makes the adapter observe-only: it scans the pool, computes
+	// health factors and publishes a ScanReport, but never emits tasks (so no
+	// capital can move toward this pool). Used for pools whose settlement
+	// asset has no verified conversion route to the vault's USDC.
+	Monitor bool
+	// EventLookback is how many ledgers of pool events to scan for position
+	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
+	EventLookback int64
 }
 
-// Adapter implements adapters.ProtocolAdapter for Blend.
+// Adapter implements adapters.ProtocolAdapter for one Blend pool. Run several
+// instances to monitor several pools — Name() is unique per pool.
 type Adapter struct {
-	cfg Config
-	dex *dex.SwapClient
+	cfg      Config
+	dex      *dex.SwapClient
+	lastScan *adapters.ScanReport
 }
 
 // NewAdapter builds a Blend adapter. dexc may be nil to disable collateral
@@ -41,17 +51,38 @@ func NewAdapter(cfg Config, dexc *dex.SwapClient) *Adapter {
 	return &Adapter{cfg: cfg, dex: dexc}
 }
 
-// Name returns the protocol identifier.
-func (a *Adapter) Name() string { return "blend" }
+// Name returns the protocol identifier, unique per monitored pool.
+func (a *Adapter) Name() string {
+	if a.cfg.PoolAddr == "" {
+		return "blend"
+	}
+	return "blend:" + shortAddr(a.cfg.PoolAddr)
+}
+
+// LastScan implements adapters.ScanReporter.
+func (a *Adapter) LastScan() *adapters.ScanReport { return a.lastScan }
+
+// shortAddr elides a contract address to prefix..suffix for labels.
+func shortAddr(addr string) string {
+	if len(addr) <= 8 {
+		return addr
+	}
+	return addr[:4] + ".." + addr[len(addr)-4:]
+}
 
 // taskData is the per-task payload threaded from GetTasks to Execute so the
 // pool snapshot (oracle prices, reserves) is reused without re-loading.
 type taskData struct {
 	pool *core.PoolState
+	// bidAssets / lotAssets are the position's liability / collateral
+	// underlying addresses, required by v2's new_auction entry point.
+	bidAssets []string
+	lotAssets []string
 }
 
 // GetTasks loads the pool and returns one liquidation task per underwater
-// position (health factor < 1).
+// position (health factor < 1). In Monitor mode it still scans and reports,
+// but returns no tasks.
 func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	if a.cfg.PoolAddr == "" {
 		return nil, nil
@@ -64,17 +95,50 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("latest ledger: %w", err)
 	}
-	positions, err := core.GetPositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, ledger-1000)
+	lookback := a.cfg.EventLookback
+	if lookback <= 0 {
+		lookback = 1000
+	}
+	positions, err := core.GetPositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, ledger-lookback)
 	if err != nil {
 		return nil, fmt.Errorf("get positions: %w", err)
+	}
+
+	report := &adapters.ScanReport{
+		Pool:           a.cfg.PoolAddr,
+		Monitor:        a.cfg.Monitor,
+		Status:         pool.Status,
+		Reserves:       len(pool.Reserves),
+		OracleDecimals: pool.OracleDecimals,
+		Prices:         make(map[string]float64, len(pool.Reserves)),
+	}
+	for asset, r := range pool.Reserves {
+		report.Prices[asset] = r.OraclePrice
+	}
+
+	indexToAsset := make(map[uint32]string, len(pool.Reserves))
+	for asset, r := range pool.Reserves {
+		indexToAsset[r.Index] = asset
 	}
 
 	var tasks []adapters.Task
 	for i := range positions {
 		pos := &positions[i]
 		hf := core.CalcHealthFactor(*pos, pool)
-		if hf >= 1.0 {
+		report.Positions = append(report.Positions, adapters.PositionHealth{Address: pos.Address, HF: hf})
+		if hf >= 1.0 || a.cfg.Monitor {
 			continue
+		}
+		var bidAssets, lotAssets []string
+		for idx := range pos.Liabilities {
+			if asset, ok := indexToAsset[idx]; ok {
+				bidAssets = append(bidAssets, asset)
+			}
+		}
+		for idx := range pos.Collateral {
+			if asset, ok := indexToAsset[idx]; ok {
+				lotAssets = append(lotAssets, asset)
+			}
 		}
 		tasks = append(tasks, adapters.Task{
 			Protocol: a.Name(),
@@ -82,9 +146,10 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 			Target:   pos.Address,
 			Priority: priorityFromHF(hf),
 			Health:   hf,
-			Data:     taskData{pool: pool},
+			Data:     taskData{pool: pool, bidAssets: bidAssets, lotAssets: lotAssets},
 		})
 	}
+	a.lastScan = report
 	return tasks, nil
 }
 
@@ -102,7 +167,12 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	pool := td.pool
 	user := task.Target
 
-	if err := core.CreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, 50); err != nil {
+	if a.cfg.Monitor {
+		return &adapters.Result{Note: "monitor-only pool — execution disabled"}, nil
+	}
+
+	if err := core.CreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, 50,
+		td.bidAssets, td.lotAssets); err != nil {
 		return nil, fmt.Errorf("create auction: %w", err)
 	}
 	auction, err := core.GetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)

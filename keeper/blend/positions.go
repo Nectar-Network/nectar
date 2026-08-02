@@ -112,7 +112,8 @@ func parsePositions(val xdr.ScVal, user string) *Position {
 // EstimateCapital returns an upper-bound USD estimate of the capital a
 // keeper needs to liquidate `pct`% of the position's debt. The result is
 // expressed in 7-decimal stroops (USDC). Returns 0 if the position has no
-// liabilities or pct <= 0.
+// liabilities or pct <= 0. Unpriced reserves (OraclePrice 0) contribute
+// nothing rather than a fabricated value.
 func EstimateCapital(pos Position, pool *PoolState, pct int64) int64 {
 	if pct <= 0 {
 		return 0
@@ -131,13 +132,25 @@ func EstimateCapital(pos Position, pool *PoolState, pct int64) int64 {
 			continue
 		}
 		f, _ := new(big.Float).SetInt(dAmt).Float64()
-		totalUSD += (f / scalar) * (r.DRate / scalar) * r.OraclePrice
+		// dTokens -> underlying (DRate, 12-dec multiplier) -> whole tokens -> USD
+		totalUSD += (f / r.TokenScalar()) * r.DRate * r.OraclePrice
 	}
 	scaled := totalUSD * float64(pct) / 100.0
 	return int64(scaled * scalar)
 }
 
-// CalcHealthFactor computes HF = Σ(collateral*price*cFactor) / Σ(liability*price/lFactor).
+// CalcHealthFactor mirrors blend-contracts-v2 PositionData::calculate_from_positions
+// (pool/src/pool/health_factor.rs:27-77 @ ba22b48):
+//
+//	collateral_base = Σ b_tokens × b_rate × c_factor × price
+//	liability_base  = Σ d_tokens × d_rate ÷ l_factor × price
+//	HF = collateral_base / liability_base
+//
+// b_rate/d_rate convert b/d tokens to underlying (12-dec fixed point on-chain,
+// plain multipliers here); token amounts are scaled by each reserve's own
+// decimals. Reserves without an oracle price contribute nothing to either leg
+// (on-chain this would panic InvalidPrice; off-chain we surface HF from the
+// priced legs only, which callers treat as best-effort).
 func CalcHealthFactor(pos Position, pool *PoolState) float64 {
 	// build index -> reserve map
 	indexMap := make(map[uint32]*Reserve)
@@ -152,15 +165,15 @@ func CalcHealthFactor(pos Position, pool *PoolState) float64 {
 			continue
 		}
 		f, _ := new(big.Float).SetInt(bAmt).Float64()
-		effColl += (f / scalar) * (r.BRate / scalar) * r.OraclePrice * r.CollateralFactor
+		effColl += (f / r.TokenScalar()) * r.BRate * r.OraclePrice * r.CollateralFactor
 	}
 	for idx, dAmt := range pos.Liabilities {
 		r, ok := indexMap[idx]
-		if !ok {
+		if !ok || r.LiabilityFactor == 0 {
 			continue
 		}
 		f, _ := new(big.Float).SetInt(dAmt).Float64()
-		effLiab += (f / scalar) * (r.DRate / scalar) * r.OraclePrice / r.LiabilityFactor
+		effLiab += (f / r.TokenScalar()) * r.DRate * r.OraclePrice / r.LiabilityFactor
 	}
 
 	if effLiab == 0 {

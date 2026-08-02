@@ -65,3 +65,29 @@ func SortByPriority(tasks []Task) {
 		return tasks[i].Priority > tasks[j].Priority
 	})
 }
+
+// PositionHealth is one scanned position's health factor.
+type PositionHealth struct {
+	Address string
+	HF      float64
+}
+
+// ScanReport summarizes an adapter's most recent GetTasks pass — everything
+// the keeper observed, not just the actionable subset. Adapters that monitor
+// an external market (e.g. one Blend pool each) expose it via ScanReporter so
+// the main loop can log and publish per-pool state.
+type ScanReport struct {
+	Pool           string             // pool contract address ("" if n/a)
+	Monitor        bool               // true = observe only, never execute
+	Status         uint32             // protocol-specific status (Blend: 0=Active…6=Setup)
+	Reserves       int                // reserves successfully loaded
+	OracleDecimals uint32             // oracle price decimals
+	Prices         map[string]float64 // asset address -> USD per whole token
+	Positions      []PositionHealth   // every position seen this pass, with HF
+}
+
+// ScanReporter is optionally implemented by adapters that can describe their
+// last scan. The main loop type-asserts; adapters without it are unaffected.
+type ScanReporter interface {
+	LastScan() *ScanReport
+}

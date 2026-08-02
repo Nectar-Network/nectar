@@ -117,3 +117,48 @@ func setRequiredEnvs(t *testing.T) {
 		t.Cleanup(func() { os.Unsetenv(k) })
 	}
 }
+
+func TestParseBlendPools_MultiWithModes(t *testing.T) {
+	const a = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"
+	const b = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+	pools := parseBlendPools(a+":monitor, "+b+":active", "")
+	if len(pools) != 2 {
+		t.Fatalf("expected 2 pools, got %d", len(pools))
+	}
+	if pools[0].Addr != a || !pools[0].Monitor {
+		t.Errorf("pool 0: got %+v want %s monitor", pools[0], a)
+	}
+	if pools[1].Addr != b || pools[1].Monitor {
+		t.Errorf("pool 1: got %+v want %s active", pools[1], b)
+	}
+}
+
+func TestParseBlendPools_DefaultModeIsActive(t *testing.T) {
+	const a = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"
+	pools := parseBlendPools(a, "")
+	if len(pools) != 1 || pools[0].Monitor {
+		t.Fatalf("bare address must default to active, got %+v", pools)
+	}
+}
+
+func TestParseBlendPools_FallbackToLegacySingle(t *testing.T) {
+	const a = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"
+	pools := parseBlendPools("", a)
+	if len(pools) != 1 || pools[0].Addr != a || pools[0].Monitor {
+		t.Fatalf("BLEND_POOL fallback broken: %+v", pools)
+	}
+}
+
+func TestParseBlendPools_EmptyBoth(t *testing.T) {
+	if pools := parseBlendPools("", ""); pools != nil {
+		t.Fatalf("expected nil, got %+v", pools)
+	}
+}
+
+func TestParseBlendPools_DedupesKeepingFirst(t *testing.T) {
+	const a = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"
+	pools := parseBlendPools(a+":monitor,"+a+":active", "")
+	if len(pools) != 1 || !pools[0].Monitor {
+		t.Fatalf("dedupe must keep first entry, got %+v", pools)
+	}
+}

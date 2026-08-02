@@ -72,25 +72,49 @@ type Auction struct {
 
 var ErrAlreadyFilled = errors.New("auction already filled by another keeper")
 
-// CreateAuction calls new_liquidation_auction on the Blend pool. This only
-// applies to user-liquidation auctions; interest and bad-debt auctions are
-// triggered by the pool's internal accounting (no creation entry-point).
-func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, pct int) error {
+// CreateAuction creates a user-liquidation auction via the blend-contracts-v2
+// entry point `new_auction(auction_type: u32, user: Address, bid: Vec<Address>,
+// lot: Vec<Address>, percent: u32)` (pool/src/contract.rs:277-283 @ ba22b48 —
+// v2 has no `new_liquidation_auction`). bid lists the user's liability
+// underlyings to auction, lot the collateral underlyings; percent is a whole
+// percentage 1..=100 (NOT 7-dec scaled — user_liquidation_auction.rs:92-105).
+func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, pct int, bid, lot []string) error {
 	userVal, err := soroban.ScvAddress(user)
 	if err != nil {
 		return err
 	}
-	pctVal := soroban.ScvU64(uint64(pct) * 1e7)
+	bidVec, err := addressVecVal(bid)
+	if err != nil {
+		return fmt.Errorf("bid vec: %w", err)
+	}
+	lotVec, err := addressVecVal(lot)
+	if err != nil {
+		return fmt.Errorf("lot vec: %w", err)
+	}
 
-	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "new_liquidation_auction",
-		soroban.DefaultRetry(), userVal, pctVal)
+	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "new_auction",
+		soroban.DefaultRetry(),
+		soroban.ScvU32(uint32(AuctionUserLiquidation)), userVal, bidVec, lotVec, soroban.ScvU32(uint32(pct)))
 	if err != nil {
 		if isAuctionExists(err.Error()) {
 			return nil
 		}
-		return fmt.Errorf("new_liquidation_auction: %w", err)
+		return fmt.Errorf("new_auction: %w", err)
 	}
 	return nil
+}
+
+// addressVecVal builds a Vec<Address> ScVal from contract/account addresses.
+func addressVecVal(addrs []string) (xdr.ScVal, error) {
+	vals := make([]xdr.ScVal, 0, len(addrs))
+	for _, a := range addrs {
+		v, err := soroban.ScvAddress(a)
+		if err != nil {
+			return xdr.ScVal{}, err
+		}
+		vals = append(vals, v)
+	}
+	return soroban.ScvVec(vals...), nil
 }
 
 // GetAuctionByType fetches an auction of the given kind for the user/address.
@@ -100,7 +124,9 @@ func GetAuctionByType(rpc *soroban.Client, passphrase, poolAddr, user string, ki
 	if err != nil {
 		return nil, err
 	}
-	auctType := soroban.ScvU64(uint64(kind))
+	// get_auction(auction_type: u32, user: Address) — u32, not u64
+	// (pool/src/contract.rs:295 @ ba22b48)
+	auctType := soroban.ScvU32(uint32(kind))
 
 	sim, err := rpc.SimulateRead(passphrase, poolAddr, "get_auction", auctType, userVal)
 	if err != nil {
@@ -263,7 +289,7 @@ func Profitability(auction Auction, pool *PoolState, currentBlock int64) float64
 			continue
 		}
 		f, _ := new(big.Float).SetInt(amt).Float64()
-		lotVal += (f / scalar) * lotPct * r.OraclePrice
+		lotVal += (f / r.TokenScalar()) * legRate(auction.Type, true, r) * lotPct * r.OraclePrice
 	}
 	for asset, amt := range auction.Bid {
 		r, ok := pool.Reserves[asset]
@@ -271,12 +297,34 @@ func Profitability(auction Auction, pool *PoolState, currentBlock int64) float64
 			continue
 		}
 		f, _ := new(big.Float).SetInt(amt).Float64()
-		bidVal += (f / scalar) * bidPct * r.OraclePrice
+		bidVal += (f / r.TokenScalar()) * legRate(auction.Type, false, r) * bidPct * r.OraclePrice
 	}
 	if bidVal == 0 {
 		return math.Inf(1)
 	}
 	return lotVal / bidVal
+}
+
+// legRate converts a raw auction map amount to underlying tokens. Per
+// docs/FACTS.md ("Auction asset flows", verified @ ba22b48): user-liquidation
+// lots are bTokens and bids are dTokens; bad-debt bids are dTokens (lot is
+// backstop LP, not a reserve — callers skip unpriced assets); interest lots
+// are underlying already (bid is backstop LP, likewise skipped).
+func legRate(kind AuctionType, isLot bool, r *Reserve) float64 {
+	switch kind {
+	case AuctionUserLiquidation:
+		if isLot {
+			return r.BRate
+		}
+		return r.DRate
+	case AuctionBadDebt:
+		if !isLot {
+			return r.DRate
+		}
+	case AuctionInterest:
+		// lot is underlying tokens; no conversion
+	}
+	return 1.0
 }
 
 // BidValueUSD totals the bid leg's USD value at the current scaling.
@@ -290,7 +338,7 @@ func BidValueUSD(auction Auction, pool *PoolState, currentBlock int64) float64 {
 			continue
 		}
 		f, _ := new(big.Float).SetInt(amt).Float64()
-		v += (f / scalar) * bidPct * r.OraclePrice
+		v += (f / r.TokenScalar()) * legRate(auction.Type, false, r) * bidPct * r.OraclePrice
 	}
 	return v
 }

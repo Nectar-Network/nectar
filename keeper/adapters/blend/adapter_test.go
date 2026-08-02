@@ -66,3 +66,37 @@ func TestOracleValueUSDC(t *testing.T) {
 
 // Adapter must satisfy the ProtocolAdapter interface.
 var _ adapters.ProtocolAdapter = (*Adapter)(nil)
+
+// Name must be unique per pool so two Blend adapters never collide in
+// Task.Protocol, logs, or SSE streams.
+func TestAdapter_Name_UniquePerPool(t *testing.T) {
+	a := NewAdapter(Config{PoolAddr: "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"}, nil)
+	b := NewAdapter(Config{PoolAddr: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"}, nil)
+	if a.Name() == b.Name() {
+		t.Fatalf("two pools share Name() %q", a.Name())
+	}
+	if a.Name() != "blend:CCEB..4HGF" {
+		t.Errorf("unexpected name format: %s", a.Name())
+	}
+}
+
+// A monitor-mode adapter must refuse to execute even if handed a task.
+func TestAdapter_Execute_MonitorRefuses(t *testing.T) {
+	a := NewAdapter(Config{
+		PoolAddr: "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF",
+		Monitor:  true,
+	}, nil)
+	task := adapters.Task{
+		Protocol: a.Name(),
+		Type:     "liquidation",
+		Target:   "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+		Data:     taskData{pool: &core.PoolState{}},
+	}
+	res, err := a.Execute(nil, nil, task, nil)
+	if err != nil {
+		t.Fatalf("monitor Execute must not error: %v", err)
+	}
+	if res == nil || res.Success {
+		t.Fatal("monitor Execute must return an unsuccessful result")
+	}
+}

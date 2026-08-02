@@ -20,8 +20,8 @@ func fastRetry() soroban.RetryConfig {
 func makePool(price float64) *PoolState {
 	return &PoolState{
 		Reserves: map[string]*Reserve{
-			"XLM":  {OraclePrice: price},
-			"USDC": {OraclePrice: 1.0},
+			"XLM":  {Decimals: 7, BRate: 1.0, DRate: 1.0, OraclePrice: price},
+			"USDC": {Decimals: 7, BRate: 1.0, DRate: 1.0, OraclePrice: 1.0},
 		},
 	}
 }

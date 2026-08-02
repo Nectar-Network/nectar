@@ -7,6 +7,14 @@ import (
 	"strings"
 )
 
+// BlendPoolConfig is one entry of BLEND_POOLS: a pool contract address plus
+// its capital mode. Monitor pools are scanned and reported but never receive
+// vault capital.
+type BlendPoolConfig struct {
+	Addr    string
+	Monitor bool
+}
+
 type Config struct {
 	RpcURL          string
 	HorizonURL      string
@@ -15,16 +23,17 @@ type Config struct {
 	KeeperName      string
 	RegistryID      string
 	VaultID         string
-	BlendPool       string
-	UsdcAddr        string // USDC token contract; collateral is swapped into this
-	SoroswapRouter  string // Soroswap router contract (primary DEX); empty disables
-	PhoenixRouter   string // Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX); empty disables
-	DeFindexVault   string // DeFindex vault to monitor for rebalancing; empty disables
+	BlendPools      []BlendPoolConfig // parsed from BLEND_POOLS (fallback: BLEND_POOL)
+	UsdcAddr        string            // USDC token contract; collateral is swapped into this
+	SoroswapRouter  string            // Soroswap router contract (primary DEX); empty disables
+	PhoenixRouter   string            // Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX); empty disables
+	DeFindexVault   string            // DeFindex vault to monitor for rebalancing; empty disables
 	APIPort         string
 	PollInterval    int
 	MinProfit       float64
 	SlippageBps     int      // max swap slippage in basis points (100 = 1%)
 	DriftBps        int      // DeFindex allocation drift threshold in bps (500 = 5%)
+	EventLookback   int64    // ledgers of pool events scanned for position discovery
 	KnownDepositors []string // comma-separated G-addresses for performance page
 }
 
@@ -37,7 +46,6 @@ func LoadConfig() Config {
 		KeeperName:     envOr("KEEPER_NAME", "nectar-keeper-1"),
 		RegistryID:     mustEnv("REGISTRY_CONTRACT"),
 		VaultID:        mustEnv("VAULT_CONTRACT"),
-		BlendPool:      envOr("BLEND_POOL", ""),
 		UsdcAddr:       envOr("USDC_CONTRACT", ""),
 		SoroswapRouter: envOr("SOROSWAP_ROUTER", ""),
 		PhoenixRouter:  envOr("PHOENIX_ROUTER", ""),
@@ -93,6 +101,19 @@ func LoadConfig() Config {
 	}
 	c.DriftBps = drift
 
+	lookbackStr := envOr("BLEND_EVENT_LOOKBACK", "1000")
+	lookback, err := strconv.ParseInt(lookbackStr, 10, 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%q is not a valid integer\n", lookbackStr)
+		os.Exit(1)
+	}
+	// Soroban RPC retains ~24h of events (17280 ledgers at 5s); cap generously.
+	if lookback < 1 || lookback > 120000 {
+		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%d out of range [1,120000]\n", lookback)
+		os.Exit(1)
+	}
+	c.EventLookback = lookback
+
 	if raw := os.Getenv("KNOWN_DEPOSITORS"); raw != "" {
 		for _, addr := range strings.Split(raw, ",") {
 			addr = strings.TrimSpace(addr)
@@ -102,7 +123,58 @@ func LoadConfig() Config {
 		}
 	}
 
+	c.BlendPools = parseBlendPools(os.Getenv("BLEND_POOLS"), os.Getenv("BLEND_POOL"))
+
 	return c
+}
+
+// parseBlendPools parses BLEND_POOLS, a comma-separated list of
+// `POOL_ADDRESS[:mode]` entries where mode is `active` (default — vault
+// capital may be used to fill this pool's auctions) or `monitor` (scan and
+// report only). When BLEND_POOLS is empty it falls back to the legacy single
+// BLEND_POOL variable (active mode), preserving backward compatibility.
+// Duplicate addresses keep their first entry. Invalid entries exit(1) rather
+// than silently monitoring the wrong contract.
+func parseBlendPools(multi, single string) []BlendPoolConfig {
+	raw := strings.TrimSpace(multi)
+	if raw == "" {
+		if s := strings.TrimSpace(single); s != "" {
+			return []BlendPoolConfig{{Addr: s}}
+		}
+		return nil
+	}
+	var pools []BlendPoolConfig
+	seen := make(map[string]bool)
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		addr := entry
+		monitor := false
+		if i := strings.IndexByte(entry, ':'); i >= 0 {
+			addr = strings.TrimSpace(entry[:i])
+			mode := strings.ToLower(strings.TrimSpace(entry[i+1:]))
+			switch mode {
+			case "active", "":
+			case "monitor":
+				monitor = true
+			default:
+				fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: unknown mode %q (want active|monitor)\n", entry, mode)
+				os.Exit(1)
+			}
+		}
+		if len(addr) != 56 || !strings.HasPrefix(addr, "C") {
+			fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: %q is not a contract address\n", entry, addr)
+			os.Exit(1)
+		}
+		if seen[addr] {
+			continue
+		}
+		seen[addr] = true
+		pools = append(pools, BlendPoolConfig{Addr: addr, Monitor: monitor})
+	}
+	return pools
 }
 
 func mustEnv(key string) string {
