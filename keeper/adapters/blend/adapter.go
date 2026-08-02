@@ -32,6 +32,12 @@ type Config struct {
 	// capital can move toward this pool). Used for pools whose settlement
 	// asset has no verified conversion route to the vault's USDC.
 	Monitor bool
+	// PoolUsdc is the pool's own USDC contract when it differs from the
+	// vault's UsdcAddr. Fills then require a DEX conversion vault-USDC ->
+	// pool-USDC (entry) under a par-anchored slippage guard; an off-parity
+	// route blocks execution BEFORE any vault draw. Empty means the pool
+	// settles in the vault's USDC directly.
+	PoolUsdc string
 	// EventLookback is how many ledgers of pool events to scan for position
 	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
 	EventLookback int64
@@ -120,6 +126,22 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 		report.Prices[asset] = r.OraclePrice
 	}
 
+	// Canary route check for pools settling a different USDC: quote a 1-USDC
+	// conversion. Off-parity (or no route/DEX) suppresses task emission this
+	// cycle — the pool is effectively monitor-only until the route heals, and
+	// the report says so explicitly.
+	convertible := a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr
+	if convertible && !a.cfg.Monitor {
+		if a.dex == nil {
+			report.Note = "pool settles different USDC and no DEX configured — not emitting tasks"
+			convertible = false
+		} else if _, err := a.dex.QuoteConvertIn(a.cfg.UsdcAddr, a.cfg.PoolUsdc, 1_0000000); err != nil {
+			report.Note = fmt.Sprintf("conversion route not viable (%v) — not emitting tasks", err)
+			convertible = false
+		}
+	}
+	suppressTasks := a.cfg.Monitor || (a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr && !convertible)
+
 	indexToAsset := make(map[uint32]string, len(pool.Reserves))
 	for asset, r := range pool.Reserves {
 		indexToAsset[r.Index] = asset
@@ -130,7 +152,7 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 		pos := &positions[i]
 		hf := core.CalcHealthFactor(*pos, pool)
 		report.Positions = append(report.Positions, adapters.PositionHealth{Address: pos.Address, HF: hf})
-		if hf >= 1.0 || a.cfg.Monitor {
+		if hf >= 1.0 || suppressTasks {
 			continue
 		}
 		var bidAssets, lotAssets []string
@@ -197,11 +219,17 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	}
 
 	// The draw is sized by summing raw bid amounts, which is only valid when
-	// the debt being repaid is USDC itself. Refuse mixed/non-USDC bids rather
-	// than drawing a number of USDC stroops that matches a different asset.
-	if a.cfg.UsdcAddr != "" {
+	// the debt being settled is a single known USDC. The pool's settle asset
+	// is its own USDC when configured (conversion pools), the vault's
+	// otherwise. Refuse mixed/other bids rather than drawing a number of USDC
+	// stroops that matches a different asset.
+	settleAsset := a.cfg.UsdcAddr
+	if a.cfg.PoolUsdc != "" {
+		settleAsset = a.cfg.PoolUsdc
+	}
+	if settleAsset != "" {
 		for asset := range auction.Bid {
-			if asset != a.cfg.UsdcAddr {
+			if asset != settleAsset {
 				return &adapters.Result{Block: ledger,
 					Note: fmt.Sprintf("unsupported non-USDC bid asset %s — skipping", asset)}, nil
 			}
@@ -219,13 +247,45 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		bidAmt += amt.Int64()
 	}
 
-	res := &adapters.Result{Block: ledger, Drew: bidAmt}
+	// Conversion pools: price the entry conversion BEFORE drawing anything.
+	// An off-parity or missing route aborts here with zero capital moved.
+	needConvert := a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr && bidAmt > 0
+	drawAmt := bidAmt
+	if needConvert {
+		if a.dex == nil {
+			return &adapters.Result{Block: ledger, Note: "pool settles different USDC and no DEX configured — skipping"}, nil
+		}
+		required, err := a.dex.QuoteConvertIn(a.cfg.UsdcAddr, a.cfg.PoolUsdc, bidAmt)
+		if err != nil {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("entry conversion refused pre-draw: %v", err)}, nil
+		}
+		drawAmt = required
+	}
+
+	res := &adapters.Result{Block: ledger, Drew: drawAmt}
 
 	drawStart := time.Now()
-	if bidAmt > 0 {
-		if err := vc.Draw(bidAmt); err != nil {
+	if drawAmt > 0 {
+		if err := vc.Draw(drawAmt); err != nil {
 			return nil, fmt.Errorf("vault draw: %w", err)
 		}
+	}
+	if needConvert {
+		conv, err := a.dex.ConvertExactOut(kp, a.cfg.UsdcAddr, a.cfg.PoolUsdc, bidAmt, drawAmt)
+		if err != nil {
+			// Nothing spent (or spend failed): return the drawn capital as-is.
+			res.Proceeds = drawAmt
+			res.Note = fmt.Sprintf("entry conversion failed after draw, capital returned: %v", err)
+			if drawAmt > 0 {
+				if rerr := vc.ReturnProceeds(res.Proceeds, 0); rerr != nil {
+					res.Note = fmt.Sprintf("entry conversion failed AND return failed (capital outstanding): %v / %v", err, rerr)
+				}
+			}
+			res.Latency = time.Since(start)
+			return res, nil
+		}
+		_ = conv // keeper now holds bidAmt of pool USDC to settle the assumed debt
 	}
 
 	fillTx, fillErr := core.FillAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user)
@@ -234,9 +294,9 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		res.Success = true
 		res.TxHash = fillTx
 		res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
-		if bidAmt > 0 {
+		if drawAmt > 0 {
 			res.Proceeds = a.swapCollateral(kp, pool, auction)
-			res.Profit = res.Proceeds - bidAmt
+			res.Profit = res.Proceeds - drawAmt
 			if res.Profit < 0 {
 				res.Profit = 0
 			}
@@ -245,10 +305,19 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 			}
 		}
 	case errors.Is(fillErr, core.ErrAlreadyFilled):
-		// Another keeper won. We drew capital but never spent it — return it
-		// unchanged (no profit, no loss).
+		// Another keeper won. Return what we still hold: unconverted capital
+		// as-is; converted pool-USDC swapped back under the same guard.
 		res.Note = "already filled by another keeper"
-		res.Proceeds = bidAmt
+		if needConvert {
+			if back, err := a.dex.SwapToUSDC(kp, a.cfg.PoolUsdc, bidAmt, bidAmt); err == nil {
+				res.Proceeds = back.OutputAmount
+			} else {
+				res.Proceeds = 0
+				res.Note = fmt.Sprintf("already filled; exit conversion refused, pool-USDC held (%v)", err)
+			}
+		} else {
+			res.Proceeds = drawAmt
+		}
 	default:
 		return nil, fmt.Errorf("fill auction: %w", fillErr)
 	}

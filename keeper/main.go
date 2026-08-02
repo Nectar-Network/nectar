@@ -218,13 +218,14 @@ func main() {
 		k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
 			PoolAddr:      pc.Addr,
 			Monitor:       pc.Monitor,
+			PoolUsdc:      pc.PoolUsdc,
 			MinProfit:     cfg.MinProfit,
 			HorizonURL:    cfg.HorizonURL,
 			Passphrase:    cfg.Passphrase,
 			UsdcAddr:      cfg.UsdcAddr,
 			EventLookback: cfg.EventLookback,
 		}, dexc))
-		logInfo("blend pool configured", "pool", short(pc.Addr), "mode", poolMode(pc.Monitor))
+		logInfo("blend pool configured", "pool", short(pc.Addr), "mode", poolMode(pc.Monitor), "pool_usdc", short(pc.PoolUsdc))
 	}
 	if cfg.DeFindexVault != "" {
 		k.protocols = append(k.protocols, defindexadapter.NewAdapter(defindexadapter.Config{
@@ -333,6 +334,9 @@ func (k *Keeper) cycle() error {
 				logInfo("pool scan", "pool", short(rep.Pool), "mode", poolMode(rep.Monitor),
 					"status", rep.Status, "reserves", rep.Reserves,
 					"oracle_decimals", rep.OracleDecimals, "positions", len(rep.Positions))
+				if rep.Note != "" {
+					logWarn("pool scan note", "pool", short(rep.Pool), "note", rep.Note)
+				}
 				for asset, price := range rep.Prices {
 					logInfo("reserve price", "pool", short(rep.Pool), "asset", short(asset), "usd", fmt.Sprintf("%.7f", price))
 				}

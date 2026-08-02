@@ -162,3 +162,15 @@ func TestParseBlendPools_DedupesKeepingFirst(t *testing.T) {
 		t.Fatalf("dedupe must keep first entry, got %+v", pools)
 	}
 }
+
+func TestParseBlendPools_ThirdFieldPoolUsdc(t *testing.T) {
+	const pool = "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF"
+	const poolUsdc = "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU"
+	pools := parseBlendPools(pool+":active:"+poolUsdc, "")
+	if len(pools) != 1 {
+		t.Fatalf("expected 1 pool, got %d", len(pools))
+	}
+	if pools[0].PoolUsdc != poolUsdc || pools[0].Monitor {
+		t.Fatalf("third field not parsed: %+v", pools[0])
+	}
+}

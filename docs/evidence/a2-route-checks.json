@@ -1,0 +1,76 @@
+{
+  "task": "A2 — DEX route verification between vault USDC and each pool's USDC",
+  "date": "2026-08-03",
+  "method": "stellar contract invoke --send=no (simulation) against the Soroswap testnet router; every result below is a live on-chain quote, not an assumption",
+  "router": {
+    "address": "CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD",
+    "verified_by": "on-chain contract spec lists SoroswapRouter functions (router_get_amounts_out, get_factory, ...)",
+    "factory": "CDP3HMUH6SMS3S7NPGNDJLULCOXXEPSHY4JKUKMBNQMATHDHWXRRJTBY"
+  },
+  "assets": {
+    "vault_usdc_circle": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "testnetv2_pool_usdc_blend": "CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGCPTUEPFM4AVSRCJU",
+    "xlm_sac": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+  },
+  "queries": [
+    {
+      "name": "direct Circle->Blend, 10 USDC",
+      "call": "router_get_amounts_out(100000000, [circle, blend_usdc])",
+      "result": ["100000000", "80095447"],
+      "rate": 0.8010
+    },
+    {
+      "name": "direct Circle->Blend, 1 USDC",
+      "call": "router_get_amounts_out(10000000, [circle, blend_usdc])",
+      "result": ["10000000", "9391109"],
+      "rate": 0.9391
+    },
+    {
+      "name": "direct Blend->Circle, 1 USDC",
+      "call": "router_get_amounts_out(10000000, [blend_usdc, circle])",
+      "result": ["10000000", "10174692"],
+      "rate": 1.0175
+    },
+    {
+      "name": "direct Blend->Circle, 10 USDC",
+      "call": "router_get_amounts_out(100000000, [blend_usdc, circle])",
+      "result": ["100000000", "86264894"],
+      "rate": 0.8626
+    },
+    {
+      "name": "2-hop Circle->XLM->Blend, 10 USDC",
+      "call": "router_get_amounts_out(100000000, [circle, xlm, blend_usdc])",
+      "result": ["100000000", "1008054214", "174159162"],
+      "note": "wildly off any real price (10 USDC -> 100.8 XLM -> 17.4 USDC): unarbitraged testnet toy liquidity; unusable as a price reference"
+    },
+    {
+      "name": "leg XLM->Blend USDC, 10 XLM",
+      "call": "router_get_amounts_out(100000000, [xlm, blend_usdc])",
+      "result": ["100000000", "17462559"]
+    },
+    {
+      "name": "leg XLM->Circle USDC, 10 XLM",
+      "call": "router_get_amounts_out(100000000, [xlm, circle])",
+      "result": ["100000000", "9860401"]
+    },
+    {
+      "name": "pair reserves Circle/Blend",
+      "call": "get_reserves(factory, circle, blend_usdc)",
+      "result": ["510234787", "490000000"],
+      "note": "51.02 Circle USDC vs 49.00 Blend USDC — pair EXISTS, priced near 1:1, but only ~$50 deep per side"
+    }
+  ],
+  "per_pool_decision": {
+    "TestnetV2 (CCEBVDYM...4HGF)": {
+      "pool_usdc": "Blend-mock USDC CAQCFVLO... != vault Circle USDC",
+      "route": "EXISTS — direct Soroswap pair, near-par at sub-1-USDC size",
+      "decision": "ACTIVE with keeper-side conversion + par-anchored slippage guard (task rule: route exists => implement conversion, mark ACTIVE). At the pair's current ~50-USDC depth, any conversion of realistic bid size (>= ~0.5 USDC at SLIPPAGE_BPS=100) breaches the guard, so the keeper will REFUSE conversion pre-draw and skip the fill with an explicit log line. No capital can be spent through an off-parity route; capital support is real but gated on route viability, which is re-quoted live every attempt.",
+      "config": "BLEND_POOLS entry 'CCEBVDYM...:active:CAQCFVLO...' (third field = pool USDC)"
+    },
+    "Nectar Sandbox (deployed in Task A4)": {
+      "pool_usdc": "vault Circle USDC itself (same asset)",
+      "route": "NOT NEEDED — pool settles in the vault's own USDC",
+      "decision": "ACTIVE, no conversion path involved"
+    }
+  }
+}

@@ -9,10 +9,13 @@ import (
 
 // BlendPoolConfig is one entry of BLEND_POOLS: a pool contract address plus
 // its capital mode. Monitor pools are scanned and reported but never receive
-// vault capital.
+// vault capital. PoolUsdc, when set, names the pool's own USDC contract for
+// pools that settle in a different USDC than the vault; the keeper converts
+// vault-USDC <-> pool-USDC through the DEX with a par-anchored slippage guard.
 type BlendPoolConfig struct {
-	Addr    string
-	Monitor bool
+	Addr     string
+	Monitor  bool
+	PoolUsdc string
 }
 
 type Config struct {
@@ -129,12 +132,15 @@ func LoadConfig() Config {
 }
 
 // parseBlendPools parses BLEND_POOLS, a comma-separated list of
-// `POOL_ADDRESS[:mode]` entries where mode is `active` (default — vault
-// capital may be used to fill this pool's auctions) or `monitor` (scan and
-// report only). When BLEND_POOLS is empty it falls back to the legacy single
-// BLEND_POOL variable (active mode), preserving backward compatibility.
-// Duplicate addresses keep their first entry. Invalid entries exit(1) rather
-// than silently monitoring the wrong contract.
+// `POOL_ADDRESS[:mode[:POOL_USDC_ADDRESS]]` entries. mode is `active`
+// (default — vault capital may be used to fill this pool's auctions) or
+// `monitor` (scan and report only). The optional third field names the pool's
+// own USDC contract when it differs from the vault's USDC; fills then convert
+// through the DEX under a par-anchored slippage guard. When BLEND_POOLS is
+// empty it falls back to the legacy single BLEND_POOL variable (active mode),
+// preserving backward compatibility. Duplicate addresses keep their first
+// entry. Invalid entries exit(1) rather than silently monitoring the wrong
+// contract.
 func parseBlendPools(multi, single string) []BlendPoolConfig {
 	raw := strings.TrimSpace(multi)
 	if raw == "" {
@@ -150,29 +156,38 @@ func parseBlendPools(multi, single string) []BlendPoolConfig {
 		if entry == "" {
 			continue
 		}
-		addr := entry
-		monitor := false
-		if i := strings.IndexByte(entry, ':'); i >= 0 {
-			addr = strings.TrimSpace(entry[:i])
-			mode := strings.ToLower(strings.TrimSpace(entry[i+1:]))
-			switch mode {
+		parts := strings.Split(entry, ":")
+		if len(parts) > 3 {
+			fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: too many fields (want ADDR[:mode[:POOL_USDC]])\n", entry)
+			os.Exit(1)
+		}
+		pc := BlendPoolConfig{Addr: strings.TrimSpace(parts[0])}
+		if len(parts) >= 2 {
+			switch mode := strings.ToLower(strings.TrimSpace(parts[1])); mode {
 			case "active", "":
 			case "monitor":
-				monitor = true
+				pc.Monitor = true
 			default:
 				fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: unknown mode %q (want active|monitor)\n", entry, mode)
 				os.Exit(1)
 			}
 		}
-		if len(addr) != 56 || !strings.HasPrefix(addr, "C") {
-			fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: %q is not a contract address\n", entry, addr)
+		if len(parts) == 3 {
+			pc.PoolUsdc = strings.TrimSpace(parts[2])
+			if len(pc.PoolUsdc) != 56 || !strings.HasPrefix(pc.PoolUsdc, "C") {
+				fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: pool USDC %q is not a contract address\n", entry, pc.PoolUsdc)
+				os.Exit(1)
+			}
+		}
+		if len(pc.Addr) != 56 || !strings.HasPrefix(pc.Addr, "C") {
+			fmt.Fprintf(os.Stderr, "BLEND_POOLS entry %q: %q is not a contract address\n", entry, pc.Addr)
 			os.Exit(1)
 		}
-		if seen[addr] {
+		if seen[pc.Addr] {
 			continue
 		}
-		seen[addr] = true
-		pools = append(pools, BlendPoolConfig{Addr: addr, Monitor: monitor})
+		seen[pc.Addr] = true
+		pools = append(pools, pc)
 	}
 	return pools
 }

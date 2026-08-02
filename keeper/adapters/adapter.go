@@ -84,6 +84,7 @@ type ScanReport struct {
 	OracleDecimals uint32             // oracle price decimals
 	Prices         map[string]float64 // asset address -> USD per whole token
 	Positions      []PositionHealth   // every position seen this pass, with HF
+	Note           string             // operational caveat (e.g. conversion route not viable)
 }
 
 // ScanReporter is optionally implemented by adapters that can describe their
