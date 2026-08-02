@@ -38,6 +38,12 @@ type Config struct {
 	DriftBps        int      // DeFindex allocation drift threshold in bps (500 = 5%)
 	EventLookback   int64    // ledgers of pool events scanned for position discovery
 	KnownDepositors []string // comma-separated G-addresses for performance page
+
+	// Testnet USDC faucet (payments from a treasury account; NOT a mint —
+	// Circle USDC is not mintable by us). Empty FaucetSecret disables.
+	FaucetSecret       string
+	FaucetAmount       int64 // stroops per claim (default 1000 USDC)
+	FaucetCooldownSecs int64 // per-address cooldown (default 3600)
 }
 
 func LoadConfig() Config {
@@ -127,6 +133,22 @@ func LoadConfig() Config {
 	}
 
 	c.BlendPools = parseBlendPools(os.Getenv("BLEND_POOLS"), os.Getenv("BLEND_POOL"))
+
+	c.FaucetSecret = envOr("FAUCET_SECRET", "")
+	amtStr := envOr("FAUCET_AMOUNT", "10000000000") // 1000.0000000 USDC
+	amt, err := strconv.ParseInt(amtStr, 10, 64)
+	if err != nil || amt <= 0 {
+		fmt.Fprintf(os.Stderr, "FAUCET_AMOUNT=%q must be a positive integer (stroops)\n", amtStr)
+		os.Exit(1)
+	}
+	c.FaucetAmount = amt
+	cdStr := envOr("FAUCET_COOLDOWN_SECS", "3600")
+	cd, err := strconv.ParseInt(cdStr, 10, 64)
+	if err != nil || cd < 0 {
+		fmt.Fprintf(os.Stderr, "FAUCET_COOLDOWN_SECS=%q must be a non-negative integer\n", cdStr)
+		os.Exit(1)
+	}
+	c.FaucetCooldownSecs = cd
 
 	return c
 }

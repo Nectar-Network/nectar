@@ -237,6 +237,8 @@ func main() {
 	}
 	logInfo("adapters registered", "count", len(k.protocols))
 
+	initFaucet(rpc, cfg)
+
 	go serveHTTP(cfg.APIPort)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -501,6 +503,8 @@ func serveHTTP(port string) {
 	mux.HandleFunc("/api/state", corsMiddleware(handleState))
 	mux.HandleFunc("/api/events", corsMiddleware(handleSSE))
 	mux.HandleFunc("/api/performance", corsMiddleware(handlePerformance))
+	mux.HandleFunc("/api/faucet/info", corsMiddleware(handleFaucetInfo))
+	mux.HandleFunc("/api/faucet", corsMiddleware(handleFaucetClaim))
 	mux.HandleFunc("/metrics", handleMetrics)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -524,7 +528,7 @@ func serveHTTP(port string) {
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
