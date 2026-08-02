@@ -1,0 +1,23 @@
+{
+  "authEntryCount": 1,
+  "date": "2026-08-03",
+  "gate": "0.7",
+  "latestLedger": 3935602,
+  "minResourceFee": "553000",
+  "network": "testnet",
+  "pool": "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF",
+  "positionsKeys": [
+    "collateral",
+    "liabilities",
+    "supply"
+  ],
+  "request": {
+    "address": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+    "amount": "10000",
+    "request_type": 0
+  },
+  "returnValueXDR": "AAAAEQAAAAEAAAADAAAADwAAAApjb2xsYXRlcmFsAAAAAAARAAAAAQAAAAAAAAAPAAAAC2xpYWJpbGl0aWVzAAAAABEAAAABAAAAAAAAAA8AAAAGc3VwcGx5AAAAAAARAAAAAQAAAAEAAAADAAAAAAAAAAoAAAAAAAAAAAAAAAAAABda",
+  "rpc": "https://soroban-testnet.stellar.org",
+  "sent": false,
+  "submit_args": "from=spender=to=GATK27P6LOQBSXMVCYBBSKPUYKX5HVZ5AI4AAKF7UEYNKELSEBH53P7W"
+}
