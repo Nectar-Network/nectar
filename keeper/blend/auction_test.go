@@ -270,11 +270,11 @@ func TestSubmitPayload_BlendABITypes(t *testing.T) {
 	}
 }
 
-// The retry tests below exercise the policy that wraps fillAuctionRequest and
+// The retry tests below exercise the policy that wraps SubmitRequests and
 // CreateAuction. They use soroban.RetryWith so we can simulate transient and
 // deterministic failures without spinning a live RPC.
 
-func TestFillAuction_RetriesOnSequenceError(t *testing.T) {
+func TestSubmitRetry_RetriesOnSequenceError(t *testing.T) {
 	attempts := 0
 	err := soroban.RetryWith(fastRetry(), func() error {
 		attempts++
@@ -291,7 +291,7 @@ func TestFillAuction_RetriesOnSequenceError(t *testing.T) {
 	}
 }
 
-func TestFillAuction_DoesNotRetryAlreadyFilled(t *testing.T) {
+func TestSubmitRetry_DoesNotRetryAlreadyFilled(t *testing.T) {
 	attempts := 0
 	err := soroban.RetryWith(fastRetry(), func() error {
 		attempts++
@@ -305,7 +305,7 @@ func TestFillAuction_DoesNotRetryAlreadyFilled(t *testing.T) {
 	}
 }
 
-func TestFillAuction_RetriesOnResourceExhaust(t *testing.T) {
+func TestSubmitRetry_RetriesOnResourceExhaust(t *testing.T) {
 	attempts := 0
 	err := soroban.RetryWith(fastRetry(), func() error {
 		attempts++

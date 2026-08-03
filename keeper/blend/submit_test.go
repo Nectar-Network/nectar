@@ -93,20 +93,60 @@ func TestFillAndUnwind_RejectsBadInputs(t *testing.T) {
 	const user = "GATK27P6LOQBSXMVCYBBSKPUYKX5HVZ5AI4AAKF7UEYNKELSEBH53P7W"
 	const usdc = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
 	rpc := soroban.NewClient("http://invalid.local")
+	oneRepay := []RepayLeg{{Asset: usdc, Amount: 1}}
+	oneAsset := []string{testAsset}
 
 	// Fill percent 0 would panic BadRequest on-chain (scale_auction).
-	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 0, usdc, 1, nil); err == nil {
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 0, oneRepay, oneAsset); err == nil {
 		t.Error("fill percent 0 must be rejected before any network call")
 	}
-	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 101, usdc, 1, nil); err == nil {
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 101, oneRepay, oneAsset); err == nil {
 		t.Error("fill percent 101 must be rejected")
 	}
 	// Repaying nothing would leave the assumed debt outstanding.
-	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100, usdc, 0, nil); err == nil {
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100, nil, oneAsset); err == nil {
+		t.Error("empty repay list must be rejected")
+	}
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100,
+		[]RepayLeg{{Asset: usdc, Amount: 0}}, oneAsset); err == nil {
 		t.Error("zero repay amount must be rejected")
 	}
-	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100, "", 1, nil); err == nil {
-		t.Error("empty settle asset must be rejected")
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100,
+		[]RepayLeg{{Asset: "", Amount: 1}}, oneAsset); err == nil {
+		t.Error("empty repay asset must be rejected")
+	}
+	// Filling without withdrawing the seized collateral would leave bTokens
+	// stranded in the pool — the unwind must always free them.
+	if _, err := FillAndUnwind(rpc, "http://invalid.local", nil, "pass", testAsset, user, 100, oneRepay, nil); err == nil {
+		t.Error("empty collateral list must be rejected")
+	}
+}
+
+// A multi-asset debt position produces one repay leg per bid asset, in caller
+// order, between the fill and the withdrawals.
+func TestRequestsVal_MultiRepayShape(t *testing.T) {
+	const user = "GATK27P6LOQBSXMVCYBBSKPUYKX5HVZ5AI4AAKF7UEYNKELSEBH53P7W"
+	const usdc = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+	const xlm = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+	reqs := []PoolRequest{
+		{Type: ReqFillUserLiquidation, Address: user, Amount: 100},
+		{Type: ReqRepay, Address: usdc, Amount: 10_0000000},
+		{Type: ReqRepay, Address: xlm, Amount: 40_0000000},
+		{Type: ReqWithdrawCollateral, Address: testAsset, Amount: MaxWithdraw},
+	}
+	val, err := requestsVal(reqs)
+	if err != nil {
+		t.Fatalf("requestsVal: %v", err)
+	}
+	got := decodeRequests(t, val)
+	if len(got) != 4 {
+		t.Fatalf("want 4 requests, got %d", len(got))
+	}
+	if got[1].Type != 5 || got[1].Address != usdc || got[1].Amount != 10_0000000 {
+		t.Errorf("first repay leg: %+v", got[1])
+	}
+	if got[2].Type != 5 || got[2].Address != xlm || got[2].Amount != 40_0000000 {
+		t.Errorf("second repay leg: %+v", got[2])
 	}
 }
 
@@ -154,6 +194,33 @@ func TestFindLiquidationPercent_BinarySearchesOnContractVerdict(t *testing.T) {
 	}
 	if tried[0] != 100 {
 		t.Errorf("full liquidation must be attempted first, got %d", tried[0])
+	}
+}
+
+// A deeply underwater position accepts a full (100%) liquidation on the first
+// simulation — the search must return 100 immediately without probing partials
+// (full liquidation is the most profitable outcome for the keeper).
+func TestFindLiquidationPercent_FullLiquidationFirstTry(t *testing.T) {
+	const user = "GATK27P6LOQBSXMVCYBBSKPUYKX5HVZ5AI4AAKF7UEYNKELSEBH53P7W"
+	var tried []int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		tried = append(tried, percentFromSimBody(t, string(body)))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"latestLedger":1,"results":[{"xdr":"AAAAAQ=="}]}}`))
+	}))
+	defer srv.Close()
+
+	got, err := FindLiquidationPercent(soroban.NewClient(srv.URL), "pass", testAsset, user,
+		[]string{testAsset}, []string{testOracle})
+	if err != nil {
+		t.Fatalf("FindLiquidationPercent: %v", err)
+	}
+	if got != 100 {
+		t.Errorf("percent: got %d want 100", got)
+	}
+	if len(tried) != 1 || tried[0] != 100 {
+		t.Errorf("a valid full liquidation must need exactly one simulation, tried %v", tried)
 	}
 }
 

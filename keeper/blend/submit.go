@@ -79,14 +79,25 @@ func SubmitRequests(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 	return tx.Hash, nil
 }
 
+// RepayLeg is one Repay request inside a fill-and-unwind submit. Amount is in
+// raw underlying tokens of Asset and must cover the full assumed dToken debt
+// of that reserve — the pool refunds any overpayment (actions.rs:415-441
+// @ ba22b48), so callers pass their whole earmarked holding of the asset.
+type RepayLeg struct {
+	Asset  string
+	Amount int64
+}
+
 // FillAndUnwind fills a user-liquidation auction and immediately unwinds the
 // resulting position in ONE atomic submit:
 //
 //	[6] FillUserLiquidationAuction — assume the liquidatee's dToken debt and
 //	    receive their bToken collateral (no tokens move: docs/FACTS.md
 //	    "Auction asset flows")
-//	[5] Repay repayAmt of the settle asset — burns the assumed dTokens,
-//	    overpayment is refunded (actions.rs:415-441)
+//	[5] Repay per debt asset — burns the assumed dTokens; overpayment is
+//	    refunded (actions.rs:415-441). One leg per bid asset; the keeper must
+//	    already hold each leg's tokens (drawn USDC for the settle asset,
+//	    DEX-acquired for any other debt asset).
 //	[3] WithdrawCollateral (clamped) per seized asset — turns the bToken
 //	    positions into real tokens the keeper holds
 //
@@ -96,16 +107,26 @@ func SubmitRequests(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 // all. A separate fill-then-unwind sequence could strand an assumed debt if
 // the second transaction failed.
 func FillAndUnwind(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string,
-	fillPct int64, settleAsset string, repayAmt int64, collateralAssets []string) (string, error) {
+	fillPct int64, repays []RepayLeg, collateralAssets []string) (string, error) {
 	if fillPct < 1 || fillPct > 100 {
 		return "", fmt.Errorf("fill percent %d out of range [1,100]", fillPct)
 	}
-	if settleAsset == "" || repayAmt <= 0 {
-		return "", fmt.Errorf("settle asset and positive repay amount required")
+	// Filling without repaying every assumed debt leg (or without freeing the
+	// seized collateral) would defeat the atomic unwind — reject up front.
+	if len(repays) == 0 {
+		return "", fmt.Errorf("at least one repay leg required")
+	}
+	if len(collateralAssets) == 0 {
+		return "", fmt.Errorf("at least one collateral withdrawal required")
 	}
 	reqs := []PoolRequest{
 		{Type: ReqFillUserLiquidation, Address: user, Amount: fillPct},
-		{Type: ReqRepay, Address: settleAsset, Amount: repayAmt},
+	}
+	for _, leg := range repays {
+		if leg.Asset == "" || leg.Amount <= 0 {
+			return "", fmt.Errorf("repay leg needs an asset and a positive amount, got %q/%d", leg.Asset, leg.Amount)
+		}
+		reqs = append(reqs, PoolRequest{Type: ReqRepay, Address: leg.Asset, Amount: leg.Amount})
 	}
 	for _, asset := range collateralAssets {
 		reqs = append(reqs, PoolRequest{Type: ReqWithdrawCollateral, Address: asset, Amount: MaxWithdraw})

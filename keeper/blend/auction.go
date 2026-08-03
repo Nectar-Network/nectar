@@ -260,86 +260,18 @@ func DetectAuctions(rpc *soroban.Client, passphrase, poolAddr, user string) ([]*
 	return out, nil
 }
 
-// fillAuctionRequest builds the Soroban submit() arguments and invokes the
-// pool, returning the landed transaction hash. addr/from/spender are all the
-// keeper. The request map is the same shape across all three fill paths —
-// only the request_type constant changes.
-func fillAuctionRequest(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind AuctionType, fillPct int64) (string, error) {
-	// For fill request types (6/7/8) Request.amount is a fill PERCENTAGE cast
-	// `as u64` and must be 1..=100 — scale_auction panics BadRequest on 0 or
-	// >100 (docs/FACTS.md; blend-contracts-v2 auctions/auction.rs:194-196
-	// @ ba22b48). Sending 0 would make every fill revert.
-	if fillPct < 1 || fillPct > 100 {
-		return "", fmt.Errorf("fill percent %d out of range [1,100]", fillPct)
-	}
-	fromVal, err := soroban.ScvAddress(kp.Address())
-	if err != nil {
-		return "", err
-	}
-	userVal, err := soroban.ScvAddress(user)
-	if err != nil {
-		return "", err
-	}
-
-	// Blend's Request struct: request_type:u32, address:Address, amount:i128.
-	// Wrong scalar types make the pool reject the submit even when the keys
-	// look right — see contracts/blend Request derive.
-	reqTypeVal := soroban.ScvU32(kind.requestType())
-	pctVal := soroban.ScvI128(fillPct)
-
-	// Keys MUST be in sorted lexicographic order for Soroban Map<Symbol, Val>.
-	reqMap := xdr.ScMap{
-		{Key: soroban.ScvSymbol("address"), Val: userVal},
-		{Key: soroban.ScvSymbol("amount"), Val: pctVal},
-		{Key: soroban.ScvSymbol("request_type"), Val: reqTypeVal},
-	}
-	reqMapPtr := &reqMap
-	reqVec := xdr.ScVec{{Type: xdr.ScValTypeScvMap, Map: &reqMapPtr}}
-	reqVecPtr := &reqVec
-	requestsVal := xdr.ScVal{Type: xdr.ScValTypeScvVec, Vec: &reqVecPtr}
-
-	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "submit",
-		soroban.DefaultRetry(),
-		fromVal, fromVal, fromVal, requestsVal)
-	if err != nil {
-		if isAlreadyFilled(err.Error()) {
-			return "", ErrAlreadyFilled
-		}
-		return "", fmt.Errorf("fill %s auction: %w", kind, err)
-	}
-	return tx.Hash, nil
-}
-
 // FullFillPct fills 100% of an auction's scaled amounts.
 const FullFillPct int64 = 100
 
-// FillAuction fills a user-liquidation auction (request_type 6) in full and
-// returns the landed transaction hash. Alias for FillUserLiquidationAuction.
-func FillAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) (string, error) {
-	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, user, AuctionUserLiquidation, FullFillPct)
-}
-
-// FillUserLiquidationAuction fills a user-liquidation auction (request_type 6).
-func FillUserLiquidationAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string) (string, error) {
-	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, user, AuctionUserLiquidation, FullFillPct)
-}
-
-// FillBadDebtAuction fills a bad-debt auction (request_type 7). The bidder
-// takes on socialized bad debt in exchange for the lot of bToken collateral.
-func FillBadDebtAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) (string, error) {
-	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, AuctionBadDebt, FullFillPct)
-}
-
-// FillInterestAuction fills an interest auction (request_type 8). The bidder
-// pays BLND in exchange for accumulated backstop interest.
-func FillInterestAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string) (string, error) {
-	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, AuctionInterest, FullFillPct)
-}
-
-// FillByType dispatches to the right Fill* function based on the auction kind.
-func FillByType(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, addr string, kind AuctionType) (string, error) {
-	return fillAuctionRequest(rpc, horizonURL, kp, passphrase, poolAddr, addr, kind, FullFillPct)
-}
+// NOTE: the old standalone fill entry points (FillAuction / FillByType /
+// FillBadDebtAuction / FillInterestAuction) were DELETED. A bare fill of a
+// user-liquidation or bad-debt auction moves no tokens — the filler assumes
+// dToken debt (docs/FACTS.md "Auction asset flows") — so "fill, then swap the
+// collateral" was operating on collateral the keeper never held, and a bare
+// interest fill would revert without the backstop-LP pre-approval it never
+// performed. The only supported fill path is the atomic FillAndUnwind in
+// submit.go. Auction DETECTION for all three kinds (DetectAuctions,
+// GetAuctionByType) remains.
 
 // AuctionPhase describes which scaling phase a Blend Dutch auction is in.
 type AuctionPhase int
