@@ -2,6 +2,7 @@ package dex
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/xdr"
@@ -55,6 +56,7 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, from, to string, amount, 
 	if ref <= 0 {
 		ref = expectedOut
 	}
+	slog.Info("soroswap swap landed", "in", amount, "out", got, "tx", hash)
 	return &SwapResult{
 		InputToken:   from,
 		InputAmount:  amount,

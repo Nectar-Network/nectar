@@ -2,6 +2,7 @@ package vault
 
 import (
 	"fmt"
+	"log/slog"
 	"math/big"
 	"time"
 
@@ -38,12 +39,13 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 		return err
 	}
 	amtVal := soroban.ScvI128(amount)
-	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "draw",
+	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "draw",
 		soroban.RetryConfig{MaxAttempts: 2, InitialDelay: time.Second, BackoffFactor: 2.0, RetryAmbiguous: false},
 		keeperVal, amtVal)
 	if err != nil {
 		return fmt.Errorf("vault draw: %w", err)
 	}
+	slog.Info("vault draw landed", "amount", amount, "tx", tx.Hash)
 	return nil
 }
 
@@ -75,12 +77,13 @@ func ReturnProceeds(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 	respVal := soroban.ScvU64(uint64(responseTimeMs))
 	retry := soroban.DefaultRetry()
 	retry.RetryAmbiguous = false
-	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "return_proceeds",
+	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "return_proceeds",
 		retry,
 		keeperVal, amtVal, respVal)
 	if err != nil {
 		return fmt.Errorf("vault return_proceeds: %w", err)
 	}
+	slog.Info("vault return_proceeds landed", "amount", amount, "tx", tx.Hash)
 	return nil
 }
 

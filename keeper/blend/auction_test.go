@@ -350,3 +350,28 @@ func TestContains(t *testing.T) {
 		}
 	}
 }
+
+// Blend v2 signals a MISSING auction as a wasm trap, not a contract error:
+// storage::get_auction does .unwrap_optimized() (storage.rs:607-616 @ ba22b48)
+// and the fill path shares the lookup (auction.rs:152). Verified live on the
+// Nectar Sandbox — the RPC surfaces "Error(WasmVm, InvalidAction)" /
+// "UnreachableCodeReached". Both classifiers must recognize it, or every
+// pre-create existence check errors out and no auction is ever created.
+func TestMissingAuctionTrapClassification(t *testing.T) {
+	trap := "HostError: Error(WasmVm, InvalidAction)\n\nEvent log:\n" +
+		`data:"VM call trapped: UnreachableCodeReached", get_auction`
+	if !isNotFound(trap) {
+		t.Error("isNotFound must recognize the missing-auction wasm trap")
+	}
+	if !isAlreadyFilled(trap) {
+		t.Error("isAlreadyFilled must recognize the missing-auction wasm trap")
+	}
+	// The clean contract-code path still works.
+	if !isNotFound("Error(Contract, #4)") || !isAlreadyFilled("Error(Contract, #4)") {
+		t.Error("contract code #4 must still classify")
+	}
+	// Ordinary contract errors must NOT classify as missing.
+	if isNotFound("Error(Contract, #1214)") || isAlreadyFilled("Error(Contract, #1214)") {
+		t.Error("numbered contract errors must not classify as missing-auction")
+	}
+}

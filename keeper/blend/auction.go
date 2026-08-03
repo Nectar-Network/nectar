@@ -3,6 +3,7 @@ package blend
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 
@@ -92,7 +93,7 @@ func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pas
 		return fmt.Errorf("lot vec: %w", err)
 	}
 
-	_, err = rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "new_auction",
+	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "new_auction",
 		soroban.DefaultRetry(),
 		soroban.ScvU32(uint32(AuctionUserLiquidation)), userVal, bidVec, lotVec, soroban.ScvU32(uint32(pct)))
 	if err != nil {
@@ -101,6 +102,7 @@ func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pas
 		}
 		return fmt.Errorf("new_auction: %w", err)
 	}
+	slog.Info("new_auction landed", "user", user, "percent", pct, "tx", tx.Hash)
 	return nil
 }
 
@@ -429,18 +431,40 @@ const (
 	blendErrAuctionExists   uint32 = 5 // creating an auction that already exists
 )
 
+// isMissingAuctionTrap recognizes how Blend v2 ACTUALLY signals a missing
+// auction, verified live on the Nectar Sandbox (2026-08-03): both the
+// `get_auction` read and the fill path call `storage::get_auction`, which
+// does `.unwrap_optimized()` on the temporary-storage entry
+// (pool/src/storage.rs:607-616; fill lookup auctions/auction.rs:152
+// @ ba22b48; the contract trait doc says "Panics — If the auction does not
+// exist"). In release wasm that panic is an unreachable trap surfacing as
+// `Error(WasmVm, InvalidAction)` / "UnreachableCodeReached" — NOT a numbered
+// contract error, so code-based matching alone never fires. An unrelated
+// wasm trap could in principle match too; call sites tolerate that because
+// all accounting is measured from balances, never inferred from the
+// classification.
+func isMissingAuctionTrap(s string) bool {
+	return contains(s, "UnreachableCodeReached") || contains(s, "Error(WasmVm, InvalidAction)")
+}
+
 func isNotFound(s string) bool {
+	if isMissingAuctionTrap(s) {
+		return true
+	}
 	if code, ok := soroban.ParseContractCode(s); ok {
 		return code == blendErrAuctionNotFound
 	}
 	return contains(s, "AuctionNotFound") || contains(s, "NotFound")
 }
 
-// isAlreadyFilled reports that the auction is no longer fillable. At fill time a
-// missing auction (code #4) means another keeper consumed it first — the safe
-// "lost the race" outcome, where drawn capital is returned unspent. It shares
-// code #4 with isNotFound by design; the two differ only in call-site intent.
+// isAlreadyFilled reports that the auction is no longer fillable. At fill
+// time a missing auction — the storage trap above, or code #4 from
+// alternative deployments — means another keeper consumed it first: the safe
+// "lost the race" outcome, where drawn capital is returned unspent.
 func isAlreadyFilled(s string) bool {
+	if isMissingAuctionTrap(s) {
+		return true
+	}
 	if code, ok := soroban.ParseContractCode(s); ok {
 		return code == blendErrAuctionNotFound
 	}

@@ -2,6 +2,7 @@ package blend
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/xdr"
@@ -76,6 +77,7 @@ func SubmitRequests(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 		}
 		return "", fmt.Errorf("submit: %w", err)
 	}
+	slog.Info("pool submit landed", "requests", len(reqs), "tx", tx.Hash)
 	return tx.Hash, nil
 }
 

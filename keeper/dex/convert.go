@@ -3,6 +3,7 @@ package dex
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/stellar/go/keypair"
 
@@ -80,6 +81,7 @@ func (s *SwapClient) ConvertExactOut(kp *keypair.Full, from, to string, amountOu
 	if got <= 0 {
 		return nil, fmt.Errorf("conversion sent but %s balance did not increase", to[:4])
 	}
+	slog.Info("exact-out conversion landed", "out", got, "maxIn", maxIn, "tx", tx.Hash)
 	return &SwapResult{
 		InputToken:   from,
 		InputAmount:  maxIn, // upper bound; router refunds unspent input

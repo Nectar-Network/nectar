@@ -16,7 +16,10 @@ const CIRCLE_USDC = 'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
 const CIRCLE_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 const XLM_SAC = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
 
-const SUPPLY_USDC = BigInt(40_0000000); // admin lend-side liquidity
+// Admin lend-side liquidity, whole USDC as an optional arg (default 40).
+// Pass 0 to skip when the pool already holds enough unlent USDC for the
+// borrow (e.g. re-arming the position after a liquidation returned the debt).
+const SUPPLY_USDC = BigInt(Math.round(parseFloat(process.argv[3] ?? '40') * 1e7));
 const COLLATERAL_XLM = BigInt(100_0000000);
 const BORROW_USDC = BigInt(20_0000000);
 
@@ -49,6 +52,7 @@ async function main() {
   const circle = new TokenContract(CIRCLE_USDC, new Asset('USDC', CIRCLE_ISSUER));
   await invokeClassicOp(circle.classic_trustline(borrower.publicKey()), borrowerTxParams);
 
+  if (SUPPLY_USDC > 0n) {
   console.log('\n--- admin supplies', Number(SUPPLY_USDC) / 1e7, 'Circle-USDC to the pool');
   await invokeSorobanOperation(
     pool.submit({
@@ -62,6 +66,9 @@ async function main() {
     PoolContractV2.parsers.submit,
     adminTxParams
   );
+  } else {
+    console.log('\n--- skipping admin supply (arg 0): pool already has lend liquidity');
+  }
 
   console.log('\n--- borrower supplies', Number(COLLATERAL_XLM) / 1e7, 'XLM collateral and borrows', Number(BORROW_USDC) / 1e7, 'Circle-USDC');
   await invokeSorobanOperation(

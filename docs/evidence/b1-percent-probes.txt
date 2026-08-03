@@ -1,0 +1,29 @@
+# B1 evidence — percent-solver agreement with the pool (Nectar Sandbox, live)
+#
+# FindLiquidationPercent's precheck IS a read-only new_auction simulation, so
+# precheck/contract agreement holds by construction. These probes capture the
+# pool's actual verdicts on the live borrower so the accepted/rejected band is
+# on the record.
+#
+# Position: GCCTPHRT… 100 XLM collateral / 20 Circle-USDC debt, oracle XLM=$0.098
+# → HF ≈ (100×0.098×0.75)/(20/0.95) = 0.349 (deeply underwater).
+# Expected per user_liquidation_auction.rs:92-205 @ ba22b48: partial percents
+# leave post-liq HF outside [1.03,1.15] → 1214 (InvalidLiqTooSmall); percent
+# 100 with all positions = full liquidation → accepted.
+#
+# ADDENDUM (same session, earlier): the same probes against the borrower AFTER
+# its position had been consumed all returned #1211 InvalidLiquidation — the
+# empty-position guard (liability_base <= collateral_base, 0<=0) at
+# user_liquidation_auction.rs:51. Recorded because our precheck surfaces
+# exactly what the pool decides, whatever the position state.
+
+=== new_auction simulate pct=1 ===
+❌ error: transaction simulation failed: HostError: Error(Contract, #1214)
+=== new_auction simulate pct=25 ===
+❌ error: transaction simulation failed: HostError: Error(Contract, #1214)
+=== new_auction simulate pct=50 ===
+❌ error: transaction simulation failed: HostError: Error(Contract, #1214)
+=== new_auction simulate pct=99 ===
+ACCEPTED (simulation succeeded): {"bid":{"CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA":"199992045"},"block":3943673,"lot":{"CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC":"1000000000"}}
+=== new_auction simulate pct=100 ===
+ACCEPTED (simulation succeeded): {"bid":{"CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA":"199992045"},"block":3943673,"lot":{"CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC":"1000000000"}}
