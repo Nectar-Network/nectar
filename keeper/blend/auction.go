@@ -104,6 +104,91 @@ func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pas
 	return nil
 }
 
+// Blend pool error codes relevant to sizing a liquidation
+// (pool/src/errors.rs @ ba22b48).
+const (
+	errInvalidLiqTooLarge = 1213
+	errInvalidLiqTooSmall = 1214
+)
+
+// ErrNoValidLiqPercent means no liquidation percentage satisfies the pool's
+// post-liquidation health-factor band for this position.
+var ErrNoValidLiqPercent = errors.New("no valid liquidation percent")
+
+// FindLiquidationPercent picks the liquidation percentage the pool will
+// accept. Blend requires the post-liquidation health factor to land in
+// [1.03, 1.15] — too small panics InvalidLiqTooSmall (1214), too large
+// InvalidLiqTooLarge (1213) — with a special case where >95% on a fully
+// included position is treated as a full liquidation
+// (user_liquidation_auction.rs:92-205 @ ba22b48).
+//
+// Rather than duplicating the contract's fixed-point incentive math (which
+// would silently drift from upstream), this binary-searches the percentage
+// using read-only `new_auction` SIMULATIONS: the pool itself judges each
+// candidate, and the error code says which way to move. Nothing is submitted.
+func FindLiquidationPercent(rpc *soroban.Client, passphrase, poolAddr, user string, bid, lot []string) (int, error) {
+	userVal, err := soroban.ScvAddress(user)
+	if err != nil {
+		return 0, err
+	}
+	bidVec, err := addressVecVal(bid)
+	if err != nil {
+		return 0, err
+	}
+	lotVec, err := addressVecVal(lot)
+	if err != nil {
+		return 0, err
+	}
+
+	simulate := func(pct int) (ok bool, code uint32, err error) {
+		sim, err := rpc.SimulateRead(passphrase, poolAddr, "new_auction",
+			soroban.ScvU32(uint32(AuctionUserLiquidation)), userVal, bidVec, lotVec, soroban.ScvU32(uint32(pct)))
+		if err != nil {
+			return false, 0, err
+		}
+		if sim.Error == "" {
+			return true, 0, nil
+		}
+		if c, found := soroban.ParseContractCode(sim.Error); found {
+			return false, c, nil
+		}
+		return false, 0, fmt.Errorf("new_auction sim: %s", sim.Error)
+	}
+
+	// A full liquidation is valid whenever the position is deeply enough
+	// underwater, and it is the most profitable outcome — try it first.
+	if ok, _, err := simulate(100); err != nil {
+		return 0, err
+	} else if ok {
+		return 100, nil
+	}
+
+	lo, hi := 1, 99
+	best := 0
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		ok, code, err := simulate(mid)
+		if err != nil {
+			return 0, err
+		}
+		switch {
+		case ok:
+			best = mid
+			hi = mid - 1 // prefer the smallest sufficient liquidation
+		case code == errInvalidLiqTooSmall:
+			lo = mid + 1
+		case code == errInvalidLiqTooLarge:
+			hi = mid - 1
+		default:
+			return 0, fmt.Errorf("new_auction rejected at %d%%: contract error %d", mid, code)
+		}
+	}
+	if best == 0 {
+		return 0, ErrNoValidLiqPercent
+	}
+	return best, nil
+}
+
 // addressVecVal builds a Vec<Address> ScVal from contract/account addresses.
 func addressVecVal(addrs []string) (xdr.ScVal, error) {
 	vals := make([]xdr.ScVal, 0, len(addrs))

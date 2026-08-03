@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"sort"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/nectar-network/keeper/adapters"
 	blendadapter "github.com/nectar-network/keeper/adapters/blend"
 	defindexadapter "github.com/nectar-network/keeper/adapters/defindex"
+	"github.com/nectar-network/keeper/blend"
 	"github.com/nectar-network/keeper/dex"
 	"github.com/nectar-network/keeper/registry"
 	"github.com/nectar-network/keeper/soroban"
@@ -214,6 +216,7 @@ func main() {
 		history: vault.NewHistoryIndexer(),
 	}
 	// One Blend adapter per configured pool (BLEND_POOLS, or legacy BLEND_POOL).
+	cfg.BlendPools = verifySettleAssets(rpc, cfg)
 	for _, pc := range cfg.BlendPools {
 		k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
 			PoolAddr:      pc.Addr,
@@ -633,4 +636,58 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "nectar_vault_tvl %d\n", tvl)
 	fmt.Fprintf(w, "# HELP nectar_sse_active Active SSE connections\n")
 	fmt.Fprintf(w, "nectar_sse_active %d\n", appMet.sseActive.Load())
+}
+
+// verifySettleAssets checks, at startup and against live chain state, that
+// every pool configured `active` actually lists the vault's USDC as a reserve.
+// A pool that settles a different asset can never be filled with vault capital
+// (docs/FACTS.md "USDC asset bridging"), and trusting the operator's config
+// for that is how capital ends up somewhere it cannot come back from.
+//
+// A definitive mismatch is a configuration error and exits: the operator asked
+// for active liquidation on a pool that cannot settle. A check that cannot be
+// PERFORMED (RPC down, unreadable pool) does not exit — that would crash-loop
+// on a transient outage — the pool is demoted to monitor instead, which is the
+// capital-safe direction.
+func verifySettleAssets(rpc *soroban.Client, cfg Config) []BlendPoolConfig {
+	if cfg.UsdcAddr == "" {
+		return cfg.BlendPools
+	}
+	out := make([]BlendPoolConfig, 0, len(cfg.BlendPools))
+	for _, pc := range cfg.BlendPools {
+		if pc.Monitor {
+			out = append(out, pc)
+			continue
+		}
+		assets, err := blend.ReserveAssets(rpc, cfg.Passphrase, pc.Addr)
+		if err != nil {
+			logWarn("settle-asset check failed — demoting pool to monitor",
+				"pool", short(pc.Addr), "err", err)
+			pc.Monitor = true
+			out = append(out, pc)
+			continue
+		}
+		found := false
+		for _, a := range assets {
+			if a == cfg.UsdcAddr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			logErr("pool configured active does not list the vault's USDC as a reserve",
+				"pool", short(pc.Addr), "vault_usdc", short(cfg.UsdcAddr), "reserves", len(assets))
+			fmt.Fprintf(os.Stderr,
+				"BLEND_POOLS: pool %s is active but does not settle %s — refusing to start.\n"+
+					"Set it to :monitor, or point USDC_CONTRACT at the asset this pool settles.\n",
+				pc.Addr, cfg.UsdcAddr)
+			os.Exit(1)
+		}
+		if pc.PoolUsdc != "" && pc.PoolUsdc != cfg.UsdcAddr {
+			logWarn("pool declares a different settle asset — monitor only",
+				"pool", short(pc.Addr), "pool_usdc", short(pc.PoolUsdc))
+		}
+		out = append(out, pc)
+	}
+	return out
 }

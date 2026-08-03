@@ -374,3 +374,24 @@ func scI128(val xdr.ScVal) *big.Int {
 	result.Add(result, lo)
 	return result
 }
+
+// ReserveAssets returns just the pool's reserve address list — a single cheap
+// read used at startup to verify a pool settles the asset the vault holds,
+// without the per-reserve config/oracle round-trips LoadPool performs.
+func ReserveAssets(rpc *soroban.Client, passphrase, poolAddr string) ([]string, error) {
+	sim, err := rpc.SimulateRead(passphrase, poolAddr, "get_reserve_list")
+	if err != nil {
+		return nil, fmt.Errorf("reserve list: %w", err)
+	}
+	if sim.Error != "" {
+		return nil, fmt.Errorf("reserve list sim: %s", sim.Error)
+	}
+	if len(sim.Results) == 0 {
+		return nil, fmt.Errorf("reserve list: empty result")
+	}
+	var listVal xdr.ScVal
+	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &listVal); err != nil {
+		return nil, err
+	}
+	return parseVec(listVal), nil
+}

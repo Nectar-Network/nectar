@@ -10,6 +10,7 @@ package blend
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/stellar/go/keypair"
@@ -226,16 +227,34 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		return &adapters.Result{Note: "monitor-only pool — execution disabled"}, nil
 	}
 
-	if err := core.CreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, 50,
-		td.bidAssets, td.lotAssets); err != nil {
-		return nil, fmt.Errorf("create auction: %w", err)
-	}
+	// An auction for this user may already be running — ours from an earlier
+	// cycle, or another keeper's. Creating unconditionally would just panic
+	// AuctionInProgress (1212), so look first and only create when absent.
 	auction, err := core.GetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
 	if err != nil {
 		return nil, fmt.Errorf("get auction: %w", err)
 	}
 	if auction == nil {
-		return &adapters.Result{Note: "no auction"}, nil
+		// Blend rejects a liquidation whose post-liq health factor misses the
+		// [1.03, 1.15] band, so the percentage is chosen by simulating against
+		// the pool rather than hardcoded (a fixed 50% fails with
+		// InvalidLiqTooSmall on most positions).
+		pct, perr := core.FindLiquidationPercent(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user, td.bidAssets, td.lotAssets)
+		if perr != nil {
+			return &adapters.Result{Note: fmt.Sprintf("no acceptable liquidation size: %v", perr)}, nil
+		}
+		if err := core.CreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, pct,
+			td.bidAssets, td.lotAssets); err != nil {
+			return nil, fmt.Errorf("create auction: %w", err)
+		}
+		auction, err = core.GetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
+		if err != nil {
+			return nil, fmt.Errorf("get auction: %w", err)
+		}
+		if auction == nil {
+			return &adapters.Result{Note: "auction created but not readable"}, nil
+		}
+		logAuction("auction created", a.cfg.PoolAddr, user, pct, auction.StartBlock)
 	}
 
 	ledger, err := rpc.LatestLedger()
@@ -295,39 +314,75 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 
 	res := &adapters.Result{Block: ledger, Drew: drawAmt}
 
+	// The keeper's own USDC before any capital moves. Everything it holds
+	// above this line at the end is what this operation produced — proceeds
+	// are measured against it, never inferred from auction amounts.
+	floatBefore, err := dex.TokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
+	if err != nil {
+		return &adapters.Result{Block: ledger, Note: fmt.Sprintf("pre-draw balance read failed: %v", err)}, nil
+	}
+
 	drawStart := time.Now()
 	if err := vc.Draw(drawAmt); err != nil {
 		return nil, fmt.Errorf("vault draw: %w", err)
 	}
 
-	fillTx, fillErr := core.FillAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user)
+	// Seized collateral balances before the submit, so the swap only touches
+	// what the liquidation actually produced (critical for native XLM, where
+	// the keeper's fee balance must not be swapped away).
+	lotAssets := make([]string, 0, len(auction.Lot))
+	for asset := range auction.Lot {
+		lotAssets = append(lotAssets, asset)
+	}
+	sort.Strings(lotAssets) // deterministic request order
+	before := make(map[string]int64, len(lotAssets))
+	for _, asset := range lotAssets {
+		if bal, err := dex.TokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address()); err == nil {
+			before[asset] = bal
+		}
+	}
+
+	// Fill + repay + withdraw in one atomic submit.
+	fillTx, fillErr := core.FillAndUnwind(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr,
+		user, core.FullFillPct, settleAsset, drawAmt, lotAssets)
 	switch {
 	case fillErr == nil:
 		res.Success = true
 		res.TxHash = fillTx
 		res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
-		res.Proceeds = a.swapCollateral(kp, pool, auction)
+		a.swapSeized(kp, rpc, pool, lotAssets, before)
+	case errors.Is(fillErr, core.ErrAlreadyFilled):
+		// Another keeper won. Nothing was spent — the draw is still in hand.
+		res.Note = "already filled by another keeper"
+	default:
+		return nil, fmt.Errorf("fill auction: %w", fillErr)
+	}
+
+	// Measured proceeds: whatever USDC the keeper now holds above its own
+	// pre-draw float. Covers the drawn capital that came back plus realized
+	// profit, and stays honest when a swap failed (collateral still held).
+	usdcNow, balErr := dex.TokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
+	if balErr != nil {
+		res.Note = fmt.Sprintf("post-fill balance read failed, proceeds unknown: %v", balErr)
+	} else {
+		res.Proceeds = usdcNow - floatBefore
+		if res.Proceeds < 0 {
+			res.Proceeds = 0
+		}
 		res.Profit = res.Proceeds - drawAmt
 		if res.Profit < 0 {
 			res.Profit = 0
 		}
-		if res.Proceeds == 0 {
+		if res.Success && res.Proceeds == 0 {
 			res.Note = "zero returnable proceeds — outstanding draw at slash risk"
 		}
-	case errors.Is(fillErr, core.ErrAlreadyFilled):
-		// Another keeper won. We drew capital but never spent it — return it
-		// unchanged (no profit, no loss).
-		res.Note = "already filled by another keeper"
-		res.Proceeds = drawAmt
-	default:
-		return nil, fmt.Errorf("fill auction: %w", fillErr)
 	}
 
 	// Return only when capital was actually drawn AND there is something to send.
 	// A return failure is non-fatal: the fill already happened on-chain, so we
 	// keep the result (and its accounting) and surface the outstanding-capital
 	// risk via Note rather than discarding a realized fill.
-	if bidAmt > 0 && res.Proceeds > 0 {
+	if drawAmt > 0 && res.Proceeds > 0 {
 		if err := vc.ReturnProceeds(res.Proceeds, res.ResponseTimeMs); err != nil {
 			res.Note = fmt.Sprintf("return proceeds failed (capital outstanding): %v", err)
 		}
@@ -342,38 +397,33 @@ func (a *Adapter) EstimateCapital(task adapters.Task) (int64, error) {
 	return 0, nil
 }
 
-// swapCollateral converts every non-USDC asset in the auction lot to USDC and
-// returns the total real USDC obtained. USDC already in the lot counts
-// directly; assets whose swap fails are held (excluded) rather than booked as
-// phantom profit.
-func (a *Adapter) swapCollateral(kp *keypair.Full, pool *core.PoolState, auction *core.Auction) int64 {
-	var total int64
-	for asset, amt := range auction.Lot {
-		if amt == nil {
-			continue
-		}
-		if !amt.IsInt64() {
-			continue // implausibly large lot amount — skip rather than truncate
-		}
-		v := amt.Int64()
-		if v <= 0 {
-			continue
-		}
+// swapSeized converts collateral the liquidation actually delivered into
+// USDC. Amounts come from measured balance DELTAS (post-unwind minus the
+// pre-submit snapshot), never from auction lot figures — the keeper may hold
+// the same asset for other reasons, and for native XLM its fee balance must
+// not be swapped away. Assets whose swap fails are simply held; nothing is
+// booked that did not happen.
+func (a *Adapter) swapSeized(kp *keypair.Full, rpc *soroban.Client, pool *core.PoolState, assets []string, before map[string]int64) {
+	if a.dex == nil {
+		return
+	}
+	for _, asset := range assets {
 		if asset == a.cfg.UsdcAddr {
-			total += v
-			continue
+			continue // already the settle asset; counted by the balance delta
 		}
-		if a.dex == nil {
-			continue
-		}
-		ref := oracleValueUSDC(pool, asset, v)
-		res, err := a.dex.SwapToUSDC(kp, asset, v, ref)
+		now, err := dex.TokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address())
 		if err != nil {
 			continue
 		}
-		total += res.OutputAmount
+		gained := now - before[asset]
+		if gained <= 0 {
+			continue
+		}
+		ref := oracleValueUSDC(pool, asset, gained)
+		if _, err := a.dex.SwapToUSDC(kp, asset, gained, ref); err != nil {
+			continue
+		}
 	}
-	return total
 }
 
 // priorityFromHF maps a health factor to a task priority: the more underwater,
@@ -435,3 +485,8 @@ func (a *Adapter) underlyingBid(pool *core.PoolState, auction *core.Auction) int
 	}
 	return total
 }
+
+// logAuction is a hook for auction lifecycle visibility; the keeper's logger
+// lives in package main, so this stays a no-op seam the adapter can call
+// without importing it.
+var logAuction = func(msg, pool, user string, pct int, startBlock int64) {}
