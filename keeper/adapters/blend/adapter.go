@@ -1,7 +1,7 @@
 // Package blend adapts the Blend liquidation protocol to the generic
 // adapters.ProtocolAdapter interface. It wraps the lower-level
 // github.com/nectar-network/keeper/blend package (pool/auction/position logic)
-// and the dex package (collateral→USDC conversion), turning underwater
+// and the dex package (token conversion, both directions), turning underwater
 // positions into Tasks and filling their auctions in Execute. The underlying
 // blend package is left intact (and fully tested); this is a thin translation
 // layer, which is what gets extracted into the keeper-sdk in Phase 4.
@@ -10,6 +10,8 @@ package blend
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
 	"sort"
 	"time"
 
@@ -28,34 +30,72 @@ type Config struct {
 	HorizonURL string
 	Passphrase string
 	UsdcAddr   string
+	// SlippageBps bounds how far above the oracle-implied value the keeper
+	// will pay when acquiring a non-USDC debt asset before a fill (the dex
+	// client applies the same tolerance on exits). 100 = 1%.
+	SlippageBps int
 	// Monitor makes the adapter observe-only: it scans the pool, computes
 	// health factors and publishes a ScanReport, but never emits tasks (so no
 	// capital can move toward this pool). Used for pools whose settlement
 	// asset has no verified conversion route to the vault's USDC.
 	Monitor bool
 	// PoolUsdc is the pool's own USDC contract when it differs from the
-	// vault's UsdcAddr. Fills then require a DEX conversion vault-USDC ->
-	// pool-USDC (entry) under a par-anchored slippage guard; an off-parity
-	// route blocks execution BEFORE any vault draw. Empty means the pool
-	// settles in the vault's USDC directly.
+	// vault's UsdcAddr. Such pools are monitor-only (FACTS.md "USDC asset
+	// bridging"): a fill would strand pre-converted capital.
 	PoolUsdc string
 	// EventLookback is how many ledgers of pool events to scan for position
 	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
 	EventLookback int64
 }
 
+// drawBufferBps pads every debt leg over the snapshot-time underlying amount
+// (100 = 1%). It covers d_rate interest accrual between the auction read and
+// the landed fill plus fixed-point truncation, so the atomic repay always
+// extinguishes the assumed dTokens — a leg that comes up short leaves dust
+// debt, and the submit's final health check then reverts the whole fill. The
+// pool refunds everything above the true debt, so the buffer's only cost is a
+// slightly larger draw.
+const drawBufferBps = 100
+
+// dexClient is the slice of dex.SwapClient the adapter uses; an interface so
+// failure-injection tests can fake the DEX without an RPC server.
+type dexClient interface {
+	Swap(kp *keypair.Full, from, to string, amount, refValueOut int64) (*dex.SwapResult, error)
+	SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*dex.SwapResult, error)
+	QuoteIn(from, to string, amountOut int64) (int64, error)
+	ConvertExactOut(kp *keypair.Full, from, to string, amountOut, maxIn int64) (*dex.SwapResult, error)
+	QuoteConvertIn(from, to string, amountOut int64) (int64, error)
+}
+
+// Seams for the blend/dex package functions Execute orchestrates, injectable
+// by failure-injection tests (same pattern as the log hooks below). Production
+// never reassigns them.
+var (
+	coreGetAuction    = core.GetAuction
+	coreFindLiqPct    = core.FindLiquidationPercent
+	coreCreateAuction = core.CreateAuction
+	coreFillAndUnwind = core.FillAndUnwind
+	tokenBalance      = dex.TokenBalance
+	latestLedger      = func(rpc *soroban.Client) (int64, error) { return rpc.LatestLedger() }
+)
+
 // Adapter implements adapters.ProtocolAdapter for one Blend pool. Run several
 // instances to monitor several pools — Name() is unique per pool.
 type Adapter struct {
 	cfg      Config
-	dex      *dex.SwapClient
+	dex      dexClient
 	lastScan *adapters.ScanReport
 }
 
-// NewAdapter builds a Blend adapter. dexc may be nil to disable collateral
-// swapping (proceeds are then only the USDC directly present in the lot).
+// NewAdapter builds a Blend adapter. dexc may be nil to disable all token
+// conversion: proceeds are then only the USDC directly produced by the unwind,
+// and auctions with non-USDC debt legs are skipped.
 func NewAdapter(cfg Config, dexc *dex.SwapClient) *Adapter {
-	return &Adapter{cfg: cfg, dex: dexc}
+	a := &Adapter{cfg: cfg}
+	if dexc != nil { // avoid a typed-nil interface that would pass != nil checks
+		a.dex = dexc
+	}
+	return a
 }
 
 // Name returns the protocol identifier, unique per monitored pool.
@@ -209,11 +249,105 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	return tasks, nil
 }
 
-// Execute creates and fills the user-liquidation auction for task.Target, swaps
-// the seized collateral to USDC, and returns the real proceeds via the vault.
-// Proceeds are measured, never synthesized; capital is only returned when it was
-// actually drawn (the vault's drawn==0 path would otherwise book output as
-// cost-free profit).
+// debtLeg is one bid asset's underlying owed: debt is the ceil'd dToken ×
+// d_rate amount, need pads it by drawBufferBps.
+type debtLeg struct {
+	asset string
+	debt  int64
+	need  int64
+}
+
+// debtNeeds converts an auction's bid map (dToken amounts at 100% scale) into
+// underlying-token repay requirements per asset, rounded UP and padded by
+// drawBufferBps. Erroring (rather than skipping a leg) is deliberate: a bid
+// leg we cannot price or convert must abort the whole task, or the atomic
+// repay would come up short and revert the fill.
+func debtNeeds(pool *core.PoolState, auction *core.Auction) ([]debtLeg, error) {
+	legs := make([]debtLeg, 0, len(auction.Bid))
+	for asset, amt := range auction.Bid {
+		if amt == nil || amt.Sign() <= 0 {
+			continue
+		}
+		r, ok := pool.Reserves[asset]
+		if !ok {
+			return nil, fmt.Errorf("bid asset %s not in pool reserves", shortAddr(asset))
+		}
+		rate := r.DRate
+		if auction.Type == core.AuctionInterest {
+			rate = 1.0 // interest bids are backstop LP, not dTokens
+		}
+		if rate <= 0 {
+			return nil, fmt.Errorf("bid asset %s has no d_rate", shortAddr(asset))
+		}
+		f := new(big.Float).SetInt(amt)
+		f.Mul(f, big.NewFloat(rate))
+		i, acc := f.Int(nil)
+		if acc == big.Below { // truncated down — round the owed amount UP
+			i.Add(i, big.NewInt(1))
+		}
+		if !i.IsInt64() {
+			return nil, fmt.Errorf("bid asset %s underlying debt exceeds int64", shortAddr(asset))
+		}
+		debt := i.Int64()
+		if debt <= 0 {
+			continue
+		}
+		legs = append(legs, debtLeg{asset: asset, debt: debt, need: padBps(debt, drawBufferBps)})
+	}
+	if len(legs) == 0 {
+		return nil, fmt.Errorf("auction has no priceable bid legs")
+	}
+	sort.Slice(legs, func(i, j int) bool { return legs[i].asset < legs[j].asset })
+	return legs, nil
+}
+
+// padBps returns v grown by bps basis points, rounding up, saturating at
+// MaxInt64 (a saturated draw then fails at the vault instead of wrapping).
+func padBps(v int64, bps int) int64 {
+	if v <= 0 || bps <= 0 {
+		return v
+	}
+	p := new(big.Int).Mul(big.NewInt(v), big.NewInt(int64(bps)))
+	p.Add(p, big.NewInt(9999))
+	p.Div(p, big.NewInt(10000))
+	p.Add(p, big.NewInt(v))
+	if !p.IsInt64() {
+		return math.MaxInt64
+	}
+	return p.Int64()
+}
+
+// acqPlan is one pre-fill acquisition: buy need of asset for at most maxIn
+// USDC so the atomic submit can repay a non-USDC debt leg.
+type acqPlan struct {
+	asset string
+	debt  int64
+	need  int64
+	maxIn int64
+}
+
+// Execute runs the full verified liquidation sequence for task.Target:
+//
+//  1. create the user-liquidation auction if absent, sized by contract
+//     simulation (FindLiquidationPercent)
+//  2. wait until the verified two-phase price curve makes lot/bid ≥ MinProfit
+//     (re-entered every keeper cycle until profitable — no capital is drawn
+//     while waiting)
+//  3. draw exactly the capital the fill needs: each settle-asset debt leg in
+//     underlying + drawBufferBps, plus the oracle-capped router quote for
+//     every non-USDC debt leg (routes verified BEFORE the draw)
+//  4. acquire non-USDC debt assets via exact-out swaps
+//  5. ONE atomic submit: fill 100% + repay every leg + withdraw all seized
+//     collateral (blend.FillAndUnwind)
+//  6. swap seized collateral and acquisition leftovers back to USDC
+//  7. return measured proceeds (keeper's USDC delta over its own pre-draw
+//     float) to the vault
+//
+// Failure discipline: any deterministic failure after the draw rolls back —
+// re-sell what was acquired, return every USDC above the float. An AMBIGUOUS
+// fill (tx may still land) returns nothing this cycle; the next cycle's
+// stale-draw recovery reconciles from chain state, which a double-spending
+// rollback here would corrupt.
 func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.Task, vc adapters.VaultClient) (*adapters.Result, error) {
 	start := time.Now()
 	td, ok := task.Data.(taskData)
@@ -230,7 +364,7 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	// An auction for this user may already be running — ours from an earlier
 	// cycle, or another keeper's. Creating unconditionally would just panic
 	// AuctionInProgress (1212), so look first and only create when absent.
-	auction, err := core.GetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
+	auction, err := coreGetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
 	if err != nil {
 		return nil, fmt.Errorf("get auction: %w", err)
 	}
@@ -239,15 +373,15 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		// [1.03, 1.15] band, so the percentage is chosen by simulating against
 		// the pool rather than hardcoded (a fixed 50% fails with
 		// InvalidLiqTooSmall on most positions).
-		pct, perr := core.FindLiquidationPercent(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user, td.bidAssets, td.lotAssets)
+		pct, perr := coreFindLiqPct(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user, td.bidAssets, td.lotAssets)
 		if perr != nil {
 			return &adapters.Result{Note: fmt.Sprintf("no acceptable liquidation size: %v", perr)}, nil
 		}
-		if err := core.CreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, pct,
+		if err := coreCreateAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user, pct,
 			td.bidAssets, td.lotAssets); err != nil {
 			return nil, fmt.Errorf("create auction: %w", err)
 		}
-		auction, err = core.GetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
+		auction, err = coreGetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
 		if err != nil {
 			return nil, fmt.Errorf("get auction: %w", err)
 		}
@@ -257,42 +391,13 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		logAuction("auction created", a.cfg.PoolAddr, user, pct, auction.StartBlock)
 	}
 
-	ledger, err := rpc.LatestLedger()
+	ledger, err := latestLedger(rpc)
 	if err != nil {
 		return nil, fmt.Errorf("latest ledger: %w", err)
 	}
 	ratio := core.Profitability(*auction, pool, ledger)
 	if ratio < a.cfg.MinProfit {
 		return &adapters.Result{Block: ledger, Note: fmt.Sprintf("not profitable (%.4f < %.4f)", ratio, a.cfg.MinProfit)}, nil
-	}
-
-	// The draw is sized by summing raw bid amounts, which is only valid when
-	// the debt being settled is a single known USDC. The pool's settle asset
-	// is its own USDC when configured (conversion pools), the vault's
-	// otherwise. Refuse mixed/other bids rather than drawing a number of USDC
-	// stroops that matches a different asset.
-	settleAsset := a.cfg.UsdcAddr
-	if a.cfg.PoolUsdc != "" {
-		settleAsset = a.cfg.PoolUsdc
-	}
-	if settleAsset != "" {
-		for asset := range auction.Bid {
-			if asset != settleAsset {
-				return &adapters.Result{Block: ledger,
-					Note: fmt.Sprintf("unsupported non-USDC bid asset %s — skipping", asset)}, nil
-			}
-		}
-	}
-
-	bidAmt := int64(0)
-	for _, amt := range auction.Bid {
-		if amt == nil {
-			continue
-		}
-		if !amt.IsInt64() {
-			return &adapters.Result{Block: ledger, Note: "bid amount exceeds int64 range — skipping"}, nil
-		}
-		bidAmt += amt.Int64()
 	}
 
 	// Cross-USDC pools never reach here: GetTasks emits no tasks for them
@@ -302,12 +407,58 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		return &adapters.Result{Block: ledger,
 			Note: "pool settles a different USDC — execution disabled (see FACTS.md 'USDC asset bridging')"}, nil
 	}
+	settleAsset := a.cfg.UsdcAddr
+	if settleAsset == "" {
+		return &adapters.Result{Block: ledger, Note: "no USDC/settle asset configured — cannot size a draw"}, nil
+	}
+	// The vault draws/returns are 7-decimal stroops; a settle reserve with
+	// different decimals would make every amount below unit-wrong.
+	if r, ok := pool.Reserves[settleAsset]; !ok || r.Decimals != 7 {
+		return &adapters.Result{Block: ledger, Note: "settle asset missing from pool or not 7-decimal — skipping"}, nil
+	}
 
-	// Size the draw in UNDERLYING tokens: bid maps hold dToken amounts for
-	// user-liquidation and bad-debt auctions, and dTokens are worth d_rate
-	// underlying each (>1 in any pool with accrued interest). Drawing the raw
-	// dToken number would under-fund the assumed debt.
-	drawAmt := a.underlyingBid(pool, auction)
+	legs, err := debtNeeds(pool, auction)
+	if err != nil {
+		return &adapters.Result{Block: ledger, Note: fmt.Sprintf("cannot size debt legs: %v", err)}, nil
+	}
+
+	// Draw estimator: settle-asset legs cost their padded underlying amount
+	// 1:1. Every non-USDC leg is route-checked NOW — required router input,
+	// capped at oracle value + SlippageBps — so a missing route or an
+	// off-oracle price skips the task BEFORE any capital moves. The bid map
+	// is at 100% scale, an upper bound on the assumed debt at any fill time
+	// (the bid modifier only shrinks it after t=200), so the draw always
+	// covers the fill; the pool and the exact-out swaps refund what goes
+	// unused and it all returns with the proceeds.
+	var drawAmt int64
+	var plans []acqPlan
+	for _, leg := range legs {
+		if leg.asset == settleAsset {
+			drawAmt += leg.need
+			continue
+		}
+		if a.dex == nil {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("debt leg in %s but no DEX configured — skipping", shortAddr(leg.asset))}, nil
+		}
+		requiredIn, qerr := a.dex.QuoteIn(settleAsset, leg.asset, leg.need)
+		if qerr != nil {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("no route to acquire debt asset %s: %v — skipping", shortAddr(leg.asset), qerr)}, nil
+		}
+		oracleCost := oracleValueUSDC(pool, leg.asset, leg.need)
+		if oracleCost <= 0 {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("debt asset %s unpriced by oracle — skipping", shortAddr(leg.asset))}, nil
+		}
+		maxIn := padBps(oracleCost, a.cfg.SlippageBps)
+		if requiredIn > maxIn {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("acquiring %s costs %d USDC > oracle cap %d — skipping", shortAddr(leg.asset), requiredIn, maxIn)}, nil
+		}
+		plans = append(plans, acqPlan{asset: leg.asset, debt: leg.debt, need: leg.need, maxIn: maxIn})
+		drawAmt += maxIn
+	}
 	if drawAmt <= 0 {
 		return &adapters.Result{Block: ledger, Note: "bid not priceable in underlying — skipping"}, nil
 	}
@@ -317,51 +468,116 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	// The keeper's own USDC before any capital moves. Everything it holds
 	// above this line at the end is what this operation produced — proceeds
 	// are measured against it, never inferred from auction amounts.
-	floatBefore, err := dex.TokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
+	floatBefore, err := tokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
 	if err != nil {
 		return &adapters.Result{Block: ledger, Note: fmt.Sprintf("pre-draw balance read failed: %v", err)}, nil
 	}
 
-	drawStart := time.Now()
-	if err := vc.Draw(drawAmt); err != nil {
-		return nil, fmt.Errorf("vault draw: %w", err)
+	// Baseline balances for every non-USDC asset this operation may touch —
+	// seized lot assets and acquired debt assets — taken BEFORE any capital
+	// moves. Swaps later act only on deltas above these baselines (critical
+	// for native XLM, where the keeper's fee balance must never be swapped
+	// away). An unreadable baseline aborts pre-draw: a zero default would
+	// turn the keeper's whole pre-held balance into "seized" funds.
+	touched := make([]string, 0, len(auction.Lot)+len(plans))
+	seen := map[string]bool{}
+	for asset := range auction.Lot {
+		if asset != a.cfg.UsdcAddr && !seen[asset] {
+			touched = append(touched, asset)
+			seen[asset] = true
+		}
 	}
-
-	// Seized collateral balances before the submit, so the swap only touches
-	// what the liquidation actually produced (critical for native XLM, where
-	// the keeper's fee balance must not be swapped away).
+	for _, p := range plans {
+		if !seen[p.asset] {
+			touched = append(touched, p.asset)
+			seen[p.asset] = true
+		}
+	}
+	sort.Strings(touched) // deterministic snapshot/sweep order
+	baseline := make(map[string]int64, len(touched))
+	for _, asset := range touched {
+		bal, berr := tokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address())
+		if berr != nil {
+			return &adapters.Result{Block: ledger,
+				Note: fmt.Sprintf("baseline balance read failed for %s: %v — skipping", shortAddr(asset), berr)}, nil
+		}
+		baseline[asset] = bal
+	}
 	lotAssets := make([]string, 0, len(auction.Lot))
 	for asset := range auction.Lot {
 		lotAssets = append(lotAssets, asset)
 	}
 	sort.Strings(lotAssets) // deterministic request order
-	before := make(map[string]int64, len(lotAssets))
-	for _, asset := range lotAssets {
-		if bal, err := dex.TokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address()); err == nil {
-			before[asset] = bal
-		}
+
+	drawStart := time.Now()
+	if err := vc.Draw(drawAmt); err != nil {
+		// Nothing was acquired yet. If the draw itself is ambiguous, the next
+		// cycle's stale-draw recovery reconciles against get_keeper_draw.
+		return nil, fmt.Errorf("vault draw: %w", err)
 	}
 
-	// Fill + repay + withdraw in one atomic submit.
-	fillTx, fillErr := core.FillAndUnwind(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr,
-		user, core.FullFillPct, settleAsset, drawAmt, lotAssets)
+	// Acquire every non-USDC debt leg. From here on, any deterministic
+	// failure must put the vault back together: re-sell measured acquisitions
+	// and return every USDC above the keeper's own float.
+	repays := make([]core.RepayLeg, 0, len(legs))
+	for _, leg := range legs {
+		if leg.asset == settleAsset {
+			repays = append(repays, core.RepayLeg{Asset: settleAsset, Amount: leg.need})
+		}
+	}
+	for _, p := range plans {
+		swapRes, serr := a.dex.ConvertExactOut(kp, settleAsset, p.asset, p.need, p.maxIn)
+		if serr != nil {
+			a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
+				fmt.Sprintf("debt acquisition %s failed: %v", shortAddr(p.asset), serr))
+			return res, nil
+		}
+		if swapRes.OutputAmount < p.debt {
+			a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
+				fmt.Sprintf("acquired %d of %s < debt %d", swapRes.OutputAmount, shortAddr(p.asset), p.debt))
+			return res, nil
+		}
+		// Repay everything acquired: the pool refunds the excess over the
+		// true debt, and the refund is swept back to USDC below.
+		repays = append(repays, core.RepayLeg{Asset: p.asset, Amount: swapRes.OutputAmount})
+	}
+
+	// Fill + repay every leg + withdraw all collateral in one atomic submit.
+	fillTx, fillErr := coreFillAndUnwind(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr,
+		user, core.FullFillPct, repays, lotAssets)
+	var failNote string
 	switch {
 	case fillErr == nil:
 		res.Success = true
 		res.TxHash = fillTx
 		res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
-		a.swapSeized(kp, rpc, pool, lotAssets, before)
+		a.sweepToUSDC(kp, rpc, pool, touched, baseline)
 	case errors.Is(fillErr, core.ErrAlreadyFilled):
-		// Another keeper won. Nothing was spent — the draw is still in hand.
-		res.Note = "already filled by another keeper"
+		// Another keeper consumed the auction — or our own earlier ambiguous
+		// submit actually landed and the retry found the auction gone. Either
+		// way the truth is in the balances: sweep every touched asset's delta
+		// and return the measured USDC.
+		failNote = "auction no longer fillable (raced, or an earlier ambiguous submit landed)"
+		a.sweepToUSDC(kp, rpc, pool, touched, baseline)
+	case soroban.IsTxStatusUnknown(fillErr):
+		// The submit may still land. Selling acquired assets or returning
+		// USDC now could double-move funds the landed fill will also move.
+		// Hold everything; the next cycle's stale-draw recovery re-reads
+		// chain state and finishes the unwind idempotently.
+		res.Note = fmt.Sprintf("fill outcome UNKNOWN (tx may land): %v — holding funds, next cycle reconciles", fillErr)
+		res.Latency = time.Since(start)
+		return res, nil
 	default:
-		return nil, fmt.Errorf("fill auction: %w", fillErr)
+		// Deterministic failure — the fill did not happen. Return the draw.
+		a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
+			fmt.Sprintf("fill failed: %v", fillErr))
+		return res, nil
 	}
 
 	// Measured proceeds: whatever USDC the keeper now holds above its own
 	// pre-draw float. Covers the drawn capital that came back plus realized
 	// profit, and stays honest when a swap failed (collateral still held).
-	usdcNow, balErr := dex.TokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
+	usdcNow, balErr := tokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
 	if balErr != nil {
 		res.Note = fmt.Sprintf("post-fill balance read failed, proceeds unknown: %v", balErr)
 	} else {
@@ -387,8 +603,47 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 			res.Note = fmt.Sprintf("return proceeds failed (capital outstanding): %v", err)
 		}
 	}
+	if failNote != "" {
+		if res.Note != "" {
+			res.Note = failNote + "; " + res.Note
+		} else {
+			res.Note = fmt.Sprintf("%s; returned %d of %d drawn", failNote, res.Proceeds, drawAmt)
+		}
+	}
 	res.Latency = time.Since(start)
 	return res, nil
+}
+
+// rollback is the deterministic-failure recovery path after a draw: re-sell
+// whatever the acquisition swaps actually delivered (measured deltas over the
+// pre-draw baseline), then return every USDC above the keeper's own float to
+// the vault. Sets res.Note with what happened; anything unrecoverable stays
+// with the keeper and the next cycle's stale-draw recovery keeps trying.
+func (a *Adapter) rollback(rpc *soroban.Client, kp *keypair.Full, vc adapters.VaultClient, pool *core.PoolState,
+	res *adapters.Result, floatBefore int64, baseline map[string]int64, plans []acqPlan, why string) {
+	acqAssets := make([]string, 0, len(plans))
+	for _, p := range plans {
+		acqAssets = append(acqAssets, p.asset)
+	}
+	a.sweepToUSDC(kp, rpc, pool, acqAssets, baseline)
+
+	usdcNow, err := tokenBalance(rpc, a.cfg.Passphrase, a.cfg.UsdcAddr, kp.Address())
+	if err != nil {
+		res.Note = fmt.Sprintf("%s; rollback balance read failed: %v — draw outstanding, next cycle recovers", why, err)
+		return
+	}
+	returnable := usdcNow - floatBefore
+	if returnable <= 0 {
+		res.Note = fmt.Sprintf("%s; nothing returnable above keeper float — draw outstanding, next cycle recovers", why)
+		return
+	}
+	if err := vc.ReturnProceeds(returnable, 0); err != nil {
+		res.Note = fmt.Sprintf("%s; rollback return failed: %v — draw outstanding, next cycle recovers", why, err)
+		return
+	}
+	res.Proceeds = returnable
+	shortfall := res.Drew - returnable
+	res.Note = fmt.Sprintf("%s; rolled back: returned %d of %d drawn (shortfall %d)", why, returnable, res.Drew, shortfall)
 }
 
 // EstimateCapital is best-effort: the bid is only known after the auction is
@@ -397,34 +652,47 @@ func (a *Adapter) EstimateCapital(task adapters.Task) (int64, error) {
 	return 0, nil
 }
 
-// swapSeized converts collateral the liquidation actually delivered into
-// USDC. Amounts come from measured balance DELTAS (post-unwind minus the
-// pre-submit snapshot), never from auction lot figures — the keeper may hold
-// the same asset for other reasons, and for native XLM its fee balance must
-// not be swapped away. Assets whose swap fails are simply held; nothing is
-// booked that did not happen.
-func (a *Adapter) swapSeized(kp *keypair.Full, rpc *soroban.Client, pool *core.PoolState, assets []string, before map[string]int64) {
+// sweepToUSDC converts every listed asset's balance ABOVE its pre-draw
+// baseline into USDC. Amounts come from measured balance deltas, never from
+// auction figures — the keeper may hold the same asset for other reasons, and
+// for native XLM its fee balance must not be swapped away. Assets whose swap
+// fails are simply held (the next cycle's stale-draw recovery retries);
+// nothing is booked that did not happen.
+func (a *Adapter) sweepToUSDC(kp *keypair.Full, rpc *soroban.Client, pool *core.PoolState, assets []string, baseline map[string]int64) {
 	if a.dex == nil {
+		logSwap("no DEX configured — seized collateral held", "", 0, nil)
 		return
 	}
 	for _, asset := range assets {
 		if asset == a.cfg.UsdcAddr {
 			continue // already the settle asset; counted by the balance delta
 		}
-		now, err := dex.TokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address())
+		now, err := tokenBalance(rpc, a.cfg.Passphrase, asset, kp.Address())
 		if err != nil {
+			// Silently skipping here once cost a full post-mortem: with no
+			// swap attempted and no error surfaced, the keeper looked like it
+			// had simply chosen not to sell.
+			logSwap("post-fill balance read failed — collateral held", asset, 0, err)
 			continue
 		}
-		gained := now - before[asset]
+		gained := now - baseline[asset]
 		if gained <= 0 {
+			logSwap("no measurable collateral gain — nothing to swap", asset, gained, nil)
 			continue
 		}
 		ref := oracleValueUSDC(pool, asset, gained)
-		if _, err := a.dex.SwapToUSDC(kp, asset, gained, ref); err != nil {
+		swapRes, err := a.dex.SwapToUSDC(kp, asset, gained, ref)
+		if err != nil {
+			logSwap("collateral swap refused — holding asset", asset, gained, err)
 			continue
 		}
+		logSwap("collateral swapped to USDC", asset, swapRes.OutputAmount, nil)
 	}
 }
+
+// logSwap reports collateral-conversion outcomes. Package main installs a real
+// logger; the default keeps the adapter importable without it.
+var logSwap = func(msg, asset string, amount int64, err error) {}
 
 // priorityFromHF maps a health factor to a task priority: the more underwater,
 // the more urgent.
@@ -457,36 +725,19 @@ func oracleValueUSDC(pool *core.PoolState, asset string, amt int64) int64 {
 	return int64(whole * r.OraclePrice * 1e7)
 }
 
-// underlyingBid totals an auction's bid leg in 7-decimal USDC stroops using
-// each reserve's rate and decimals. Bid maps hold dToken amounts for
-// user-liquidation and bad-debt auctions (docs/FACTS.md "Auction asset
-// flows"), so the raw number understates the debt whenever d_rate > 1.
-// Returns 0 if any bid asset is missing from the pool or unpriced — an
-// unpriceable bid must never be turned into a draw.
-func (a *Adapter) underlyingBid(pool *core.PoolState, auction *core.Auction) int64 {
-	var total int64
-	for asset, amt := range auction.Bid {
-		if amt == nil || !amt.IsInt64() {
-			return 0
-		}
-		r, ok := pool.Reserves[asset]
-		if !ok || r.OraclePrice <= 0 {
-			return 0
-		}
-		rate := r.DRate
-		if auction.Type == core.AuctionInterest {
-			rate = 1.0 // interest bids are backstop LP, not dTokens
-		}
-		if rate <= 0 {
-			return 0
-		}
-		whole := float64(amt.Int64()) / r.TokenScalar() * rate
-		total += int64(whole * 1e7)
-	}
-	return total
-}
-
 // logAuction is a hook for auction lifecycle visibility; the keeper's logger
 // lives in package main, so this stays a no-op seam the adapter can call
 // without importing it.
 var logAuction = func(msg, pool, user string, pct int, startBlock int64) {}
+
+// SetLoggers installs the keeper's logger for auction and swap events. Called
+// once at startup; adapters are constructed before this, so the hooks default
+// to no-ops rather than nil checks at every call site.
+func SetLoggers(auctionFn func(msg, pool, user string, pct int, startBlock int64), swapFn func(msg, asset string, amount int64, err error)) {
+	if auctionFn != nil {
+		logAuction = auctionFn
+	}
+	if swapFn != nil {
+		logSwap = swapFn
+	}
+}

@@ -222,6 +222,7 @@ func main() {
 			PoolAddr:      pc.Addr,
 			Monitor:       pc.Monitor,
 			PoolUsdc:      pc.PoolUsdc,
+			SlippageBps:   cfg.SlippageBps,
 			MinProfit:     cfg.MinProfit,
 			HorizonURL:    cfg.HorizonURL,
 			Passphrase:    cfg.Passphrase,
@@ -239,6 +240,21 @@ func main() {
 		}))
 	}
 	logInfo("adapters registered", "count", len(k.protocols))
+
+	// Install adapter log hooks so auction/swap outcomes reach the keeper log
+	// instead of vanishing inside the adapter.
+	blendadapter.SetLoggers(
+		func(msg, pool, user string, pct int, startBlock int64) {
+			logInfo(msg, "pool", short(pool), "user", short(user), "percent", pct, "start_block", startBlock)
+		},
+		func(msg, asset string, amount int64, err error) {
+			if err != nil {
+				logWarn(msg, "asset", short(asset), "amount", amount, "err", err)
+				return
+			}
+			logInfo(msg, "asset", short(asset), "amount", amount)
+		},
+	)
 
 	initFaucet(rpc, cfg)
 
