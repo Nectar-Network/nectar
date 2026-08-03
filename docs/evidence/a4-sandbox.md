@@ -108,6 +108,29 @@ state: XLM=$0.42, borrower HF ≈ 1.50, keeper sees both pools.
    follows the cursor until the RPC's latest ledger. After the fix, TestnetV2
    discovery went from 1 to 11 live positions in the same window.
 
+## Post-review re-verification (after the 15 review fixes)
+
+The fixes touched HF math, position discovery, and task emission, so the
+detection was re-run end-to-end on the same live pools (price crashed to
+$0.15 again, then restored — restore tx `f1f65047…`):
+
+```
+10:28:46 INFO pool scan pool=CCEB..4HGF mode=monitor status=0 reserves=4 oracle_decimals=7 positions=7
+10:28:46 WARN pool scan note pool=CCEB..4HGF note=cross-USDC pool: monitored only, execution disabled
+         (FACTS.md 'USDC asset bridging'); 1-USDC route quote: conversion route off parity:
+         need 10661879 of vault USDC for 10000000 of pool USDC (par bound 10100000)
+10:28:51 INFO pool scan pool=CBUB..CK3V mode=monitor status=0 reserves=2 oracle_decimals=7 positions=2
+10:28:51 INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+10:28:51 INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.5344
+```
+
+Same HF (0.5344) for the sandbox borrower, and the cross-USDC pool now states
+its monitor-only status with a live measurement of why the route is unusable
+(1.066 vault USDC required per 1.0 pool USDC, against a 1.01 par bound). The
+TestnetV2 position count differs from the earlier run (7 vs 11) because
+unpriceable positions are now excluded from the HF list instead of being
+assigned an invented health factor.
+
 Result: **PASS** — Nectar Sandbox deployed with a real backstop-funded Active
 pool, real Circle-USDC/XLM reserves, our own oracle; a genuine borrower goes
 underwater on demand and the multi-pool keeper detects it (HF < 1) alongside
