@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, type CSSProperties } from "react";
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import {
   formatUSDC,
   formatDuration,
@@ -84,6 +84,12 @@ export default function VaultApp() {
   const [tab, setTab] = useState<Tab>("deposit");
   const [amount, setAmount] = useState("");
   const [wallet, setWallet] = useState<WalletState | null>(null);
+  // Mirrors wallet.address for async guards: an in-flight Horizon read
+  // resolving after a wallet switch must not write into the new wallet.
+  const walletAddrRef = useRef<string | null>(null);
+  useEffect(() => {
+    walletAddrRef.current = wallet?.address ?? null;
+  }, [wallet?.address]);
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
@@ -145,23 +151,34 @@ export default function VaultApp() {
   // Wallet funding status: trustline + faucet availability. When the trustline
   // is live this also refreshes the wallet's displayed USDC balance straight
   // from Horizon — no wallet-modal re-connect needed.
+  // A slow Horizon read for a previously-connected wallet must never land in
+  // the state of the wallet connected after it, so every response is checked
+  // against the address that is current when it resolves.
   const refreshFunding = useCallback(async () => {
-    if (!wallet?.address) return;
+    const addr = wallet?.address;
+    if (!addr) return;
     const [tl, info] = await Promise.all([
-      getUsdcTrustline(wallet.address).catch(() => null),
+      getUsdcTrustline(addr).catch(() => null),
       fetchFaucetInfo(),
     ]);
+    if (walletAddrRef.current !== addr) return; // stale response — discard
     setTrustline(tl);
     setFaucetInfo(info);
     if (tl?.status === "ok") {
       const bal = parseFloat(tl.balance).toFixed(2);
-      setWallet((w) => (w ? { ...w, usdcBalance: bal } : w));
+      setWallet((w) => (w && w.address === addr ? { ...w, usdcBalance: bal } : w));
     }
   }, [wallet?.address]);
 
+  // Poll the funding state so USDC that arrives outside this page (Circle
+  // faucet, a transfer from a teammate) un-gates the deposit form without a
+  // reconnect, and so a trustline added in another tab is picked up.
   useEffect(() => {
     refreshFunding();
-  }, [refreshFunding]);
+    if (!wallet?.address) return;
+    const id = setInterval(refreshFunding, 20000);
+    return () => clearInterval(id);
+  }, [refreshFunding, wallet?.address]);
 
   // Read registry minStake once if registry is configured.
   useEffect(() => {

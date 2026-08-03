@@ -1,6 +1,7 @@
 package blend
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -92,8 +93,10 @@ func TestCalcHealthFactor_LiabilityFactor_AmplifiesDebt(t *testing.T) {
 	}
 }
 
-func TestCalcHealthFactor_UnknownAsset_Skipped(t *testing.T) {
-	// Position references reserve idx 99, which the pool doesn't have.
+func TestHealthFactor_UnknownAsset_IsAnError(t *testing.T) {
+	// Position references reserve idx 99, which the pool doesn't have. Silently
+	// skipping it would invent a health factor from partial data, so the
+	// position must be reported as unpriceable instead.
 	pool := &PoolState{Reserves: map[string]*Reserve{
 		"XLM": makeReserveAt(0, "XLM", 0.8, 1.0, 1.0),
 	}}
@@ -101,9 +104,46 @@ func TestCalcHealthFactor_UnknownAsset_Skipped(t *testing.T) {
 		Collateral:  map[uint32]*big.Int{0: big.NewInt(100_0000000), 99: big.NewInt(1_0000000)},
 		Liabilities: map[uint32]*big.Int{},
 	}
-	got := CalcHealthFactor(pos, pool)
-	if !math.IsInf(got, 1) {
-		t.Fatalf("expected +Inf with no debts, got %f", got)
+	if _, err := HealthFactor(pos, pool); !errors.Is(err, ErrUnpricedReserve) {
+		t.Fatalf("expected ErrUnpricedReserve, got %v", err)
+	}
+}
+
+func TestHealthFactor_UnpricedLiabilityIsNotInfinite(t *testing.T) {
+	// An unpriced DEBT reserve must not read as "no debt" (+Inf) — that would
+	// hide a real liquidation.
+	unpriced := makeReserveAt(1, "DEBT", 0.9, 1.0, 0)
+	pool := &PoolState{Reserves: map[string]*Reserve{
+		"XLM":  makeReserveAt(0, "XLM", 0.8, 1.0, 1.0),
+		"DEBT": unpriced,
+	}}
+	pos := Position{
+		Collateral:  map[uint32]*big.Int{0: big.NewInt(100_0000000)},
+		Liabilities: map[uint32]*big.Int{1: big.NewInt(50_0000000)},
+	}
+	if _, err := HealthFactor(pos, pool); !errors.Is(err, ErrUnpricedReserve) {
+		t.Fatalf("expected ErrUnpricedReserve for unpriced debt, got %v", err)
+	}
+}
+
+func TestHealthFactor_SupplyDoesNotBackDebt(t *testing.T) {
+	// Non-collateral `supply` must not inflate HF: only `collateral` counts,
+	// matching health_factor.rs (which reads positions.collateral alone).
+	pool := &PoolState{Reserves: map[string]*Reserve{
+		"XLM":  makeReserveAt(0, "XLM", 0.8, 1.0, 1.0),
+		"USDC": makeReserveAt(1, "USDC", 0.9, 1.0, 1.0),
+	}}
+	pos := Position{
+		Collateral:  map[uint32]*big.Int{0: big.NewInt(100_0000000)}, // 100 @ 0.8 = 80
+		Supply:      map[uint32]*big.Int{0: big.NewInt(900_0000000)}, // must be ignored
+		Liabilities: map[uint32]*big.Int{1: big.NewInt(50_0000000)},  // 50
+	}
+	hf, err := HealthFactor(pos, pool)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hf < 1.59 || hf > 1.61 {
+		t.Fatalf("HF: got %v want ~1.6 (supply must not count as collateral)", hf)
 	}
 }
 

@@ -163,16 +163,26 @@ func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error
 			params["pagination"] = map[string]any{"cursor": cursor, "limit": pageLimit}
 		}
 		if err := c.call("getEvents", params, &r); err != nil {
+			if len(all) > 0 {
+				// A transient failure mid-scan must not discard the pages we
+				// already have: returning them lets this cycle act on partial
+				// discovery instead of skipping the pool entirely.
+				return all, nil
+			}
 			return nil, err
 		}
 		all = append(all, r.Events...)
 		if r.Cursor == "" || len(all) >= maxEvents {
 			break
 		}
-		// The cursor's first field is a TOID (ledger << 32 | tx << 12 | op);
-		// once it reaches the latest ledger we are caught up.
-		if lg := cursorLedger(r.Cursor); lg > 0 && r.LatestLedger > 0 && lg >= r.LatestLedger {
-			break
+		// The cursor's first field is a TOID (ledger << 32 | tx << 12 | op).
+		// Once it reaches the latest ledger we are caught up — but only if the
+		// page was not full, since a full page means the segment still has
+		// events past this cursor.
+		if len(r.Events) < pageLimit {
+			if lg := cursorLedger(r.Cursor); lg > 0 && r.LatestLedger > 0 && lg >= r.LatestLedger {
+				break
+			}
 		}
 		cursor = r.Cursor
 	}

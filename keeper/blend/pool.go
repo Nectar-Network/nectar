@@ -3,6 +3,7 @@ package blend
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/stellar/go/xdr"
 
@@ -19,7 +20,14 @@ type PoolState struct {
 	OracleDecimals uint32              // oracle decimals() — price scaling
 	Status         uint32              // PoolConfig.status (0=Active .. 6=Setup)
 	MaxPositions   uint32              // PoolConfig.max_positions
+	Backstop       string              // backstop address, when discoverable
 }
+
+// maxPriceAge mirrors the pool's own staleness rule: load_price panics
+// InvalidPrice when price_data.timestamp + 24h < now, or price <= 0
+// (blend-contracts-v2 pool/src/pool/pool.rs:119-131 @ ba22b48). A price the
+// pool would reject must not drive our decisions either.
+const maxPriceAge = 24 * 60 * 60
 
 // Reserve carries one reserve's config, rates and oracle price.
 //
@@ -133,15 +141,20 @@ func LoadPool(rpc *soroban.Client, passphrase, poolAddr string) (*PoolState, err
 		if err != nil {
 			continue
 		}
-		res.OraclePrice = loadOraclePrice(rpc, passphrase, ps, assetAddr)
+		res.OraclePrice = loadOraclePrice(rpc, passphrase, ps, assetAddr, nowUnix())
 		ps.Reserves[assetAddr] = res
 	}
 	return ps, nil
 }
 
+// nowUnix is the clock used for oracle staleness checks; a variable so tests
+// can pin it.
+var nowUnix = func() int64 { return time.Now().Unix() }
+
 // loadOraclePrice fetches lastprice(Asset::Stellar(asset)) from the pool's
-// oracle and returns USD per whole token, or 0 when unavailable.
-func loadOraclePrice(rpc *soroban.Client, passphrase string, ps *PoolState, assetAddr string) float64 {
+// oracle and returns USD per whole token, or 0 when unavailable, non-positive,
+// or staler than the pool's own 24h window.
+func loadOraclePrice(rpc *soroban.Client, passphrase string, ps *PoolState, assetAddr string, now int64) float64 {
 	if ps.OracleAddr == "" || ps.OracleDecimals == 0 {
 		return 0
 	}
@@ -157,9 +170,12 @@ func loadOraclePrice(rpc *soroban.Client, passphrase string, ps *PoolState, asse
 	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
 		return 0
 	}
-	raw := parsePriceData(val)
-	if raw == nil {
-		return 0
+	raw, ts := parsePriceData(val)
+	if raw == nil || raw.Sign() <= 0 {
+		return 0 // absent or non-positive: the pool would panic InvalidPrice
+	}
+	if ts > 0 && now > 0 && ts+maxPriceAge < now {
+		return 0 // stale beyond the pool's 24h window
 	}
 	price, _ := new(big.Float).SetInt(raw).Float64()
 	div := 1.0
@@ -179,21 +195,35 @@ func oracleAssetArg(assetAddr string) (xdr.ScVal, error) {
 	return soroban.ScvVec(soroban.ScvSymbol("Stellar"), addrVal), nil
 }
 
-// parsePriceData decodes Option<PriceData { price: i128, timestamp: u64 }>.
-// Returns nil for None or malformed values.
-func parsePriceData(val xdr.ScVal) *big.Int {
+// parsePriceData decodes Option<PriceData { price: i128, timestamp: u64 }>,
+// returning the raw price and its timestamp (0 when absent).
+func parsePriceData(val xdr.ScVal) (*big.Int, int64) {
 	if val.Type == xdr.ScValTypeScvVoid {
-		return nil
+		return nil, 0
 	}
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {
-		return nil
+		return nil, 0
 	}
+	var price *big.Int
+	var ts int64
 	for _, e := range **val.Map {
-		if scSymbol(e.Key) == "price" {
-			return scI128(e.Val)
+		switch scSymbol(e.Key) {
+		case "price":
+			price = scI128(e.Val)
+		case "timestamp":
+			switch e.Val.Type {
+			case xdr.ScValTypeScvU64:
+				if e.Val.U64 != nil {
+					ts = int64(*e.Val.U64)
+				}
+			case xdr.ScValTypeScvU32:
+				if e.Val.U32 != nil {
+					ts = int64(*e.Val.U32)
+				}
+			}
 		}
 	}
-	return nil
+	return price, ts
 }
 
 // parsePoolConfig decodes PoolConfig { oracle, min_collateral, bstop_rate,

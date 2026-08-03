@@ -66,10 +66,13 @@ func SortByPriority(tasks []Task) {
 	})
 }
 
-// PositionHealth is one scanned position's health factor.
+// PositionHealth is one scanned position's health factor. Unpriced marks a
+// position whose HF could not be computed (a reserve it touches has no usable
+// oracle price); HF is meaningless then and the keeper must not act on it.
 type PositionHealth struct {
-	Address string
-	HF      float64
+	Address  string
+	HF       float64
+	Unpriced bool
 }
 
 // ScanReport summarizes an adapter's most recent GetTasks pass — everything

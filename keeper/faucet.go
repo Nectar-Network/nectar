@@ -22,6 +22,12 @@ import (
 // cannot issue — the treasury is refilled manually from faucet.circle.com.
 // Capacity is therefore treasuryBalance/amount claims; /api/faucet/info
 // reports the live balance so the UI never promises more than exists.
+//
+// OPERATIONAL REQUIREMENT: FAUCET_SECRET MUST be a dedicated account, never
+// the contract admin/deployer key. A public endpoint signing from the admin
+// account races the operator's own admin transactions for the same Horizon
+// sequence number, so an unauthenticated request flood can make admin
+// operations (pause, config changes) fail to submit.
 type Faucet struct {
 	rpc         *soroban.Client
 	kp          *keypair.Full
@@ -34,7 +40,33 @@ type Faucet struct {
 	cooldown    time.Duration
 
 	mu        sync.Mutex
-	lastClaim map[string]time.Time // recipient -> last successful claim
+	lastClaim map[string]time.Time // recipient -> reserved/settled claim time
+
+	// Cached treasury balance for /api/faucet/info, so an unauthenticated GET
+	// flood cannot turn into an upstream simulate flood on the RPC client the
+	// liquidation loop shares.
+	balMu     sync.Mutex
+	balCache  int64
+	balCached time.Time
+}
+
+const faucetBalanceTTL = 15 * time.Second
+
+// treasuryBalance returns the faucet treasury's USDC balance, cached briefly.
+// A read failure serves the last known value (0 before the first success).
+func (f *Faucet) treasuryBalance() int64 {
+	f.balMu.Lock()
+	defer f.balMu.Unlock()
+	if !f.balCached.IsZero() && time.Since(f.balCached) < faucetBalanceTTL {
+		return f.balCache
+	}
+	bal, err := dex.TokenBalance(f.rpc, f.passphrase, f.usdc, f.kp.Address())
+	if err != nil {
+		return f.balCache
+	}
+	f.balCache = bal
+	f.balCached = time.Now()
+	return bal
 }
 
 // faucet is nil when FAUCET_SECRET is unset (endpoints report disabled).
@@ -119,10 +151,7 @@ func handleFaucetInfo(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(faucetInfoResponse{Enabled: false})
 		return
 	}
-	bal, err := dex.TokenBalance(faucet.rpc, faucet.passphrase, faucet.usdc, faucet.kp.Address())
-	if err != nil {
-		bal = 0
-	}
+	bal := faucet.treasuryBalance()
 	_ = json.NewEncoder(w).Encode(faucetInfoResponse{
 		Enabled:      true,
 		Amount:       fmt.Sprintf("%d", faucet.amount),
@@ -158,14 +187,23 @@ func handleFaucetClaim(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Address string `json:"address"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || !strkey.IsValidEd25519PublicKey(req.Address) {
+	// Cap the body: this is the only unauthenticated POST on the daemon, and an
+	// unbounded decode lets one client stream the process out of memory.
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+	if err := dec.Decode(&req); err != nil || !strkey.IsValidEd25519PublicKey(req.Address) {
 		faucetError(w, http.StatusBadRequest, "bad_address", nil)
 		return
 	}
 	addr := req.Address
 
-	// Per-address cooldown. In-memory: resets on keeper restart, which is an
-	// accepted testnet trade-off; the treasury balance is the hard cap.
+	// Per-address cooldown, RESERVED before any slow work. Checking the map and
+	// only recording after the multi-second on-chain call would let concurrent
+	// requests for one address all pass the check and each get paid (treasury
+	// drain). The slot is claimed under the lock here and released again only
+	// if we establish that no payment can have been made.
+	//
+	// In-memory: resets on keeper restart, an accepted testnet trade-off; the
+	// treasury balance is the hard cap.
 	faucet.mu.Lock()
 	if last, ok := faucet.lastClaim[addr]; ok {
 		if wait := faucet.cooldown - time.Since(last); wait > 0 {
@@ -175,50 +213,67 @@ func handleFaucetClaim(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	faucet.lastClaim[addr] = time.Now()
 	faucet.mu.Unlock()
+
+	// releaseSlot undoes the reservation for pre-payment failures only.
+	releaseSlot := func() {
+		faucet.mu.Lock()
+		delete(faucet.lastClaim, addr)
+		faucet.mu.Unlock()
+	}
 
 	// The SAC transfer would fail without a recipient trustline; pre-check via
 	// Horizon for a precise error the UI can act on.
 	hasTrust, err := hasTrustline(faucet.horizonURL, addr, faucet.assetCode, faucet.assetIssuer)
 	if err != nil {
+		releaseSlot()
 		faucetError(w, http.StatusBadGateway, "horizon_unavailable", nil)
 		return
 	}
 	if !hasTrust {
+		releaseSlot()
 		faucetError(w, http.StatusConflict, "no_trustline", nil)
 		return
 	}
 
 	bal, err := dex.TokenBalance(faucet.rpc, faucet.passphrase, faucet.usdc, faucet.kp.Address())
 	if err != nil || bal < faucet.amount {
+		releaseSlot()
 		faucetError(w, http.StatusConflict, "insufficient_treasury", map[string]any{"treasuryBalance": bal})
 		return
 	}
 
 	fromVal, err := soroban.ScvAddress(faucet.kp.Address())
 	if err != nil {
+		releaseSlot()
 		faucetError(w, http.StatusInternalServerError, "payment_failed", nil)
 		return
 	}
 	toVal, err := soroban.ScvAddress(addr)
 	if err != nil {
+		releaseSlot()
 		faucetError(w, http.StatusBadRequest, "bad_address", nil)
 		return
 	}
 	// Deliberately NOT retried: re-broadcasting a payment after an ambiguous
-	// timeout could double-pay. A failed claim can simply be retried by the
-	// user (cooldown only records successes).
+	// timeout could double-pay.
 	tx, err := faucet.rpc.Invoke(faucet.horizonURL, faucet.kp, faucet.passphrase, faucet.usdc,
 		"transfer", fromVal, toVal, soroban.ScvI128(faucet.amount))
 	if err != nil {
+		// Only release the slot when the payment provably did NOT land. A
+		// post-send-ambiguous error (submitted, status unknown) keeps the
+		// reservation so a user retry cannot double-pay.
+		if soroban.IsTxStatusUnknown(err) {
+			logWarn("faucet payment ambiguous — cooldown kept to prevent double-pay", "to", short(addr), "err", err)
+			faucetError(w, http.StatusBadGateway, "payment_unconfirmed", nil)
+			return
+		}
+		releaseSlot()
 		logWarn("faucet payment failed", "to", short(addr), "err", err)
 		faucetError(w, http.StatusBadGateway, "payment_failed", nil)
 		return
 	}
-
-	faucet.mu.Lock()
-	faucet.lastClaim[addr] = time.Now()
-	faucet.mu.Unlock()
 
 	logInfo("faucet paid", "to", short(addr), "amount", faucet.amount, "tx", tx.Hash)
 	state.addEvent(fmt.Sprintf("faucet: paid %d.%07d USDC to %s", faucet.amount/1_0000000, faucet.amount%1_0000000, short(addr)))
@@ -249,10 +304,15 @@ func decodeScString(b64 string) (string, error) {
 	return "", fmt.Errorf("scval is not a string")
 }
 
+// horizonClient bounds the trustline pre-check. http.DefaultClient has no
+// timeout, so a hung Horizon would park a goroutine and socket per request on
+// an unauthenticated endpoint.
+var horizonClient = &http.Client{Timeout: 10 * time.Second}
+
 // hasTrustline reports whether the account holds a trustline for code:issuer.
 // A 404 (account not funded) is reported as no-trustline, not an error.
 func hasTrustline(horizonURL, account, code, issuer string) (bool, error) {
-	resp, err := http.Get(strings.TrimRight(horizonURL, "/") + "/accounts/" + account)
+	resp, err := horizonClient.Get(strings.TrimRight(horizonURL, "/") + "/accounts/" + account)
 	if err != nil {
 		return false, err
 	}

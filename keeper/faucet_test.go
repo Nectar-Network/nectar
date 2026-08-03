@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -163,5 +165,105 @@ func TestSacClassicAsset(t *testing.T) {
 	defer pureSrv.Close()
 	if _, _, err := sacClassicAsset(soroban.NewClient(pureSrv.URL), "pass", "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"); err == nil {
 		t.Fatal("pure Soroban token must be rejected")
+	}
+}
+
+// The cooldown slot must be RESERVED before the slow on-chain call, so
+// concurrent claims for one address cannot all pass the check and each get
+// paid (the treasury-drain race). One request is held inside the trustline
+// lookup — standing in for the multi-second payment — until every other
+// request has been answered; all of those must be refused with 429.
+func TestFaucetClaim_ConcurrentClaimsReserveSlot(t *testing.T) {
+	const n = 16
+	var answered int64 // requests that finished while one is held in-flight
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		deadline := time.Now().Add(5 * time.Second)
+		for atomic.LoadInt64(&answered) < n-1 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		_, _ = w.Write([]byte(`{"balances":[{"asset_type":"native"}]}`)) // no trustline -> 409
+	}))
+	defer srv.Close()
+
+	kp, _ := keypair.Random()
+	withFaucet(t, &Faucet{
+		kp:          kp,
+		horizonURL:  srv.URL,
+		assetCode:   "USDC",
+		assetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		cooldown:    time.Hour,
+		lastClaim:   map[string]time.Time{},
+	})
+
+	var wg sync.WaitGroup
+	var cooldowns int64
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/faucet",
+				strings.NewReader(`{"address":"`+faucetTestAddr+`"}`))
+			handleFaucetClaim(rec, req)
+			if rec.Code == http.StatusTooManyRequests {
+				atomic.AddInt64(&cooldowns, 1)
+			}
+			atomic.AddInt64(&answered, 1)
+		}()
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt64(&cooldowns); got != n-1 {
+		t.Fatalf("cooldown rejections: got %d want %d — concurrent claims for one address must not all pass the gate", got, n-1)
+	}
+}
+
+// A pre-payment failure must release the reservation so the user can retry.
+func TestFaucetClaim_ReleasesSlotOnPrePaymentFailure(t *testing.T) {
+	// Horizon reports the account has no USDC trustline -> 409, slot released.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"balances":[{"asset_type":"native"}]}`))
+	}))
+	defer srv.Close()
+
+	kp, _ := keypair.Random()
+	f := &Faucet{
+		kp:          kp,
+		horizonURL:  srv.URL,
+		assetCode:   "USDC",
+		assetIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		cooldown:    time.Hour,
+		lastClaim:   map[string]time.Time{},
+	}
+	withFaucet(t, f)
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/faucet",
+			strings.NewReader(`{"address":"`+faucetTestAddr+`"}`))
+		handleFaucetClaim(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("attempt %d: got %d want 409 (a released slot must not become a cooldown)", attempt, rec.Code)
+		}
+	}
+	f.mu.Lock()
+	_, held := f.lastClaim[faucetTestAddr]
+	f.mu.Unlock()
+	if held {
+		t.Fatal("slot must be released when no payment was made")
+	}
+}
+
+// An oversized body must be rejected, not buffered into memory.
+func TestFaucetClaim_RejectsOversizedBody(t *testing.T) {
+	kp, _ := keypair.Random()
+	withFaucet(t, &Faucet{kp: kp, cooldown: time.Hour, lastClaim: map[string]time.Time{}})
+	huge := `{"address":"` + strings.Repeat("A", 64*1024) + `"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/faucet", strings.NewReader(huge))
+	handleFaucetClaim(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("oversized body: got %d want 400", rec.Code)
 	}
 }

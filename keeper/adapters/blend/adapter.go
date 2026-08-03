@@ -126,21 +126,27 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 		report.Prices[asset] = r.OraclePrice
 	}
 
-	// Canary route check for pools settling a different USDC: quote a 1-USDC
-	// conversion. Off-parity (or no route/DEX) suppresses task emission this
-	// cycle — the pool is effectively monitor-only until the route heals, and
-	// the report says so explicitly.
-	convertible := a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr
-	if convertible && !a.cfg.Monitor {
-		if a.dex == nil {
-			report.Note = "pool settles different USDC and no DEX configured — not emitting tasks"
-			convertible = false
-		} else if _, err := a.dex.QuoteConvertIn(a.cfg.UsdcAddr, a.cfg.PoolUsdc, 1_0000000); err != nil {
-			report.Note = fmt.Sprintf("conversion route not viable (%v) — not emitting tasks", err)
-			convertible = false
+	// Pools that settle a different USDC than the vault are scanned but never
+	// executed. A DEX route between the two USDCs exists on testnet
+	// (docs/evidence/a2-route-checks.json) but routing vault capital through
+	// it is NOT safe with the current fill model: a user-liquidation fill
+	// transfers no tokens (the filler assumes dToken debt — docs/FACTS.md
+	// "Auction asset flows"), so pre-converted capital would sit stranded in
+	// the pool's USDC, and a failed fill or an ambiguous conversion send has
+	// no sound recovery path. The route quote is still reported each scan so
+	// the operator can see live parity.
+	crossUsdc := a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr
+	if crossUsdc {
+		report.Note = "cross-USDC pool: monitored only, execution disabled (FACTS.md 'USDC asset bridging')"
+		if a.dex != nil {
+			if _, err := a.dex.QuoteConvertIn(a.cfg.UsdcAddr, a.cfg.PoolUsdc, 1_0000000); err != nil {
+				report.Note += fmt.Sprintf("; 1-USDC route quote: %v", err)
+			} else {
+				report.Note += "; 1-USDC route quote within par bound"
+			}
 		}
 	}
-	suppressTasks := a.cfg.Monitor || (a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr && !convertible)
+	suppressTasks := a.cfg.Monitor || crossUsdc
 
 	indexToAsset := make(map[uint32]string, len(pool.Reserves))
 	for asset, r := range pool.Reserves {
@@ -150,11 +156,31 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	var tasks []adapters.Task
 	for i := range positions {
 		pos := &positions[i]
-		hf := core.CalcHealthFactor(*pos, pool)
+		hf, hfErr := core.HealthFactor(*pos, pool)
+		if hfErr != nil {
+			// Unpriceable position: report it, never act on it. Acting would
+			// mean creating an auction the pool itself would reject
+			// (InvalidPrice) off a health factor we effectively invented.
+			report.Positions = append(report.Positions, adapters.PositionHealth{Address: pos.Address, Unpriced: true})
+			continue
+		}
 		report.Positions = append(report.Positions, adapters.PositionHealth{Address: pos.Address, HF: hf})
 		if hf >= 1.0 || suppressTasks {
 			continue
 		}
+		// A position with debt but no collateral is not user-liquidatable:
+		// the lot would be empty (new_auction panics InvalidLot) and the
+		// protocol handles it as bad debt instead. This also keeps the
+		// BACKSTOP — which holds transferred bad debt and appears in
+		// bad-debt/interest auction event topics — out of the task list; the
+		// pool exposes no backstop getter to exclude it by address
+		// (docs/FACTS.md "Pool public read interface").
+		if len(pos.Collateral) == 0 {
+			continue
+		}
+		// Lot assets come from `collateral` ONLY: non-collateral `supply` is
+		// not auctionable and new_auction panics InvalidLot if it appears
+		// (user_liquidation_auction.rs:73-89 @ ba22b48).
 		var bidAssets, lotAssets []string
 		for idx := range pos.Liabilities {
 			if asset, ok := indexToAsset[idx]; ok {
@@ -165,6 +191,9 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 			if asset, ok := indexToAsset[idx]; ok {
 				lotAssets = append(lotAssets, asset)
 			}
+		}
+		if len(bidAssets) == 0 || len(lotAssets) == 0 {
+			continue // unmappable reserve indices — never guess an auction shape
 		}
 		tasks = append(tasks, adapters.Task{
 			Protocol: a.Name(),
@@ -247,45 +276,28 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		bidAmt += amt.Int64()
 	}
 
-	// Conversion pools: price the entry conversion BEFORE drawing anything.
-	// An off-parity or missing route aborts here with zero capital moved.
-	needConvert := a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr && bidAmt > 0
-	drawAmt := bidAmt
-	if needConvert {
-		if a.dex == nil {
-			return &adapters.Result{Block: ledger, Note: "pool settles different USDC and no DEX configured — skipping"}, nil
-		}
-		required, err := a.dex.QuoteConvertIn(a.cfg.UsdcAddr, a.cfg.PoolUsdc, bidAmt)
-		if err != nil {
-			return &adapters.Result{Block: ledger,
-				Note: fmt.Sprintf("entry conversion refused pre-draw: %v", err)}, nil
-		}
-		drawAmt = required
+	// Cross-USDC pools never reach here: GetTasks emits no tasks for them
+	// (see the conversion note in GetTasks). Belt-and-braces so a future
+	// caller cannot route capital through an unconverted settle asset.
+	if a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != a.cfg.UsdcAddr {
+		return &adapters.Result{Block: ledger,
+			Note: "pool settles a different USDC — execution disabled (see FACTS.md 'USDC asset bridging')"}, nil
+	}
+
+	// Size the draw in UNDERLYING tokens: bid maps hold dToken amounts for
+	// user-liquidation and bad-debt auctions, and dTokens are worth d_rate
+	// underlying each (>1 in any pool with accrued interest). Drawing the raw
+	// dToken number would under-fund the assumed debt.
+	drawAmt := a.underlyingBid(pool, auction)
+	if drawAmt <= 0 {
+		return &adapters.Result{Block: ledger, Note: "bid not priceable in underlying — skipping"}, nil
 	}
 
 	res := &adapters.Result{Block: ledger, Drew: drawAmt}
 
 	drawStart := time.Now()
-	if drawAmt > 0 {
-		if err := vc.Draw(drawAmt); err != nil {
-			return nil, fmt.Errorf("vault draw: %w", err)
-		}
-	}
-	if needConvert {
-		conv, err := a.dex.ConvertExactOut(kp, a.cfg.UsdcAddr, a.cfg.PoolUsdc, bidAmt, drawAmt)
-		if err != nil {
-			// Nothing spent (or spend failed): return the drawn capital as-is.
-			res.Proceeds = drawAmt
-			res.Note = fmt.Sprintf("entry conversion failed after draw, capital returned: %v", err)
-			if drawAmt > 0 {
-				if rerr := vc.ReturnProceeds(res.Proceeds, 0); rerr != nil {
-					res.Note = fmt.Sprintf("entry conversion failed AND return failed (capital outstanding): %v / %v", err, rerr)
-				}
-			}
-			res.Latency = time.Since(start)
-			return res, nil
-		}
-		_ = conv // keeper now holds bidAmt of pool USDC to settle the assumed debt
+	if err := vc.Draw(drawAmt); err != nil {
+		return nil, fmt.Errorf("vault draw: %w", err)
 	}
 
 	fillTx, fillErr := core.FillAuction(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user)
@@ -294,30 +306,19 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		res.Success = true
 		res.TxHash = fillTx
 		res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
-		if drawAmt > 0 {
-			res.Proceeds = a.swapCollateral(kp, pool, auction)
-			res.Profit = res.Proceeds - drawAmt
-			if res.Profit < 0 {
-				res.Profit = 0
-			}
-			if res.Proceeds == 0 {
-				res.Note = "zero returnable proceeds — outstanding draw at slash risk"
-			}
+		res.Proceeds = a.swapCollateral(kp, pool, auction)
+		res.Profit = res.Proceeds - drawAmt
+		if res.Profit < 0 {
+			res.Profit = 0
+		}
+		if res.Proceeds == 0 {
+			res.Note = "zero returnable proceeds — outstanding draw at slash risk"
 		}
 	case errors.Is(fillErr, core.ErrAlreadyFilled):
-		// Another keeper won. Return what we still hold: unconverted capital
-		// as-is; converted pool-USDC swapped back under the same guard.
+		// Another keeper won. We drew capital but never spent it — return it
+		// unchanged (no profit, no loss).
 		res.Note = "already filled by another keeper"
-		if needConvert {
-			if back, err := a.dex.SwapToUSDC(kp, a.cfg.PoolUsdc, bidAmt, bidAmt); err == nil {
-				res.Proceeds = back.OutputAmount
-			} else {
-				res.Proceeds = 0
-				res.Note = fmt.Sprintf("already filled; exit conversion refused, pool-USDC held (%v)", err)
-			}
-		} else {
-			res.Proceeds = drawAmt
-		}
+		res.Proceeds = drawAmt
 	default:
 		return nil, fmt.Errorf("fill auction: %w", fillErr)
 	}
@@ -390,8 +391,10 @@ func priorityFromHF(hf float64) int {
 	}
 }
 
-// oracleValueUSDC returns the Blend-oracle-implied USDC value (7-decimal
-// stroops) of amt of asset, or 0 when no price is available.
+// oracleValueUSDC returns the Blend-oracle-implied USDC value in 7-decimal
+// stroops for amt raw units of asset, or 0 when no price is available. amt is
+// scaled by the asset's own decimals before pricing — a 6-decimal token's raw
+// amount is not a 7-decimal stroop count.
 func oracleValueUSDC(pool *core.PoolState, asset string, amt int64) int64 {
 	if pool == nil {
 		return 0
@@ -400,5 +403,35 @@ func oracleValueUSDC(pool *core.PoolState, asset string, amt int64) int64 {
 	if !ok || r.OraclePrice <= 0 {
 		return 0
 	}
-	return int64(float64(amt) * r.OraclePrice)
+	whole := float64(amt) / r.TokenScalar()
+	return int64(whole * r.OraclePrice * 1e7)
+}
+
+// underlyingBid totals an auction's bid leg in 7-decimal USDC stroops using
+// each reserve's rate and decimals. Bid maps hold dToken amounts for
+// user-liquidation and bad-debt auctions (docs/FACTS.md "Auction asset
+// flows"), so the raw number understates the debt whenever d_rate > 1.
+// Returns 0 if any bid asset is missing from the pool or unpriced — an
+// unpriceable bid must never be turned into a draw.
+func (a *Adapter) underlyingBid(pool *core.PoolState, auction *core.Auction) int64 {
+	var total int64
+	for asset, amt := range auction.Bid {
+		if amt == nil || !amt.IsInt64() {
+			return 0
+		}
+		r, ok := pool.Reserves[asset]
+		if !ok || r.OraclePrice <= 0 {
+			return 0
+		}
+		rate := r.DRate
+		if auction.Type == core.AuctionInterest {
+			rate = 1.0 // interest bids are backstop LP, not dTokens
+		}
+		if rate <= 0 {
+			return 0
+		}
+		whole := float64(amt.Int64()) / r.TokenScalar() * rate
+		total += int64(whole * 1e7)
+	}
+	return total
 }

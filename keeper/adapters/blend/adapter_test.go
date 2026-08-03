@@ -50,11 +50,21 @@ func TestPriorityFromHF(t *testing.T) {
 }
 
 func TestOracleValueUSDC(t *testing.T) {
+	// 7-decimal token: 100 whole tokens (100_0000000 raw) at $0.50 = $50,
+	// reported as 50_0000000 USDC stroops.
 	pool := &core.PoolState{Reserves: map[string]*core.Reserve{
-		"CTKN": {OraclePrice: 0.5},
+		"CTKN": {Decimals: 7, OraclePrice: 0.5},
 	}}
-	if got := oracleValueUSDC(pool, "CTKN", 100); got != 50 {
-		t.Fatalf("expected 50 (100 * 0.5), got %d", got)
+	if got := oracleValueUSDC(pool, "CTKN", 100_0000000); got != 50_0000000 {
+		t.Fatalf("expected 50_0000000 stroops ($50), got %d", got)
+	}
+	// A 6-decimal token's raw amount is NOT a 7-decimal stroop count:
+	// 100 whole tokens (100_000000 raw) at $1 must still be $100.
+	pool6 := &core.PoolState{Reserves: map[string]*core.Reserve{
+		"CSIX": {Decimals: 6, OraclePrice: 1.0},
+	}}
+	if got := oracleValueUSDC(pool6, "CSIX", 100_000000); got != 100_0000000 {
+		t.Fatalf("6-dec asset: expected 100_0000000 stroops ($100), got %d", got)
 	}
 	if got := oracleValueUSDC(pool, "UNKNOWN", 100); got != 0 {
 		t.Fatalf("expected 0 for unknown asset, got %d", got)

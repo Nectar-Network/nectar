@@ -2,10 +2,14 @@ package blend
 
 import (
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/xdr"
+
+	"github.com/nectar-network/keeper/soroban"
 )
 
 // --- ScVal fixture builders -------------------------------------------------
@@ -140,13 +144,16 @@ func TestParseReserve_NonMapRejected(t *testing.T) {
 func TestParsePriceData_SomeAndNone(t *testing.T) {
 	some := mapVal(
 		entry("price", i128Val(4_200_000)),
-		entry("timestamp", u32Val(1)),
+		entry("timestamp", u32Val(1785000000)),
 	)
-	got := parsePriceData(some)
+	got, ts := parsePriceData(some)
 	if got == nil || got.Cmp(big.NewInt(4_200_000)) != 0 {
 		t.Errorf("Some(PriceData): got %v want 4200000", got)
 	}
-	if parsePriceData(xdr.ScVal{Type: xdr.ScValTypeScvVoid}) != nil {
+	if ts != 1785000000 {
+		t.Errorf("timestamp: got %d want 1785000000", ts)
+	}
+	if p, _ := parsePriceData(xdr.ScVal{Type: xdr.ScValTypeScvVoid}); p != nil {
 		t.Error("None must decode to nil")
 	}
 }
@@ -241,4 +248,46 @@ func TestCalcHealthFactor_UnpricedReserveContributesNothing(t *testing.T) {
 	if hf != 0 {
 		t.Errorf("HF with unpriced collateral: got %v want 0", hf)
 	}
+}
+
+// A price older than the pool's own 24h window must be treated as no price:
+// the pool itself would panic InvalidPrice on it (pool.rs:126 @ ba22b48).
+func TestLoadOraclePrice_RejectsStaleAndNonPositive(t *testing.T) {
+	const now = int64(1_785_700_000)
+	mk := func(price int64, ts int64) *httptest.Server {
+		val := mapVal(entry("price", i128Val(price)), entry("timestamp", u64Val(ts)))
+		b64, err := xdr.MarshalBase64(val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp := `{"jsonrpc":"2.0","id":1,"result":{"latestLedger":1,"results":[{"xdr":"` + b64 + `"}]}}`
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(resp))
+		}))
+	}
+	ps := &PoolState{OracleAddr: testOracle, OracleDecimals: 7}
+
+	fresh := mk(4_200_000, now-60)
+	defer fresh.Close()
+	if got := loadOraclePrice(soroban.NewClient(fresh.URL), "pass", ps, testAsset, now); got < 0.41 || got > 0.43 {
+		t.Errorf("fresh price: got %v want ~0.42", got)
+	}
+
+	stale := mk(4_200_000, now-maxPriceAge-1)
+	defer stale.Close()
+	if got := loadOraclePrice(soroban.NewClient(stale.URL), "pass", ps, testAsset, now); got != 0 {
+		t.Errorf("stale price must be rejected, got %v", got)
+	}
+
+	zero := mk(0, now-60)
+	defer zero.Close()
+	if got := loadOraclePrice(soroban.NewClient(zero.URL), "pass", ps, testAsset, now); got != 0 {
+		t.Errorf("non-positive price must be rejected, got %v", got)
+	}
+}
+
+func u64Val(v int64) xdr.ScVal {
+	u := xdr.Uint64(v)
+	return xdr.ScVal{Type: xdr.ScValTypeScvU64, U64: &u}
 }

@@ -64,8 +64,8 @@
     "TestnetV2 (CCEBVDYM...4HGF)": {
       "pool_usdc": "Blend-mock USDC CAQCFVLO... != vault Circle USDC",
       "route": "EXISTS — direct Soroswap pair, near-par at sub-1-USDC size",
-      "decision": "ACTIVE with keeper-side conversion + par-anchored slippage guard (task rule: route exists => implement conversion, mark ACTIVE). At the pair's current ~50-USDC depth, any conversion of realistic bid size (>= ~0.5 USDC at SLIPPAGE_BPS=100) breaches the guard, so the keeper will REFUSE conversion pre-draw and skip the fill with an explicit log line. No capital can be spent through an off-parity route; capital support is real but gated on route viability, which is re-quoted live every attempt.",
-      "config": "BLEND_POOLS entry 'CCEBVDYM...:active:CAQCFVLO...' (third field = pool USDC)"
+      "decision": "MONITOR-ONLY. The route exists, so the conversion primitives were implemented and unit-tested (dex.QuoteConvertIn / ConvertExactOut with a par-anchored bound), but they are NOT wired into an autonomous capital path. Reason (adversarial review, 3 confirmed critical findings): a Blend user-liquidation fill transfers no tokens - the filler assumes the dToken debt (FACTS.md 'Auction asset flows') - so capital pre-converted to pool-USDC would sit stranded, and a failed fill or a post-send-ambiguous conversion has no sound recovery path. At the pair's ~50-USDC depth every realistic conversion also breaches a 1% par bound anyway. The adapter emits no tasks for a pool whose settle asset differs from the vault's, Execute refuses defensively, and each scan re-quotes the 1-USDC route and reports parity in the pool's scan note.",
+      "config": "BLEND_POOLS entry 'CCEBVDYM...:monitor:CAQCFVLO...' (third field declares the pool USDC; any pool whose settle asset != USDC_CONTRACT is execution-disabled regardless of mode)"
     },
     "Nectar Sandbox (deployed in Task A4)": {
       "pool_usdc": "vault Circle USDC itself (same asset)",

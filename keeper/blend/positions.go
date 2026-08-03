@@ -1,6 +1,7 @@
 package blend
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -10,9 +11,16 @@ import (
 	"github.com/nectar-network/keeper/soroban"
 )
 
+// Position mirrors blend-contracts-v2 `Positions { liabilities, collateral,
+// supply }` (pool/src/pool/user.rs:11-15 @ ba22b48). `supply` is NON-collateral
+// lending and is deliberately kept separate: it does not back the user's debt
+// (health_factor.rs only reads `collateral`) and it is not part of a
+// liquidation lot, so folding it into Collateral would both overstate HF
+// inputs and put non-auctionable reserves into new_auction's lot vector.
 type Position struct {
 	Address     string
-	Collateral  map[uint32]*big.Int // reserve index -> b_token balance
+	Collateral  map[uint32]*big.Int // reserve index -> b_token balance backing debt
+	Supply      map[uint32]*big.Int // reserve index -> b_token balance, non-collateral
 	Liabilities map[uint32]*big.Int // reserve index -> d_token balance
 	HF          float64
 }
@@ -55,7 +63,7 @@ func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger 
 		if err != nil {
 			continue
 		}
-		if len(pos.Collateral) == 0 && len(pos.Liabilities) == 0 {
+		if len(pos.Collateral) == 0 && len(pos.Supply) == 0 && len(pos.Liabilities) == 0 {
 			continue // address appeared in events but holds no position
 		}
 		positions = append(positions, *pos)
@@ -76,7 +84,7 @@ func loadPosition(rpc *soroban.Client, passphrase, poolAddr, user string) (*Posi
 		return nil, fmt.Errorf("get_positions: %s", sim.Error)
 	}
 	if len(sim.Results) == 0 {
-		return &Position{Address: user, Collateral: make(map[uint32]*big.Int), Liabilities: make(map[uint32]*big.Int)}, nil
+		return newPosition(user), nil
 	}
 	var val xdr.ScVal
 	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
@@ -85,24 +93,38 @@ func loadPosition(rpc *soroban.Client, passphrase, poolAddr, user string) (*Posi
 	return parsePositions(val, user), nil
 }
 
-func parsePositions(val xdr.ScVal, user string) *Position {
-	pos := &Position{
+func newPosition(user string) *Position {
+	return &Position{
 		Address:     user,
 		Collateral:  make(map[uint32]*big.Int),
+		Supply:      make(map[uint32]*big.Int),
 		Liabilities: make(map[uint32]*big.Int),
 	}
+}
+
+func parsePositions(val xdr.ScVal, user string) *Position {
+	pos := newPosition(user)
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {
 		return pos
 	}
 	for _, entry := range **val.Map {
 		key := scSymbol(entry.Key)
 		switch key {
-		case "collateral", "supply":
+		case "collateral":
 			if entry.Val.Type == xdr.ScValTypeScvMap && entry.Val.Map != nil && *entry.Val.Map != nil {
 				for _, e := range **entry.Val.Map {
 					idx := scU32(e.Key)
 					if amt := scI128(e.Val); amt != nil {
 						pos.Collateral[idx] = amt
+					}
+				}
+			}
+		case "supply":
+			if entry.Val.Type == xdr.ScValTypeScvMap && entry.Val.Map != nil && *entry.Val.Map != nil {
+				for _, e := range **entry.Val.Map {
+					idx := scU32(e.Key)
+					if amt := scI128(e.Val); amt != nil {
+						pos.Supply[idx] = amt
 					}
 				}
 			}
@@ -150,6 +172,10 @@ func EstimateCapital(pos Position, pool *PoolState, pct int64) int64 {
 	return int64(scaled * scalar)
 }
 
+// ErrUnpricedReserve reports that a position touches a reserve with no usable
+// oracle price, so its health factor cannot be computed.
+var ErrUnpricedReserve = errors.New("position touches an unpriced reserve")
+
 // CalcHealthFactor mirrors blend-contracts-v2 PositionData::calculate_from_positions
 // (pool/src/pool/health_factor.rs:27-77 @ ba22b48):
 //
@@ -159,10 +185,26 @@ func EstimateCapital(pos Position, pool *PoolState, pct int64) int64 {
 //
 // b_rate/d_rate convert b/d tokens to underlying (12-dec fixed point on-chain,
 // plain multipliers here); token amounts are scaled by each reserve's own
-// decimals. Reserves without an oracle price contribute nothing to either leg
-// (on-chain this would panic InvalidPrice; off-chain we surface HF from the
-// priced legs only, which callers treat as best-effort).
+// decimals. Only `collateral` backs debt — `supply` is excluded, as on-chain.
+//
+// Deprecated for decision-making: prefer HealthFactor, which reports when a
+// leg could not be priced. This wrapper keeps the old signature (0 on error)
+// for display paths.
 func CalcHealthFactor(pos Position, pool *PoolState) float64 {
+	hf, err := HealthFactor(pos, pool)
+	if err != nil {
+		return 0
+	}
+	return hf
+}
+
+// HealthFactor computes the health factor and returns ErrUnpricedReserve when
+// any leg of the position references a reserve the pool did not price or does
+// not list. Silently skipping such a leg would invent a health factor: an
+// unpriced collateral reserve reads as HF≈0 (false liquidation signal, and the
+// on-chain new_auction would panic InvalidPrice), while an unpriced liability
+// reads as HF=+Inf (a real liquidation missed).
+func HealthFactor(pos Position, pool *PoolState) (float64, error) {
 	// build index -> reserve map
 	indexMap := make(map[uint32]*Reserve)
 	for _, r := range pool.Reserves {
@@ -172,23 +214,23 @@ func CalcHealthFactor(pos Position, pool *PoolState) float64 {
 	var effColl, effLiab float64
 	for idx, bAmt := range pos.Collateral {
 		r, ok := indexMap[idx]
-		if !ok {
-			continue
+		if !ok || r.OraclePrice <= 0 {
+			return 0, fmt.Errorf("%w: collateral reserve index %d", ErrUnpricedReserve, idx)
 		}
 		f, _ := new(big.Float).SetInt(bAmt).Float64()
 		effColl += (f / r.TokenScalar()) * r.BRate * r.OraclePrice * r.CollateralFactor
 	}
 	for idx, dAmt := range pos.Liabilities {
 		r, ok := indexMap[idx]
-		if !ok || r.LiabilityFactor == 0 {
-			continue
+		if !ok || r.OraclePrice <= 0 || r.LiabilityFactor == 0 {
+			return 0, fmt.Errorf("%w: liability reserve index %d", ErrUnpricedReserve, idx)
 		}
 		f, _ := new(big.Float).SetInt(dAmt).Float64()
 		effLiab += (f / r.TokenScalar()) * r.DRate * r.OraclePrice / r.LiabilityFactor
 	}
 
 	if effLiab == 0 {
-		return math.Inf(1)
+		return math.Inf(1), nil
 	}
-	return effColl / effLiab
+	return effColl / effLiab, nil
 }
