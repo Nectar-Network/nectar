@@ -8,50 +8,52 @@ import (
 	"github.com/nectar-network/keeper/soroban"
 )
 
-// swapViaPhoenix executes a token→USDC swap on a Phoenix XYK pool (fallback),
-// returning the real USDC received (balance delta). Phoenix has no public
-// testnet deployment and ships multiple swap ABIs, so it is gated behind the
-// PhoenixRouter config (set to the XYK pool/pair contract for the
-// collateral/USDC pair) and used only when Soroswap is unavailable.
+// swapViaPhoenix executes a from→to swap on a Phoenix XYK pool (fallback),
+// returning the real output received (balance delta of `to`). Phoenix has no
+// public testnet deployment and ships multiple swap ABIs, so it is gated
+// behind the PhoenixRouter config (set to the XYK pool/pair contract for the
+// collateral/USDC pair) and used only when Soroswap is unavailable. The
+// caller (Swap) only routes pairs with USDC on one side here, because the
+// configured contract is a single fixed pair.
 //
 // Unlike the Soroswap path there is no pre-trade quote here, so the oracle
-// reference is the ONLY slippage anchor: without a positive refValueUSDC the
+// reference is the ONLY slippage anchor: without a positive refValueOut the
 // swap would execute with no minimum at all on exactly the venue used when
 // things are already degraded. Refuse instead. The second return mirrors
 // swapViaSoroswap's sent semantics.
-func (s *SwapClient) swapViaPhoenix(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, bool, error) {
-	if refValueUSDC <= 0 {
+func (s *SwapClient) swapViaPhoenix(kp *keypair.Full, from, to string, amount, refValueOut int64) (*SwapResult, bool, error) {
+	if refValueOut <= 0 {
 		return nil, false, fmt.Errorf("phoenix: no oracle reference value — refusing swap without a slippage floor")
 	}
-	minOut := minOutForSlippage(refValueUSDC, s.cfg.SlippageBps)
+	minOut := minOutForSlippage(refValueOut, s.cfg.SlippageBps)
 	if minOut <= 0 {
 		return nil, false, fmt.Errorf("phoenix: slippage floor computed as 0 — refusing unprotected swap")
 	}
 
-	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
+	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, to, kp.Address())
 	if err != nil {
 		return nil, false, err
 	}
 
-	hash, err := s.phoenixSwap(kp, s.cfg.PhoenixRouter, tokenAddr, amount, minOut)
+	hash, err := s.phoenixSwap(kp, s.cfg.PhoenixRouter, from, amount, minOut)
 	if err != nil {
 		return nil, soroban.IsTxStatusUnknown(err), err
 	}
 
-	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
+	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, to, kp.Address())
 	if err != nil {
 		return nil, true, fmt.Errorf("swap landed but post-swap balance read failed: %w", err)
 	}
 	got := after - before
 	if got <= 0 {
-		return nil, true, fmt.Errorf("swap sent but USDC balance did not increase")
+		return nil, true, fmt.Errorf("swap sent but output balance did not increase")
 	}
 
 	return &SwapResult{
-		InputToken:   tokenAddr,
+		InputToken:   from,
 		InputAmount:  amount,
 		OutputAmount: got,
-		Slippage:     slippageFraction(refValueUSDC, got),
+		Slippage:     slippageFraction(refValueOut, got),
 		Route:        "phoenix",
 		TxHash:       hash,
 	}, true, nil

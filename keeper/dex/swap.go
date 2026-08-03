@@ -1,8 +1,9 @@
-// Package dex converts non-USDC liquidation collateral into USDC so it can be
-// returned to the vault, closing the liquidation loop: fill auction → receive
-// collateral → swap to USDC → return proceeds. Swaps route through Soroswap
-// (primary) with a Phoenix pool fallback. Output is measured by the keeper's
-// USDC balance delta, never synthesized, so reported proceeds are always real.
+// Package dex converts tokens for the liquidation loop in both directions:
+// seized collateral → USDC so proceeds can be returned to the vault, and
+// USDC → a position's debt asset so an atomic fill-and-unwind can repay
+// non-USDC liabilities. Swaps route through Soroswap (primary) with a Phoenix
+// pool fallback for pairs involving USDC. Output is measured by the keeper's
+// token balance delta, never synthesized, so reported amounts are always real.
 package dex
 
 import (
@@ -23,7 +24,7 @@ var (
 	// ErrNoRoute means no configured DEX could complete the swap.
 	ErrNoRoute = errors.New("dex: no swap route available")
 	// ErrSlippageExceeded means the best quote was worse than the oracle-anchored
-	// floor; the keeper refuses to sell collateral that cheaply on any venue.
+	// floor; the keeper refuses to trade that far off reference on any venue.
 	ErrSlippageExceeded = errors.New("dex: quote below slippage floor")
 	// ErrUSDCNotConfigured means the USDC token address is missing from config.
 	ErrUSDCNotConfigured = errors.New("dex: USDC address not configured")
@@ -41,7 +42,7 @@ type Config struct {
 	DeadlineSecs   int64 // swap deadline buffer in seconds (default 60)
 }
 
-// SwapClient executes collateral→USDC swaps against configured DEXs.
+// SwapClient executes token swaps against configured DEXs.
 type SwapClient struct {
 	rpc *soroban.Client
 	cfg Config
@@ -52,7 +53,7 @@ type SwapClient struct {
 type SwapResult struct {
 	InputToken   string
 	InputAmount  int64
-	OutputAmount int64   // USDC actually received (balance delta)
+	OutputAmount int64   // output tokens actually received (balance delta)
 	Slippage     float64 // realized slippage vs the reference value, [0,1]
 	Route        string  // "soroswap", "phoenix", or "none"
 	TxHash       string
@@ -69,47 +70,50 @@ func NewSwapClient(rpc *soroban.Client, cfg Config) *SwapClient {
 	return &SwapClient{rpc: rpc, cfg: cfg, now: func() int64 { return time.Now().Unix() }}
 }
 
-// SwapToUSDC converts amount of tokenAddr into USDC, trying Soroswap first and
-// Phoenix second. refValueUSDC is the oracle-implied fair USDC value of the
-// input (7-decimal stroops); when > 0 it anchors the slippage check so a
+// Swap converts amount of `from` into `to`, trying Soroswap first and Phoenix
+// second. refValueOut is the oracle-implied fair value of the input DENOMINATED
+// IN `to` (raw token units); when > 0 it anchors the slippage check so a
 // manipulated pool quote cannot pass. Pass 0 to rely only on the DEX quote's
-// on-chain amount_out_min. Returns ErrSlippageExceeded (without falling back)
-// when the price is worse than the floor, or ErrNoRoute when every venue fails.
-func (s *SwapClient) SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, error) {
+// on-chain amount_out_min (Soroswap; Phoenix refuses without a reference).
+//
+// Returns ErrSlippageExceeded (without falling back) when the price is worse
+// than the floor — a bad price is a global decision, not a venue problem — or
+// ErrNoRoute when every venue fails before broadcasting anything. Once a swap
+// transaction was (or may have been) broadcast, no second venue is tried: the
+// input may already be sold, and the next keeper cycle's recovery reconciles
+// from measured balances.
+func (s *SwapClient) Swap(kp *keypair.Full, from, to string, amount, refValueOut int64) (*SwapResult, error) {
 	if amount <= 0 {
 		return nil, fmt.Errorf("swap: amount must be > 0, got %d", amount)
 	}
-	if s.cfg.UsdcAddr == "" {
-		return nil, ErrUSDCNotConfigured
+	if from == "" || to == "" {
+		return nil, fmt.Errorf("swap: from and to token addresses required")
 	}
-	if tokenAddr == s.cfg.UsdcAddr {
-		// Already USDC — no swap needed.
-		return &SwapResult{InputToken: tokenAddr, InputAmount: amount, OutputAmount: amount, Route: "none"}, nil
+	if from == to {
+		// Same token — no swap needed.
+		return &SwapResult{InputToken: from, InputAmount: amount, OutputAmount: amount, Route: "none"}, nil
 	}
 
 	var attempts []string
 
 	if s.cfg.SoroswapRouter != "" {
-		res, sent, err := s.swapViaSoroswap(kp, tokenAddr, amount, refValueUSDC)
+		res, sent, err := s.swapViaSoroswap(kp, from, to, amount, refValueOut)
 		switch {
 		case err == nil:
 			return res, nil
 		case errors.Is(err, ErrSlippageExceeded):
-			// A bad price is a global decision: don't dump on another venue either.
 			return nil, err
 		case sent:
-			// The swap tx was (or may have been) broadcast — the collateral may
-			// already be sold. Falling back would risk a second sale (or burn
-			// fees on a doomed tx), so stop here; the next cycle's stale-draw
-			// recovery returns whatever USDC actually arrived.
 			return nil, fmt.Errorf("soroswap swap sent but outcome unconfirmed, not falling back: %w", err)
 		default:
 			attempts = append(attempts, "soroswap: "+err.Error())
 		}
 	}
 
-	if s.cfg.PhoenixRouter != "" {
-		res, _, err := s.swapViaPhoenix(kp, tokenAddr, amount, refValueUSDC)
+	// The Phoenix venue is one XYK pair configured for the collateral/USDC
+	// pair, so it can only serve swaps with USDC on one side.
+	if s.cfg.PhoenixRouter != "" && s.cfg.UsdcAddr != "" && (from == s.cfg.UsdcAddr || to == s.cfg.UsdcAddr) {
+		res, _, err := s.swapViaPhoenix(kp, from, to, amount, refValueOut)
 		if err == nil {
 			return res, nil
 		}
@@ -120,6 +124,26 @@ func (s *SwapClient) SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refV
 		return nil, ErrNoRoute
 	}
 	return nil, fmt.Errorf("%w (%s)", ErrNoRoute, strings.Join(attempts, "; "))
+}
+
+// SwapToUSDC converts amount of tokenAddr into USDC. refValueUSDC is the
+// oracle-implied fair USDC value of the input (7-decimal stroops). Thin
+// wrapper over Swap.
+func (s *SwapClient) SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, error) {
+	if s.cfg.UsdcAddr == "" {
+		return nil, ErrUSDCNotConfigured
+	}
+	return s.Swap(kp, tokenAddr, s.cfg.UsdcAddr, amount, refValueUSDC)
+}
+
+// SwapFromUSDC converts usdcAmount of USDC into tokenAddr. refValueToken is
+// the oracle-implied fair amount of tokenAddr the input should buy (raw token
+// units). Thin wrapper over Swap.
+func (s *SwapClient) SwapFromUSDC(kp *keypair.Full, tokenAddr string, usdcAmount, refValueToken int64) (*SwapResult, error) {
+	if s.cfg.UsdcAddr == "" {
+		return nil, ErrUSDCNotConfigured
+	}
+	return s.Swap(kp, s.cfg.UsdcAddr, tokenAddr, usdcAmount, refValueToken)
 }
 
 // minOutForSlippage returns the minimum acceptable output for a quoted amount
@@ -145,11 +169,11 @@ func minOutForSlippage(quotedOut int64, slippageBps int) int64 {
 
 // belowFloor reports whether a quote is worse than the slippage floor derived
 // from an oracle reference value. A non-positive reference disables the check.
-func belowFloor(quotedOut, refValueUSDC int64, slippageBps int) bool {
-	if refValueUSDC <= 0 {
+func belowFloor(quotedOut, refValueOut int64, slippageBps int) bool {
+	if refValueOut <= 0 {
 		return false
 	}
-	return quotedOut < minOutForSlippage(refValueUSDC, slippageBps)
+	return quotedOut < minOutForSlippage(refValueOut, slippageBps)
 }
 
 // slippageFraction is the realized shortfall of got vs ref, clamped to [0,1].

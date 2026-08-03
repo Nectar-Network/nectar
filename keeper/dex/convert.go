@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/xdr"
 
 	"github.com/nectar-network/keeper/soroban"
 )
@@ -18,43 +17,13 @@ var ErrOffParity = errors.New("conversion route off parity")
 
 // QuoteConvertIn returns how much of `from` is required to obtain exactly
 // amountOut of `to` on a direct Soroswap route, rejecting quotes beyond the
-// par bound: required <= amountOut * (1 + slippageBps/10000).
-//
-// ABI verified against the live router spec (docs/evidence/a2-route-checks.json):
-// router_get_amounts_in(amount_out: i128, path: Vec<Address>) -> Vec<i128>,
-// first element = required input.
+// par bound: required <= amountOut * (1 + slippageBps/10000). Both legs must
+// be USD stablecoins — that is what makes par the reference; for arbitrary
+// pairs use QuoteIn and anchor against an oracle value instead.
 func (s *SwapClient) QuoteConvertIn(from, to string, amountOut int64) (int64, error) {
-	if s.cfg.SoroswapRouter == "" {
-		return 0, ErrNoRoute
-	}
-	if amountOut <= 0 {
-		return 0, fmt.Errorf("non-positive amount %d", amountOut)
-	}
-	pathVal, err := addressVec([]string{from, to})
+	required, err := s.QuoteIn(from, to, amountOut)
 	if err != nil {
 		return 0, err
-	}
-	sim, err := s.rpc.SimulateRead(s.cfg.Passphrase, s.cfg.SoroswapRouter,
-		"router_get_amounts_in", soroban.ScvI128(amountOut), pathVal)
-	if err != nil {
-		return 0, fmt.Errorf("router_get_amounts_in: %w", err)
-	}
-	if sim.Error != "" {
-		return 0, fmt.Errorf("router_get_amounts_in: %s", sim.Error)
-	}
-	if len(sim.Results) == 0 {
-		return 0, fmt.Errorf("router_get_amounts_in: no result")
-	}
-	var val xdr.ScVal
-	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
-		return 0, err
-	}
-	if val.Type != xdr.ScValTypeScvVec || val.Vec == nil || *val.Vec == nil || len(**val.Vec) == 0 {
-		return 0, fmt.Errorf("router_get_amounts_in: malformed result")
-	}
-	required := scI128((**val.Vec)[0])
-	if required <= 0 {
-		return 0, fmt.Errorf("router_get_amounts_in: empty quote")
 	}
 	if maxIn := maxInForParity(amountOut, s.cfg.SlippageBps); required > maxIn {
 		return 0, fmt.Errorf("%w: need %d of vault USDC for %d of pool USDC (par bound %d)",

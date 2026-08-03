@@ -9,13 +9,13 @@ import (
 	"github.com/nectar-network/keeper/soroban"
 )
 
-// swapViaSoroswap quotes then executes a token→USDC swap on the Soroswap
-// router, returning the real USDC received (balance delta). The second return
-// reports whether the swap transaction was (or may have been) broadcast — once
-// true, the caller must not try another venue: the collateral may already be
-// sold even though this call errored.
-func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*SwapResult, bool, error) {
-	path := []string{tokenAddr, s.cfg.UsdcAddr}
+// swapViaSoroswap quotes then executes a from→to swap on the Soroswap router,
+// returning the real output received (balance delta of `to`). The second
+// return reports whether the swap transaction was (or may have been)
+// broadcast — once true, the caller must not try another venue: the input may
+// already be sold even though this call errored.
+func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, from, to string, amount, refValueOut int64) (*SwapResult, bool, error) {
+	path := []string{from, to}
 
 	expectedOut, err := s.soroswapQuote(amount, path)
 	if err != nil {
@@ -24,14 +24,14 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount,
 	if expectedOut <= 0 {
 		return nil, false, fmt.Errorf("empty quote")
 	}
-	if belowFloor(expectedOut, refValueUSDC, s.cfg.SlippageBps) {
+	if belowFloor(expectedOut, refValueOut, s.cfg.SlippageBps) {
 		return nil, false, fmt.Errorf("%w: quote %d < floor %d", ErrSlippageExceeded,
-			expectedOut, minOutForSlippage(refValueUSDC, s.cfg.SlippageBps))
+			expectedOut, minOutForSlippage(refValueOut, s.cfg.SlippageBps))
 	}
 
 	minOut := minOutForSlippage(expectedOut, s.cfg.SlippageBps)
 
-	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
+	before, err := TokenBalance(s.rpc, s.cfg.Passphrase, to, kp.Address())
 	if err != nil {
 		return nil, false, err
 	}
@@ -42,21 +42,21 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount,
 		return nil, soroban.IsTxStatusUnknown(err), err
 	}
 
-	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, s.cfg.UsdcAddr, kp.Address())
+	after, err := TokenBalance(s.rpc, s.cfg.Passphrase, to, kp.Address())
 	if err != nil {
 		return nil, true, fmt.Errorf("swap landed but post-swap balance read failed: %w", err)
 	}
 	got := after - before
 	if got <= 0 {
-		return nil, true, fmt.Errorf("swap sent but USDC balance did not increase")
+		return nil, true, fmt.Errorf("swap sent but output balance did not increase")
 	}
 
-	ref := refValueUSDC
+	ref := refValueOut
 	if ref <= 0 {
 		ref = expectedOut
 	}
 	return &SwapResult{
-		InputToken:   tokenAddr,
+		InputToken:   from,
 		InputAmount:  amount,
 		OutputAmount: got,
 		Slippage:     slippageFraction(ref, got),
@@ -66,7 +66,7 @@ func (s *SwapClient) swapViaSoroswap(kp *keypair.Full, tokenAddr string, amount,
 }
 
 // soroswapQuote calls router_get_amounts_out (read-only) and returns the final
-// (USDC) element of the returned Vec<i128>. ABI verified against
+// (output-token) element of the returned Vec<i128>. ABI verified against
 // soroswap/core router lib.rs: router_get_amounts_out(amount_in: i128,
 // path: Vec<Address>) -> Vec<i128>.
 func (s *SwapClient) soroswapQuote(amount int64, path []string) (int64, error) {
@@ -99,6 +99,50 @@ func (s *SwapClient) soroswapQuote(amount int64, path []string) (int64, error) {
 	return scI128(vec[len(vec)-1]), nil
 }
 
+// QuoteIn returns how much of `from` the Soroswap router requires to obtain
+// exactly amountOut of `to` on a direct route. No price bound is applied here
+// — callers anchor the result against an oracle reference (or par, for
+// stable-to-stable: see QuoteConvertIn) before moving capital.
+//
+// ABI verified against the live router spec (docs/evidence/a2-route-checks.json):
+// router_get_amounts_in(amount_out: i128, path: Vec<Address>) -> Vec<i128>,
+// first element = required input.
+func (s *SwapClient) QuoteIn(from, to string, amountOut int64) (int64, error) {
+	if s.cfg.SoroswapRouter == "" {
+		return 0, ErrNoRoute
+	}
+	if amountOut <= 0 {
+		return 0, fmt.Errorf("non-positive amount %d", amountOut)
+	}
+	pathVal, err := addressVec([]string{from, to})
+	if err != nil {
+		return 0, err
+	}
+	sim, err := s.rpc.SimulateRead(s.cfg.Passphrase, s.cfg.SoroswapRouter,
+		"router_get_amounts_in", soroban.ScvI128(amountOut), pathVal)
+	if err != nil {
+		return 0, fmt.Errorf("router_get_amounts_in: %w", err)
+	}
+	if sim.Error != "" {
+		return 0, fmt.Errorf("router_get_amounts_in: %s", sim.Error)
+	}
+	if len(sim.Results) == 0 {
+		return 0, fmt.Errorf("router_get_amounts_in: no result")
+	}
+	var val xdr.ScVal
+	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
+		return 0, err
+	}
+	if val.Type != xdr.ScValTypeScvVec || val.Vec == nil || *val.Vec == nil || len(**val.Vec) == 0 {
+		return 0, fmt.Errorf("router_get_amounts_in: malformed result")
+	}
+	required := scI128((**val.Vec)[0])
+	if required <= 0 {
+		return 0, fmt.Errorf("router_get_amounts_in: empty quote")
+	}
+	return required, nil
+}
+
 // soroswapSwap executes swap_exact_tokens_for_tokens and returns the tx hash.
 // ABI verified against soroswap/core router lib.rs (exact arg order):
 // amount_in i128, amount_out_min i128, path Vec<Address>, to Address,
@@ -114,7 +158,7 @@ func (s *SwapClient) soroswapSwap(kp *keypair.Full, amount, minOut int64, path [
 	}
 	deadline := uint64(s.now() + s.cfg.DeadlineSecs)
 	// Swaps are NOT auto-retried: re-broadcasting a non-idempotent swap after a
-	// post-send timeout could sell the collateral twice (at a second price). A
+	// post-send timeout could sell the input twice (at a second price). A
 	// transient failure is simply retried on the next keeper cycle. The on-chain
 	// amount_out_min still bounds execution-time slippage.
 	tx, err := s.rpc.Invoke(s.cfg.HorizonURL, kp, s.cfg.Passphrase, s.cfg.SoroswapRouter,

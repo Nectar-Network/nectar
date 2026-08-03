@@ -260,3 +260,118 @@ func mockRPCError(t *testing.T) *httptest.Server {
 		_, _ = w.Write([]byte(resp))
 	}))
 }
+
+// ── Bi-directional Swap tests (Task B3) ─────────────────────────────────────
+
+// Swap with identical from/to is a passthrough in either direction.
+func TestSwap_SameTokenPassthrough(t *testing.T) {
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), baseCfg())
+	res, err := c.Swap(mustKP(t), testToken, testToken, 700, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.OutputAmount != 700 || res.Route != "none" {
+		t.Fatalf("expected passthrough 700/none, got %d/%s", res.OutputAmount, res.Route)
+	}
+}
+
+func TestSwap_RejectsEmptyAddresses(t *testing.T) {
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), baseCfg())
+	if _, err := c.Swap(mustKP(t), "", testUSDC, 100, 0); err == nil {
+		t.Error("empty from must be rejected")
+	}
+	if _, err := c.Swap(mustKP(t), testToken, "", 100, 0); err == nil {
+		t.Error("empty to must be rejected")
+	}
+}
+
+func TestSwapFromUSDC_RequiresUSDCConfigured(t *testing.T) {
+	cfg := baseCfg()
+	cfg.UsdcAddr = ""
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), cfg)
+	_, err := c.SwapFromUSDC(mustKP(t), testToken, 100, 0)
+	if !errors.Is(err, ErrUSDCNotConfigured) {
+		t.Fatalf("expected ErrUSDCNotConfigured, got %v", err)
+	}
+}
+
+// The slippage floor applies in the USDC→token direction too: a quote that
+// buys fewer tokens than the oracle-implied floor must be rejected without
+// executing or falling back.
+func TestSwapFromUSDC_SlippageRejected(t *testing.T) {
+	srv := mockSimResult(t, vecI128Base64(t, 100_000_000, 50_000_000)) // out = 5 tokens
+	defer srv.Close()
+
+	cfg := baseCfg()
+	cfg.PhoenixRouter = ""
+	c := NewSwapClient(soroban.NewClient(srv.URL), cfg)
+
+	// ref = 100 tokens expected, 1% floor = 99; quote 5 is far below.
+	_, err := c.SwapFromUSDC(mustKP(t), testToken, 1_000_000_000, 1_000_000_000)
+	if !errors.Is(err, ErrSlippageExceeded) {
+		t.Fatalf("expected ErrSlippageExceeded, got %v", err)
+	}
+}
+
+func TestSwap_NoRouteEitherDirection(t *testing.T) {
+	cfg := baseCfg()
+	cfg.SoroswapRouter = ""
+	cfg.PhoenixRouter = ""
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), cfg)
+	if _, err := c.Swap(mustKP(t), testToken, testUSDC, 100, 0); !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("token→USDC: expected ErrNoRoute, got %v", err)
+	}
+	if _, err := c.Swap(mustKP(t), testUSDC, testToken, 100, 0); !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("USDC→token: expected ErrNoRoute, got %v", err)
+	}
+}
+
+// Phoenix is a single configured X/USDC pair: a swap between two non-USDC
+// tokens must not be sent to it, leaving a clean ErrNoRoute (no attempts).
+func TestSwap_PhoenixSkippedForNonUSDCPair(t *testing.T) {
+	cfg := baseCfg()
+	cfg.SoroswapRouter = ""
+	cfg.PhoenixRouter = testPhx
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), cfg)
+
+	_, err := c.Swap(mustKP(t), testToken, testRouter /* another non-USDC contract */, 100, 1)
+	if !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("expected ErrNoRoute, got %v", err)
+	}
+	if strings.Contains(err.Error(), "phoenix") {
+		t.Fatalf("phoenix must not be attempted for a non-USDC pair: %v", err)
+	}
+}
+
+// QuoteIn is the generic exact-out input quote and applies NO price bound —
+// price anchoring is the caller's job (oracle for generic pairs, par for
+// stable-to-stable via QuoteConvertIn).
+func TestQuoteIn_NoPriceBound(t *testing.T) {
+	// Router says 2 USDC in for 1 token out — far off par, but QuoteIn passes
+	// it through untouched.
+	srv := mockSimResult(t, vecI128Base64(t, 20_000_000, 10_000_000))
+	defer srv.Close()
+	c := NewSwapClient(soroban.NewClient(srv.URL), baseCfg())
+
+	got, err := c.QuoteIn(testUSDC, testToken, 10_000_000)
+	if err != nil {
+		t.Fatalf("QuoteIn: %v", err)
+	}
+	if got != 20_000_000 {
+		t.Fatalf("expected required=20000000 (first element), got %d", got)
+	}
+
+	// The par-anchored wrapper must reject the same quote.
+	if _, err := c.QuoteConvertIn(testUSDC, testToken, 10_000_000); !errors.Is(err, ErrOffParity) {
+		t.Fatalf("QuoteConvertIn must reject off-par quotes, got %v", err)
+	}
+}
+
+func TestQuoteIn_NoRouterConfigured(t *testing.T) {
+	cfg := baseCfg()
+	cfg.SoroswapRouter = ""
+	c := NewSwapClient(soroban.NewClient("http://invalid.local"), cfg)
+	if _, err := c.QuoteIn(testUSDC, testToken, 100); !errors.Is(err, ErrNoRoute) {
+		t.Fatalf("expected ErrNoRoute, got %v", err)
+	}
+}
