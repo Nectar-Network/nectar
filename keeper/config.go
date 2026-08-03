@@ -38,6 +38,11 @@ type Config struct {
 	DriftBps        int      // DeFindex allocation drift threshold in bps (500 = 5%)
 	EventLookback   int64    // ledgers of pool events scanned for position discovery
 	KnownDepositors []string // comma-separated G-addresses for performance page
+	// XlmReserve (stroops) is the native XLM the keeper always keeps for
+	// transaction fees. Stale-draw recovery may sweep pool-reserve assets the
+	// keeper holds back into USDC, and for native XLM only the balance ABOVE
+	// this floor is ever considered sellable.
+	XlmReserve int64
 
 	// Testnet USDC faucet (payments from a treasury account; NOT a mint —
 	// Circle USDC is not mintable by us). Empty FaucetSecret disables.
@@ -122,6 +127,14 @@ func LoadConfig() Config {
 		os.Exit(1)
 	}
 	c.EventLookback = lookback
+
+	xlmResStr := envOr("KEEPER_XLM_RESERVE", "1000000000") // 100 XLM
+	xlmRes, err := strconv.ParseInt(xlmResStr, 10, 64)
+	if err != nil || xlmRes < 0 {
+		fmt.Fprintf(os.Stderr, "KEEPER_XLM_RESERVE=%q must be a non-negative integer (stroops)\n", xlmResStr)
+		os.Exit(1)
+	}
+	c.XlmReserve = xlmRes
 
 	if raw := os.Getenv("KNOWN_DEPOSITORS"); raw != "" {
 		for _, addr := range strings.Split(raw, ",") {

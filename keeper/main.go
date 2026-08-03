@@ -119,10 +119,26 @@ type Keeper struct {
 	rpc       *soroban.Client
 	kp        *keypair.Full
 	cfg       Config
-	vault     *vault.Client
+	vault     adapters.VaultClient
+	dexc      recoverySwapper // nil when no DEX is configured
+	nativeSAC string          // native XLM SAC for this network ("" disables sweeps)
 	history   *vault.HistoryIndexer
 	protocols []adapters.ProtocolAdapter
 }
+
+// recoverySwapper is the one dex.SwapClient method stale-draw recovery needs;
+// an interface so recovery tests can fake the DEX.
+type recoverySwapper interface {
+	SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*dex.SwapResult, error)
+}
+
+// Seams for recovery's chain reads, injectable by tests. Production never
+// reassigns them.
+var (
+	getKeeperDraw    = vault.GetKeeperDraw
+	readTokenBalance = dex.TokenBalance
+	loadPoolState    = blend.LoadPool
+)
 
 // addEvent appends msg to the ring-buffer and broadcasts to SSE subscribers.
 // Subscriber channels are iterated outside the data lock to avoid deadlock.
@@ -215,6 +231,17 @@ func main() {
 		vault:   vault.NewClient(rpc, kp, cfg.HorizonURL, cfg.Passphrase, cfg.VaultID),
 		history: vault.NewHistoryIndexer(),
 	}
+	if dexc != nil { // typed-nil guard: a nil *dex.SwapClient must stay a nil interface
+		k.dexc = dexc
+	}
+	// The native SAC identifies which pool reserve is the keeper's fee asset.
+	// If the derivation ever fails, collateral sweeps are disabled entirely —
+	// fail-safe: recovery must never risk selling the fee balance.
+	if nativeSAC, err := soroban.NativeContractID(cfg.Passphrase); err != nil {
+		logErr("native SAC derivation failed — recovery collateral sweeps disabled", "err", err)
+	} else {
+		k.nativeSAC = nativeSAC
+	}
 	// One Blend adapter per configured pool (BLEND_POOLS, or legacy BLEND_POOL).
 	cfg.BlendPools = verifySettleAssets(rpc, cfg)
 	for _, pc := range cfg.BlendPools {
@@ -283,25 +310,42 @@ func main() {
 	}
 }
 
-// cycle runs every adapter once: scan tasks, execute them by priority, fold the
-// results into dashboard state, then refresh vault + depositor balances.
-// recoverStaleDraw makes the vault whole when a prior cycle left capital drawn
-// but unreturned (e.g. a transient ReturnProceeds failure after a fill). It
-// returns up to the outstanding draw from the keeper's USDC on hand, which clears
-// the draw and avoids a timeout slash. Safe: capped at the drawn amount (never
-// touches more of the keeper's float), and a no-op on vaults deployed before
-// get_keeper_draw existed.
+// recoverStaleDraw makes the vault whole when a prior cycle left capital
+// drawn but unreturned — a transient ReturnProceeds failure, an ambiguous
+// fill, a refused exit swap, or a keeper crash mid-unwind. It is the
+// IDEMPOTENT UNWIND RESUME: every input is re-read from chain each cycle
+// (outstanding draw via get_keeper_draw, holdings via token balances), so a
+// restart loses nothing and a second pass after a successful return is a
+// no-op. When USDC on hand cannot cover the draw, it first resumes the
+// interrupted unwind by sweeping held pool-reserve assets back to USDC
+// (oracle-anchored — a manipulated venue can stall recovery but not
+// fire-sale it), then returns up to the drawn amount. Never touches more of
+// the keeper's own float than the draw, and is a no-op on vaults deployed
+// before get_keeper_draw existed.
 func (k *Keeper) recoverStaleDraw() {
 	if k.cfg.UsdcAddr == "" {
 		return
 	}
-	drawn, err := vault.GetKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
+	drawn, err := getKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
 	if err != nil || drawn <= 0 {
 		return // no outstanding draw, or the vault predates the getter
 	}
-	usdc, err := dex.TokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address())
-	if err != nil || usdc <= 0 {
-		logWarn("outstanding vault draw but no USDC on hand — holding collateral for manual recovery", "drawn", drawn)
+	usdc, err := readTokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address())
+	if err != nil {
+		logWarn("outstanding vault draw but USDC balance unreadable — retrying next cycle", "drawn", drawn, "err", err)
+		return
+	}
+	if usdc < drawn {
+		if k.sweepHeldCollateral() {
+			if b, err := readTokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address()); err == nil {
+				usdc = b
+			}
+		}
+	}
+	if usdc <= 0 {
+		logWarn("outstanding vault draw and nothing sellable on hand — retrying next cycle",
+			"drawn", drawn)
+		state.addEvent(fmt.Sprintf("UNRECOVERED draw outstanding: %d (nothing sellable yet)", drawn))
 		return
 	}
 	ret := drawn
@@ -314,6 +358,73 @@ func (k *Keeper) recoverStaleDraw() {
 	}
 	logInfo("recovered stale vault draw", "drawn", drawn, "returned", ret)
 	state.addEvent(fmt.Sprintf("recovered stale draw: returned %d to vault", ret))
+	if ret < drawn {
+		logWarn("draw only partially recovered — remainder still outstanding", "drawn", drawn, "returned", ret)
+		state.addEvent(fmt.Sprintf("UNRECOVERED draw remainder: %d", drawn-ret))
+	}
+}
+
+// sweepHeldCollateral resumes an interrupted unwind from chain state alone:
+// for every ACTIVE pool it loads live reserves and sells whatever the keeper
+// holds of each non-USDC reserve asset, anchored to the pool's oracle price
+// so a bad venue quote is refused rather than dumped into. For native XLM
+// only the balance above cfg.XlmReserve is ever considered — the fee floor
+// must survive recovery. Returns true if at least one swap landed.
+//
+// Scope note, documented for operators: while a draw is outstanding, the
+// keeper treats its ENTIRE holding of a pool-reserve token (above the XLM fee
+// floor) as sellable. Keepers are not expected to hold pool collateral assets
+// for their own account; do not park personal funds on the keeper address.
+func (k *Keeper) sweepHeldCollateral() bool {
+	if k.dexc == nil {
+		logWarn("cannot sweep held collateral: no DEX configured")
+		return false
+	}
+	if k.nativeSAC == "" {
+		logWarn("cannot sweep held collateral: native SAC unknown (fee balance unprotectable)")
+		return false
+	}
+	swapped := false
+	for _, pc := range k.cfg.BlendPools {
+		if pc.Monitor {
+			continue
+		}
+		pool, err := loadPoolState(k.rpc, k.cfg.Passphrase, pc.Addr)
+		if err != nil {
+			logWarn("unwind resume: pool unreadable", "pool", short(pc.Addr), "err", err)
+			continue
+		}
+		for asset, r := range pool.Reserves {
+			if asset == k.cfg.UsdcAddr {
+				continue
+			}
+			bal, err := readTokenBalance(k.rpc, k.cfg.Passphrase, asset, k.kp.Address())
+			if err != nil || bal <= 0 {
+				continue
+			}
+			if asset == k.nativeSAC {
+				bal -= k.cfg.XlmReserve
+				if bal <= 0 {
+					continue
+				}
+			}
+			if r.OraclePrice <= 0 {
+				logWarn("unwind resume: asset unpriced, holding", "asset", short(asset), "balance", bal)
+				continue
+			}
+			ref := int64(float64(bal) / r.TokenScalar() * r.OraclePrice * 1e7)
+			res, err := k.dexc.SwapToUSDC(k.kp, asset, bal, ref)
+			if err != nil {
+				logWarn("unwind resume: swap refused, holding", "asset", short(asset), "balance", bal, "err", err)
+				continue
+			}
+			logInfo("unwind resume: sold held collateral", "asset", short(asset),
+				"amount", bal, "usdc_out", res.OutputAmount, "tx", res.TxHash)
+			state.addEvent(fmt.Sprintf("unwind resume: sold %d of %s for %d USDC", bal, short(asset), res.OutputAmount))
+			swapped = true
+		}
+	}
+	return swapped
 }
 
 // plannedTask pairs a discovered task with the adapter that produced it, so
