@@ -146,6 +146,35 @@ the `Result` into dashboard state/metrics.
 - **`keeper/adapters/blend`** — draws Nectar capital, fills a Blend auction,
   swaps the seized collateral to USDC (via the `dex` package), returns the real
   proceeds. Shows the capital-drawing flow and the `Task.Data` snapshot pattern.
+
+### Blend auction-type scope (operator-facing, verified in docs/FACTS.md)
+
+The three Blend v2 auction kinds move different assets, so the keeper treats
+them differently — "same logic, different request type" is NOT how Blend works:
+
+- **User liquidation (type 0) — full support.** The fill assumes the
+  borrower's dToken debt and receives their bToken collateral, all in one
+  health-checked `submit`; the keeper repays and withdraws atomically, swaps
+  collateral to USDC, and returns drawn capital + profit to the vault.
+- **Bad debt (type 1) — fill-and-hold, funded by the KEEPER FLOAT.** The fill
+  assumes the backstop's dToken debt (repaid atomically in the same submit)
+  and is compensated in **backstop LP tokens** (the BLND:USDC comet token) —
+  not in USDC. Those LP tokens cannot be liquidated into the vault's USDC on
+  testnet (the comet legs are not the vault asset and the BLND leg has no
+  market), and vault draws must return within the registry `slash_timeout` —
+  so bad-debt fills NEVER touch vault capital. The keeper spends its own
+  float (capped by `BAD_DEBT_MAX_SPEND`, 0 disables) and holds the LP, whose
+  value is logged every scan at the backstop's `token_spot_price` and at the
+  configured haircut (`BAD_DEBT_LP_HAIRCUT_BPS`, default 50%). Unwinding the
+  LP (single-sided comet exit into its USDC leg) is deferred to mainnet,
+  where that leg IS the vault's Circle USDC.
+- **Interest (type 2) — detected, never filled (deferred).** Here the LP
+  token is the **bid**: the filler must pre-hold backstop LP worth ~120% of
+  the auctioned interest and pre-approve the backstop to pull it. A keeper
+  operating vault USDC carries no LP inventory, so the keeper logs
+  `interest auction seen, deferred` (once per auction) and moves on. Filling
+  these would only make sense for an operator who already farms backstop LP —
+  out of scope for Nectar's vault-USDC capital model.
 - **`keeper/adapters/defindex`** — pure reallocation (no Nectar capital): reads
   `fetch_total_managed_funds`, computes drift vs target weights, and submits a
   role-gated `rebalance`. Shows struct/enum encode-decode and the auth pre-check.

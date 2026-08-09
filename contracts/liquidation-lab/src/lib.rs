@@ -203,11 +203,14 @@ impl LiquidationLab {
             .ok_or(LabError::AuctionNotFound)
     }
 
-    /// Fills an auction. The Go keeper sends request_type=6 (FillUserLiquidationAuction).
+    /// Fills an auction. The Go keeper sends request_type=6 (FillUserLiquidationAuction);
+    /// this lab models only user-liquidation fills (bad-debt fills — request_type 7 —
+    /// involve the backstop and LP-token draws the lab does not simulate).
     /// We parse the requests to find the user, remove the auction, and clear the position.
     ///
     /// The keeper sends requests as Vec<Map<Symbol, Val>> where each map has:
-    /// {request_type: U64(6), address: Address(user), amount: U64(0)}
+    /// {request_type: U32(6), address: Address(user), amount: I128(pct)} — the real
+    /// Blend ABI types, locked by keeper TestSubmitPayload_BlendABITypes.
     pub fn submit(
         env: Env,
         from: Address,

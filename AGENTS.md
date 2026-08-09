@@ -49,9 +49,9 @@ docs/               # Internal documentation
 - Interacts with Soroban via JSON-RPC (simulateTransaction, sendTransaction, getEvents)
 - XDR encoding for contract arguments using github.com/stellar/go/xdr
 - Stateless — all state read from chain each cycle. Restarts safely.
-- Config via environment variables (KEEPER_SECRET, BLEND_POOL, REGISTRY_CONTRACT, VAULT_CONTRACT)
+- Config via environment variables (KEEPER_SECRET, BLEND_POOLS, REGISTRY_CONTRACT, VAULT_CONTRACT)
 - Polling interval: 10 seconds default
-- Blend Dutch auctions: lot scales 0%→100% over 200 blocks, bid scales 100%→0%
+- Blend Dutch auctions (v2, verified — docs/FACTS.md): two sequential phases over 400 ledgers: t=0–200 lot 0%→100% (bid 100%), t=200–400 bid 100%→0% (lot 100%); fair point at t=200
 - Profitability threshold: lot_value/bid_cost > 1.02 (configurable)
 
 ### Frontend (Next.js/TypeScript)
@@ -78,7 +78,7 @@ Check docs/TRANCHE-{1,2,3}-SPEC.md for detailed deliverable specifications.
 ### Tranche 1 (MVP, due June 15, 2026):
 1. KeeperRegistry: add staking (USDC deposit on register), performance tracking (execution count, success rate, avg response time on-chain), slashing (auto-slash on draw timeout)
 2. NectarVault: add deposit caps, withdrawal cooldowns, hardened share math (7-decimal edge cases, concurrent draw+withdraw)
-3. Blend adapter: full auction integration (user/interest/bad debt auctions), Dutch auction profitability engine, retry logic with exponential backoff
+3. Blend adapter: auction integration (delivered scope per verified mechanics — docs/FACTS.md: user-liquidation fills FULL and proven live; bad-debt fills implemented fill-and-hold, float-funded; interest auctions detected + deferred, bid requires pre-held backstop LP), Dutch auction profitability engine, retry logic with exponential backoff
 
 ### Tranche 2 (Testnet, due August 15, 2026):
 1. DEX integration: Soroswap/Phoenix swap after auction fills (collateral → USDC)

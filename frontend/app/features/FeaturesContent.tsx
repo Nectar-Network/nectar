@@ -80,7 +80,7 @@ const STEPS = [
   {
     n: "05",
     t: "Return",
-    d: "Winner returns 90% of profit to the vault; retains 10%. Share price ticks up.",
+    d: "Winner returns the drawn capital plus all realized profit to the vault. Share price ticks up.",
   },
 ];
 
@@ -281,8 +281,8 @@ function Contention() {
 // ── Economics — profit becomes share price ───────────────────────────────────
 const ECON = [
   {
-    t: "90 / 10 split",
-    d: "Every liquidation returns 90% of realized profit to the vault. The winning keeper keeps 10% as its execution incentive.",
+    t: "Profit to depositors",
+    d: "Every liquidation returns its full realized profit (proceeds minus drawn capital) to the vault — depositors capture it as a rising share price.",
   },
   {
     t: "One rising price",
