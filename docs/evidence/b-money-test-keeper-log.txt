@@ -1,0 +1,478 @@
+21:48:46.420 [] INFO parsing keypair key_len=56 prefix=S
+21:48:46.422 [] INFO registering keeper name=keeper-alpha
+21:48:49.556 [] INFO registered name=keeper-alpha
+21:48:50.095 [] INFO blend pool configured pool=CBUB..CK3V mode=active pool_usdc=
+21:48:50.095 [] INFO adapters registered count=1
+21:48:50.096 [] INFO API server listening addr=:8099
+21:48:50.096 [] INFO keeper started pools=1 interval=10
+21:49:14.446 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:49:14.446 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:49:14.446 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:49:14.446 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:49:14.446 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:49:14.446 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+2026/08/09 21:49:22 INFO stale auction deleted user=GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ kind=user_liquidation tx=b8bc528356c9781087139b84a48860327049ac9307685d525e6a124ea868af86
+2026/08/09 21:49:29 INFO new_auction landed user=GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ percent=100 tx=e7af9d8ed7669c8da442d29dcc4c14be0ab336ff798162166c5a62408449b383
+21:49:29.744 [] INFO auction created pool=CBUB..CK3V user=GCCT..NOIJ percent=100 start_block=4054313
+21:49:32.494 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0000 < 1.0200)
+21:49:51.089 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:49:51.089 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:49:51.089 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:49:51.090 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:49:51.090 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:49:51.090 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:49:54.635 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0098 < 1.0200)
+21:50:13.467 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:50:13.467 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:50:13.467 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:50:13.467 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:50:13.467 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:50:13.467 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:50:17.200 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0220 < 1.0200)
+21:50:36.501 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:50:36.501 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:50:36.501 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:50:36.501 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:50:36.501 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:50:36.501 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:50:39.782 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0318 < 1.0200)
+21:50:59.558 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:50:59.558 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:50:59.558 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:50:59.558 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:50:59.558 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:50:59.558 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:51:03.183 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0441 < 1.0200)
+21:51:21.709 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:51:21.709 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:51:21.709 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:51:21.709 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:51:21.709 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:51:21.709 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:51:25.363 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0539 < 1.0200)
+21:51:45.605 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:51:45.605 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:51:45.605 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:51:45.605 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:51:45.605 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:51:45.605 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:51:48.494 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0661 < 1.0200)
+21:52:07.064 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:52:07.064 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:52:07.064 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:52:07.064 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:52:07.064 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:52:07.064 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:52:09.746 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0759 < 1.0200)
+21:52:29.081 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=2
+21:52:29.081 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:52:29.081 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:52:29.081 [] INFO position pool=CBUB..CK3V addr=GATK..3P7W hf=+Inf
+21:52:29.081 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:52:29.081 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:52:32.230 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0857 < 1.0200)
+21:52:50.450 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:52:50.450 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:52:50.450 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:52:50.450 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:52:50.450 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:52:54.632 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.0979 < 1.0200)
+21:53:12.508 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:53:12.509 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:53:12.509 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:53:12.509 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:53:12.509 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:53:16.887 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1077 < 1.0200)
+21:53:35.300 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:53:35.300 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:53:35.300 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:53:35.300 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:53:35.300 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:53:38.333 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1200 < 1.0200)
+21:53:57.210 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:53:57.210 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:53:57.210 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:53:57.210 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:53:57.210 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:54:00.838 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1298 < 1.0200)
+21:54:19.551 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:54:19.551 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:54:19.551 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:54:19.551 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:54:19.551 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:54:22.333 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1395 < 1.0200)
+21:54:40.406 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:54:40.407 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:54:40.407 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:54:40.407 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:54:40.407 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:54:43.510 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1518 < 1.0200)
+21:55:01.550 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:55:01.551 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:55:01.551 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:55:01.551 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:55:01.551 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:55:05.913 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1616 < 1.0200)
+21:55:23.845 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:55:23.846 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:55:23.846 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:55:23.846 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:55:23.846 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:55:26.838 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1714 < 1.0200)
+21:55:45.938 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:55:45.938 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:55:45.939 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:55:45.939 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:55:45.939 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:55:49.036 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1836 < 1.0200)
+21:56:07.208 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:56:07.208 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:56:07.208 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:56:07.208 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:56:07.208 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:56:10.186 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.1934 < 1.0200)
+21:56:30.002 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:56:30.002 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:56:30.003 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:56:30.003 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:56:30.003 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:56:33.585 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2056 < 1.0200)
+21:56:52.413 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:56:52.413 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:56:52.413 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:56:52.413 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:56:52.413 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:56:55.761 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2154 < 1.0200)
+21:57:12.822 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:57:12.822 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:57:12.822 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:57:12.822 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:57:12.822 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:57:17.136 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2252 < 1.0200)
+21:57:34.513 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:57:34.514 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:57:34.514 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:57:34.514 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:57:34.514 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:57:37.888 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2375 < 1.0200)
+21:57:55.383 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:57:55.383 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:57:55.383 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:57:55.383 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:57:55.383 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:57:59.204 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2473 < 1.0200)
+21:58:16.943 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:58:16.943 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:58:16.943 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:58:16.943 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:58:16.943 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:58:21.408 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2571 < 1.0200)
+21:58:39.630 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:58:39.630 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:58:39.630 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:58:39.630 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:58:39.630 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:58:43.457 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2693 < 1.0200)
+21:59:01.864 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:59:01.865 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:59:01.865 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:59:01.865 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:59:01.865 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:59:05.444 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2791 < 1.0200)
+21:59:25.419 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:59:25.420 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:59:25.420 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:59:25.420 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:59:25.420 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:59:28.514 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.2913 < 1.0200)
+21:59:46.369 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+21:59:46.373 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+21:59:46.373 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+21:59:46.373 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+21:59:46.373 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+21:59:49.483 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3011 < 1.0200)
+22:00:07.151 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:00:07.152 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:00:07.153 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:00:07.153 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:00:07.153 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:00:11.040 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3109 < 1.0200)
+22:00:31.422 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:00:31.424 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:00:31.424 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:00:31.424 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:00:31.424 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:00:36.766 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3232 < 1.0200)
+22:00:55.013 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:00:55.018 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:00:55.018 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:00:55.018 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:00:55.018 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:00:58.688 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3354 < 1.0200)
+22:01:18.310 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:01:18.311 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:01:18.311 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:01:18.311 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:01:18.311 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:01:22.604 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3452 < 1.0200)
+22:01:41.192 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:01:41.192 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:01:41.192 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:01:41.192 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:01:41.192 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:01:44.157 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3574 < 1.0200)
+22:02:01.870 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:02:01.870 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:02:01.870 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:02:01.870 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:02:01.870 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:02:05.161 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3672 < 1.0200)
+22:02:25.711 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:02:25.716 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:02:25.716 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:02:25.716 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:02:25.716 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:02:30.037 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3795 < 1.0200)
+22:02:48.516 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:02:48.520 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:02:48.520 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:02:48.520 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:02:48.520 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:02:52.974 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.3893 < 1.0200)
+22:03:11.845 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:03:11.846 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:03:11.846 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:03:11.846 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:03:11.846 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:03:16.039 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4015 < 1.0200)
+22:03:33.340 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:03:33.341 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:03:33.341 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:03:33.342 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:03:33.342 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:03:36.508 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4113 < 1.0200)
+22:03:54.639 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:03:54.643 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:03:54.643 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:03:54.643 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:03:54.643 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:03:57.789 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4211 < 1.0200)
+22:04:16.853 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:04:16.857 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:04:16.857 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:04:16.857 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:04:16.857 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:04:20.101 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4333 < 1.0200)
+22:04:38.145 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:04:38.146 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:04:38.146 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:04:38.146 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:04:38.146 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:04:42.335 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4431 < 1.0200)
+22:05:00.684 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:05:00.685 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:05:00.685 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:05:00.685 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:05:00.685 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:05:05.850 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4554 < 1.0200)
+22:05:23.959 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:05:23.959 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:05:23.959 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:05:23.959 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:05:23.959 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:05:28.982 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4651 < 1.0200)
+22:05:48.175 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:05:48.175 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:05:48.175 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:05:48.175 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:05:48.175 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:05:52.324 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4774 < 1.0200)
+22:06:09.638 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:06:09.638 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:06:09.638 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:06:09.638 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:06:09.638 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:06:12.818 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4872 < 1.0200)
+22:06:31.163 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:06:31.163 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:06:31.163 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:06:31.163 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:06:31.163 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:06:37.943 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.4996 < 1.0200)
+22:06:58.755 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:06:58.755 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:06:58.755 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:06:58.755 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:06:58.755 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:07:02.054 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5127 < 1.0200)
+22:07:21.544 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:07:21.544 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:07:21.544 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:07:21.544 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:07:21.544 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:07:24.752 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5265 < 1.0200)
+22:07:43.160 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:07:43.160 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:07:43.161 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:07:43.161 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:07:43.161 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:07:46.853 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5381 < 1.0200)
+22:08:08.081 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:08:08.081 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:08:08.081 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:08:08.081 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:08:08.081 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:08:11.796 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5532 < 1.0200)
+22:08:34.138 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:08:34.138 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:08:34.138 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:08:34.138 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:08:34.138 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:08:38.508 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5693 < 1.0200)
+22:08:57.253 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:08:57.253 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:08:57.253 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:08:57.253 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:08:57.253 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:09:01.821 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.5864 < 1.0200)
+22:09:20.662 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:09:20.663 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:09:20.663 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:09:20.663 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:09:20.663 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:09:23.856 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6008 < 1.0200)
+22:09:42.159 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:09:42.159 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:09:42.159 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:09:42.159 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:09:42.159 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:09:45.893 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6198 < 1.0200)
+22:10:04.994 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:10:04.996 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:10:04.996 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:10:04.996 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:10:04.996 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:10:09.269 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6359 < 1.0200)
+22:10:30.158 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:10:30.158 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:10:30.158 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:10:30.158 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:10:30.158 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:10:33.305 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6572 < 1.0200)
+22:10:52.064 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:10:52.065 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:10:52.065 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:10:52.065 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:10:52.065 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:10:56.485 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6800 < 1.0200)
+22:11:15.464 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:11:15.464 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:11:15.464 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:11:15.465 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:11:15.465 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:11:18.724 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.6995 < 1.0200)
+22:11:36.470 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:11:36.470 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:11:36.470 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:11:36.470 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:11:36.470 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:11:40.763 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.7254 < 1.0200)
+22:11:58.452 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:11:58.452 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:11:58.452 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:11:58.452 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:11:58.453 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:12:01.951 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.7475 < 1.0200)
+22:12:21.302 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:12:21.302 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:12:21.302 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:12:21.302 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:12:21.302 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:12:25.032 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.7772 < 1.0200)
+22:12:44.123 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:12:44.123 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:12:44.123 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:12:44.123 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:12:44.123 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:12:47.517 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.8027 < 1.0200)
+22:13:09.009 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:13:09.010 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:13:09.010 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:13:09.010 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:13:09.010 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:13:13.308 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.8370 < 1.0200)
+22:13:33.789 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:13:33.789 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:13:33.789 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:13:33.789 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:13:33.789 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:13:37.727 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.8743 < 1.0200)
+22:13:58.289 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:13:58.289 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:13:58.289 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:13:58.289 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:13:58.289 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:14:01.636 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.9152 < 1.0200)
+22:14:20.369 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:14:20.369 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:14:20.369 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:14:20.369 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:14:20.369 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:14:24.260 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.9507 < 1.0200)
+22:14:43.587 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:14:43.587 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:14:43.587 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:14:43.587 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:14:43.587 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+22:14:49.039 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=not profitable (0.9992 < 1.0200)
+22:15:07.703 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:15:07.703 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:15:07.703 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:15:07.703 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:15:07.703 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+2026/08/09 22:15:19 INFO vault draw landed amount=202154450 tx=49114876a8e783044eb8f9eb9a780301b83176649d494ba15c1f41affe30c494
+22:15:57.198 [] INFO task not executed protocol=blend:CBUB..CK3V target=GCCT..NOIJ note=fill failed: submit: submit sim: HostError: Error(Contract, #10)
+
+Event log (newest first):
+   0: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[error, Error(Contract, #10)], data:"escalating error to VM trap from failed host function call: call"
+   1: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[error, Error(Contract, #10)], data:["contract call failed", transfer, [GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, 202154450]]
+   2: [Failed Diagnostic Event (not emitted)] contract:CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA, topics:[error, Error(Contract, #10)], data:["resulting balance is not within the allowed range", 0, -194616470, 9223372036854775807]
+   3: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fn_call, CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA, transfer], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, 202154450]
+   4: [Contract Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[withdraw_collateral, CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF], data:[1000000000, 1000000000]
+   5: [Contract Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[repay, CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF], data:[84064234, 83996659]
+   6: [Contract Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fill_auction, 0, GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, 100, {bid: {CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA: 83996659}, block: 4054313, lot: {CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC: 1000000000}}]
+   7: [Contract Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[bad_debt, GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ, CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA], data:115995386
+   8: [Diagnostic Event] topics:[fn_call, CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, submit], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, [{address: GCCTPHRTKMZMQEOH26GZGD3VQUYALUZZDWRP37ZC3QBDOXQHWQ2MNOIJ, amount: 100, request_type: 6}, {address: CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA, amount: 202154450, request_type: 5}, {address: CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC, amount: 4611686018427387904, request_type: 3}]]
+; nothing returnable above keeper float — draw outstanding, next cycle recovers
+22:16:15.951 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+22:16:15.951 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:16:15.951 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:16:15.951 [] INFO position pool=CBUB..CK3V addr=GCCT..NOIJ hf=0.3489
+22:16:15.951 [] INFO executing task protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ priority=10
+2026/08/09 22:16:26 INFO vault draw landed amount=202154468 tx=96bad3cc6a02b5ab8f62ad92269133e6ecbc6beee42cf04615a18d39774d8b33
+2026/08/09 22:16:36 INFO pool submit landed requests=3 tx=ff90b7a288923490527b3009faf8d5913299b5ce0371171019dd32bdee2b2aea
+2026/08/09 22:16:45 INFO soroswap swap landed in=999794363 out=102018455 tx=754aa6d09a8547f5ff56c51ae148c087c8ceafe4c4843dd8f1a5b928382433d3
+22:16:45.748 [] INFO collateral swapped to USDC asset=CDLZ..CYSC amount=102018455
+2026/08/09 22:16:56 INFO vault return_proceeds landed amount=228114802 tx=f644a9ca37fa9188cfc44b4f8c6af6c94294459df397898460b85eaf67ccb491
+22:16:56.397 [] INFO task executed protocol=blend:CBUB..CK3V type=liquidation target=GCCT..NOIJ drew=202154468 proceeds=228114802 profit=25960334 response_ms=16174
+22:17:18.034 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+22:17:18.034 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:17:18.034 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:17:18.034 [] INFO no positions visible pool=CBUB..CK3V
+22:17:35.997 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+22:17:35.997 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:17:35.997 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:17:35.997 [] INFO no positions visible pool=CBUB..CK3V
+22:17:54.052 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+22:17:54.052 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:17:54.052 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:17:54.052 [] INFO no positions visible pool=CBUB..CK3V
+22:18:11.580 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+22:18:11.580 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:18:11.580 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:18:11.580 [] INFO no positions visible pool=CBUB..CK3V
+22:18:30.183 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+22:18:30.183 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+22:18:30.183 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.0980000
+22:18:30.183 [] INFO no positions visible pool=CBUB..CK3V
+22:18:32.559 [] INFO shutdown signal received, exiting

@@ -1,0 +1,60 @@
+/Users/kunal/.zshenv:.:2: no such file or directory: /Users/kunal/.starkli/env
+== building keeper ==
+BEFORE: total_usdc=600000000 total_shares=600000000 total_profit=0 active_liq=0
+BEFORE share price: 1.0
+== starting keeper (log: /Volumes/Extreme SSD/nectar/docs/evidence/b-money-test-keeper.log) ==
+t=30s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=60s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=90s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=120s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=150s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=180s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=210s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=240s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=270s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=300s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=330s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=360s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=390s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=420s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=450s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=480s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=510s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=540s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=570s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=600s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=630s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=660s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=690s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=720s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=750s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=780s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=810s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=840s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=870s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=900s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=930s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=960s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=990s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1020s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1050s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1080s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1110s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1140s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1170s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1200s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1230s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1260s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1290s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1320s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1350s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1380s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1410s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1440s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1470s total_usdc=600000000 profit=0 active_liq=0 keeper_draw=0
+t=1500s total_usdc=600000000 profit=0 active_liq=202154468 keeper_draw=202154468
+t=1530s total_usdc=625960334 profit=25960334 active_liq=0 keeper_draw=0
+== cycle complete ==
+AFTER:  total_usdc=625960334 total_shares=600000000 total_profit=25960334 active_liq=0
+share price: 1.0000000 -> 1.0432672 (delta_usdc=25960334 stroops)
+MONEY TEST PASS: share price increased
