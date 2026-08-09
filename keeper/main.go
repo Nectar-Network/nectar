@@ -574,7 +574,16 @@ func (k *Keeper) recordResult(task adapters.Task, res *adapters.Result) {
 	}
 	if !res.Success {
 		if res.Note != "" {
-			logInfo("task not executed", "protocol", task.Protocol, "target", short(task.Target), "note", res.Note)
+			// A no-op skip (waiting for profitability, no route, …) is routine;
+			// a failed attempt where capital actually MOVED (rollback, held
+			// funds, ambiguous fill) is an operator-attention event.
+			if res.Drew > 0 {
+				logWarn("task failed after drawing capital", "protocol", task.Protocol, "target", short(task.Target),
+					"drew", res.Drew, "returned", res.Proceeds, "note", res.Note)
+				state.addEvent(fmt.Sprintf("%s %s FAILED post-draw: %s", task.Protocol, task.Type, res.Note))
+			} else {
+				logInfo("task not executed", "protocol", task.Protocol, "target", short(task.Target), "note", res.Note)
+			}
 		}
 		return
 	}

@@ -130,7 +130,7 @@ fi
 
 # 4. Retry-path tests already covered by Go unit tests; surface them here.
 echo "→ Retry classifier (covered by Go tests)"
-(cd "$ROOT_DIR/keeper" && go test -run 'TestFillAuction_Retries|TestFillAuction_DoesNotRetry|TestRegister_DoesNotRetry' ./blend/ -count=1 -timeout 30s) \
+(cd "$ROOT_DIR/keeper" && go test -run 'TestSubmitRetry_Retries|TestSubmitRetry_DoesNotRetry|TestRegister_DoesNotRetry' ./blend/ -count=1 -timeout 30s) \
   && ok "blend retry tests pass" \
   || fail "blend retry tests failed"
 

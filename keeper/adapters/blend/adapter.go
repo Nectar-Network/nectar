@@ -78,7 +78,40 @@ var (
 	coreDeleteStale   = core.DeleteStaleAuction
 	tokenBalance      = dex.TokenBalance
 	latestLedger      = func(rpc *soroban.Client) (int64, error) { return rpc.LatestLedger() }
+	awaitTx           = func(rpc *soroban.Client, hash string, timeout time.Duration) error {
+		_, err := rpc.AwaitTx(hash, timeout)
+		return err
+	}
 )
+
+// ambiguityWait is how long Execute re-polls an ambiguous transaction before
+// giving up. Signed txs carry a 30-second timebound (soroban/tx.go) and the
+// Invoke path already polled 30s, so this window covers the tx's entire
+// remaining life: at its end the tx has either landed (SUCCESS/FAILED
+// visible) or expired. Residual "unknown" therefore implies a sustained RPC
+// outage — the conservative hold path then applies, and the next cycle's
+// recovery (whose chain reads would fail the same way) cannot race a
+// still-pending tx.
+const ambiguityWait = 45 * time.Second
+
+// ambiguity classifies an ambiguous (possibly-landed) transaction error by
+// re-polling its hash: landed (it SUCCEEDED), failed (it definitively landed
+// and FAILED — safe to treat deterministically), or neither (still unknown).
+func ambiguity(rpc *soroban.Client, err error) (hash string, landed, failed bool) {
+	var u *soroban.TxStatusUnknownError
+	if !errors.As(err, &u) || u.Hash == "" {
+		return "", false, false
+	}
+	aerr := awaitTx(rpc, u.Hash, ambiguityWait)
+	switch {
+	case aerr == nil:
+		return u.Hash, true, false
+	case !soroban.IsTxStatusUnknown(aerr):
+		return u.Hash, false, true
+	default:
+		return u.Hash, false, false
+	}
+}
 
 // Adapter implements adapters.ProtocolAdapter for one Blend pool. Run several
 // instances to monitor several pools — Name() is unique per pool.
@@ -551,19 +584,48 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	}
 	for _, p := range plans {
 		swapRes, serr := a.dex.ConvertExactOut(kp, settleAsset, p.asset, p.need, p.maxIn)
-		if serr != nil {
+		var got int64
+		switch {
+		case serr == nil:
+			got = swapRes.OutputAmount
+		case soroban.IsTxStatusUnknown(serr):
+			// The swap tx may still land. Rolling back now could return USDC
+			// the late-landing swap will then spend from the keeper's own
+			// float, stranding the bought asset. Re-poll the hash across the
+			// tx's remaining timebound life first.
+			_, landed, failedDet := ambiguity(rpc, serr)
+			switch {
+			case landed:
+				// Measure what actually arrived instead of trusting the plan.
+				bal, berr := tokenBalance(rpc, a.cfg.Passphrase, p.asset, kp.Address())
+				if berr != nil {
+					res.Note = fmt.Sprintf("acquisition %s landed but balance unreadable: %v — holding, next cycle reconciles", shortAddr(p.asset), berr)
+					res.Latency = time.Since(start)
+					return res, nil
+				}
+				got = bal - baseline[p.asset]
+			case failedDet:
+				a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
+					fmt.Sprintf("debt acquisition %s definitively failed: %v", shortAddr(p.asset), serr))
+				return res, nil
+			default:
+				res.Note = fmt.Sprintf("acquisition %s outcome UNKNOWN (tx may land): %v — holding funds, next cycle reconciles", shortAddr(p.asset), serr)
+				res.Latency = time.Since(start)
+				return res, nil
+			}
+		default:
 			a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
 				fmt.Sprintf("debt acquisition %s failed: %v", shortAddr(p.asset), serr))
 			return res, nil
 		}
-		if swapRes.OutputAmount < p.debt {
+		if got < p.debt {
 			a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
-				fmt.Sprintf("acquired %d of %s < debt %d", swapRes.OutputAmount, shortAddr(p.asset), p.debt))
+				fmt.Sprintf("acquired %d of %s < debt %d", got, shortAddr(p.asset), p.debt))
 			return res, nil
 		}
 		// Repay everything acquired: the pool refunds the excess over the
 		// true debt, and the refund is swept back to USDC below.
-		repays = append(repays, core.RepayLeg{Asset: p.asset, Amount: swapRes.OutputAmount})
+		repays = append(repays, core.RepayLeg{Asset: p.asset, Amount: got})
 	}
 
 	// Fill + repay every leg + withdraw all collateral in one atomic submit.
@@ -585,12 +647,27 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		a.sweepToUSDC(kp, rpc, pool, touched, baseline)
 	case soroban.IsTxStatusUnknown(fillErr):
 		// The submit may still land. Selling acquired assets or returning
-		// USDC now could double-move funds the landed fill will also move.
-		// Hold everything; the next cycle's stale-draw recovery re-reads
-		// chain state and finishes the unwind idempotently.
-		res.Note = fmt.Sprintf("fill outcome UNKNOWN (tx may land): %v — holding funds, next cycle reconciles", fillErr)
-		res.Latency = time.Since(start)
-		return res, nil
+		// USDC now could double-move funds the landed fill will also move —
+		// so first re-poll the hash across the tx's remaining timebound life.
+		hash, landed, failedDet := ambiguity(rpc, fillErr)
+		switch {
+		case landed:
+			res.Success = true
+			res.TxHash = hash
+			res.ResponseTimeMs = time.Since(drawStart).Milliseconds()
+			a.sweepToUSDC(kp, rpc, pool, touched, baseline)
+		case failedDet:
+			a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,
+				fmt.Sprintf("fill definitively failed: %v", fillErr))
+			return res, nil
+		default:
+			// Still unknown after the timebound window: sustained RPC outage.
+			// Hold everything; the next cycle's stale-draw recovery re-reads
+			// chain state and finishes the unwind idempotently.
+			res.Note = fmt.Sprintf("fill outcome UNKNOWN (tx may land): %v — holding funds, next cycle reconciles", fillErr)
+			res.Latency = time.Since(start)
+			return res, nil
+		}
 	default:
 		// Deterministic failure — the fill did not happen. Return the draw.
 		a.rollback(rpc, kp, vc, pool, res, floatBefore, baseline, plans,

@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stellar/go/keypair"
 
@@ -447,8 +448,16 @@ func TestExecute_FillDeterministicFailure_ReturnsFullDraw(t *testing.T) {
 	}
 }
 
-// Ambiguous fill outcome: the tx may still land, so NOTHING moves this cycle
-// — no sweep, no return. The next cycle's stale-draw recovery reconciles.
+// setAwaitTx overrides the ambiguity re-poll seam for one test.
+func setAwaitTx(t *testing.T, fn func(hash string) error) {
+	t.Helper()
+	orig := awaitTx
+	t.Cleanup(func() { awaitTx = orig })
+	awaitTx = func(rpc *soroban.Client, hash string, timeout time.Duration) error { return fn(hash) }
+}
+
+// Ambiguous fill that stays unknown after the timebound re-poll: NOTHING
+// moves this cycle — no sweep, no return. Next cycle's recovery reconciles.
 func TestExecute_FillAmbiguous_HoldsEverything(t *testing.T) {
 	bal := newBalTable()
 	fd := &fakeDex{bal: bal}
@@ -456,6 +465,9 @@ func TestExecute_FillAmbiguous_HoldsEverything(t *testing.T) {
 	amb := &soroban.TxStatusUnknownError{Hash: "deadbeef", Err: errors.New("timed out")}
 	installSeams(t, bal, auction, func(repays []core.RepayLeg, collateral []string) (string, error) {
 		return "", fmt.Errorf("submit: %w", amb)
+	})
+	setAwaitTx(t, func(hash string) error {
+		return &soroban.TxStatusUnknownError{Hash: hash, Err: errors.New("still pending")}
 	})
 	fv := &fakeVault{bal: bal}
 
@@ -471,6 +483,140 @@ func TestExecute_FillAmbiguous_HoldsEverything(t *testing.T) {
 	}
 	if !strings.Contains(res.Note, "UNKNOWN") {
 		t.Fatalf("note should flag the unknown outcome, got %q", res.Note)
+	}
+}
+
+// An ambiguous fill whose re-poll finds the tx LANDED is a success: the
+// chain effects happened, so the sweep and the measured return proceed.
+func TestExecute_FillAmbiguous_ResolvesLanded(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	fd.swapFn = func(token string, amount, ref int64) (*dex.SwapResult, error) {
+		bal.add(token, -amount)
+		bal.add(tUSDC, 97_000_000)
+		return &dex.SwapResult{OutputAmount: 97_000_000, Route: "soroswap"}, nil
+	}
+	auction := usdcAuction()
+	amb := &soroban.TxStatusUnknownError{Hash: "cafebabe", Err: errors.New("poll timeout")}
+	installSeams(t, bal, auction, func(repays []core.RepayLeg, collateral []string) (string, error) {
+		// The tx DID land on-chain despite the ambiguous report.
+		bal.add(tUSDC, -50_000_000)
+		bal.add(tXLM, seizedXLM)
+		return "", fmt.Errorf("submit: %w", amb)
+	})
+	setAwaitTx(t, func(hash string) error { return nil }) // resolved: SUCCESS
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !res.Success || res.TxHash != "cafebabe" {
+		t.Fatalf("resolved-landed must be a success with the polled hash, got %+v", res)
+	}
+	wantProceeds := settleNeed - 50_000_000 + 97_000_000
+	if len(fv.returns) != 1 || fv.returns[0] != wantProceeds {
+		t.Fatalf("proceeds after resolution: returned %v want [%d]", fv.returns, wantProceeds)
+	}
+}
+
+// An ambiguous fill whose re-poll finds the tx definitively FAILED rolls
+// back like any deterministic failure: the full draw comes home.
+func TestExecute_FillAmbiguous_ResolvesFailed(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	auction := usdcAuction()
+	amb := &soroban.TxStatusUnknownError{Hash: "feedface", Err: errors.New("poll timeout")}
+	installSeams(t, bal, auction, func(repays []core.RepayLeg, collateral []string) (string, error) {
+		return "", fmt.Errorf("submit: %w", amb)
+	})
+	setAwaitTx(t, func(hash string) error { return errors.New("tx feedface failed: AAAA") })
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Success {
+		t.Fatal("resolved-failed must not be a success")
+	}
+	if len(fv.returns) != 1 || fv.returns[0] != settleNeed {
+		t.Fatalf("full draw must come back: %v want [%d]", fv.returns, settleNeed)
+	}
+}
+
+// An ambiguous acquisition that stays unknown holds everything — no
+// rollback (a late-landing swap would spend returned USDC from the float).
+func TestExecute_AcquisitionAmbiguous_Holds(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	fd.quoteFn = func(from, to string, out int64) (int64, error) { return 40_500_000, nil }
+	amb := &soroban.TxStatusUnknownError{Hash: "0ddball", Err: errors.New("poll timeout")}
+	fd.convFn = func(from, to string, out, maxIn int64) (*dex.SwapResult, error) {
+		return nil, fmt.Errorf("swap_tokens_for_exact_tokens: %w", amb)
+	}
+	auction := usdcAuction()
+	auction.Bid[tXLM] = big.NewInt(400_000_000)
+	installSeams(t, bal, auction, nil)
+	setAwaitTx(t, func(hash string) error {
+		return &soroban.TxStatusUnknownError{Hash: hash, Err: errors.New("still pending")}
+	})
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(fv.returns) != 0 {
+		t.Fatalf("ambiguous acquisition must not return funds: %v", fv.returns)
+	}
+	if len(fd.swapToCalls) != 0 {
+		t.Fatalf("ambiguous acquisition must not re-sell: %v", fd.swapToCalls)
+	}
+	if !strings.Contains(res.Note, "UNKNOWN") {
+		t.Fatalf("note: %q", res.Note)
+	}
+}
+
+// An ambiguous acquisition whose re-poll finds the swap LANDED continues the
+// fill with the MEASURED balance delta as the repay amount.
+func TestExecute_AcquisitionAmbiguous_ResolvesLanded(t *testing.T) {
+	const xlmNeed = int64(404_000_000)
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	fd.quoteFn = func(from, to string, out int64) (int64, error) { return 40_500_000, nil }
+	amb := &soroban.TxStatusUnknownError{Hash: "5eed", Err: errors.New("poll timeout")}
+	fd.convFn = func(from, to string, out, maxIn int64) (*dex.SwapResult, error) {
+		// The swap actually landed: tokens arrived, USDC left.
+		bal.add(tUSDC, -40_500_000)
+		bal.add(tXLM, out)
+		return nil, fmt.Errorf("swap_tokens_for_exact_tokens: %w", amb)
+	}
+	fd.swapFn = func(token string, amount, ref int64) (*dex.SwapResult, error) {
+		out := amount / 10 * 97 / 100
+		bal.add(token, -amount)
+		bal.add(tUSDC, out)
+		return &dex.SwapResult{OutputAmount: out, Route: "soroswap"}, nil
+	}
+	auction := usdcAuction()
+	auction.Bid[tXLM] = big.NewInt(400_000_000)
+	repaysGot := installSeams(t, bal, auction, func(repays []core.RepayLeg, collateral []string) (string, error) {
+		bal.add(tUSDC, -50_000_000)
+		bal.add(tXLM, -200_000_000+seizedXLM)
+		return "filltx", nil
+	})
+	setAwaitTx(t, func(hash string) error { return nil }) // resolved: landed
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success, got %+v", res)
+	}
+	if len(*repaysGot) != 2 || (*repaysGot)[1] != (core.RepayLeg{Asset: tXLM, Amount: xlmNeed}) {
+		t.Fatalf("repay must use the MEASURED delta: %v", *repaysGot)
 	}
 }
 

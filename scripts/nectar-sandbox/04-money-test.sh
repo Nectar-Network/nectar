@@ -60,6 +60,7 @@ env \
   SLIPPAGE_BPS=100 \
   MIN_PROFIT=1.02 \
   POLL_INTERVAL=10 \
+  BLEND_EVENT_LOOKBACK="${BLEND_EVENT_LOOKBACK:-110000}" \
   API_PORT=8099 \
   SOROBAN_RPC="https://soroban-testnet.stellar.org:443" \
   HORIZON_URL="https://horizon-testnet.stellar.org" \
