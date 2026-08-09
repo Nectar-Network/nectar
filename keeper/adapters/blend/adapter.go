@@ -52,6 +52,21 @@ type Config struct {
 	// EventLookback is how many ledgers of pool events to scan for position
 	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
 	EventLookback int64
+	// KeeperAddress is the keeper's own G-address, used by scans to report the
+	// keeper's backstop-LP holdings. Empty disables that report line only.
+	KeeperAddress string
+	// BadDebtMaxSpend caps the keeper-FLOAT USDC (7-dec stroops) committed to
+	// one bad-debt fill; 0 disables bad-debt fills entirely. Bad-debt fills
+	// never draw vault capital: the fill pays USDC (debt repay) and receives
+	// backstop LP tokens that cannot be liquidated to vault USDC before
+	// mainnet, while vault draws must return within the registry's
+	// slash_timeout — so the LP position is keeper-operator risk by design
+	// (docs/FACTS.md Decisions, fill-and-hold).
+	BadDebtMaxSpend int64
+	// BadDebtHaircutBps discounts the backstop's token_spot_price when valuing
+	// the LP lot (5000 = value at 50% of spot). The haircut prices in the
+	// deferred unwind: comet exit fees/slippage and spot drift.
+	BadDebtHaircutBps int
 }
 
 // drawBufferBps pads every debt leg over the snapshot-time underlying amount
@@ -87,14 +102,22 @@ type dexClient interface {
 // by failure-injection tests (same pattern as the log hooks below). Production
 // never reassigns them.
 var (
-	coreGetAuction    = core.GetAuction
-	coreFindLiqPct    = core.FindLiquidationPercent
-	coreCreateAuction = core.CreateAuction
-	coreFillAndUnwind = core.FillAndUnwind
-	coreDeleteStale   = core.DeleteStaleAuction
-	tokenBalance      = dex.TokenBalance
-	latestLedger      = func(rpc *soroban.Client) (int64, error) { return rpc.LatestLedger() }
-	awaitTx           = func(rpc *soroban.Client, hash string, timeout time.Duration) error {
+	coreGetAuction       = core.GetAuction
+	coreFindLiqPct       = core.FindLiquidationPercent
+	coreCreateAuction    = core.CreateAuction
+	coreFillAndUnwind    = core.FillAndUnwind
+	coreDeleteStale      = core.DeleteStaleAuction
+	coreGetAuctionByType = core.GetAuctionByType
+	coreGetBackstop      = core.GetBackstop
+	coreGetBackstopToken = core.GetBackstopToken
+	coreBackstopPoolData = core.GetBackstopPoolData
+	coreLoadPosition     = core.LoadPosition
+	coreCreateBadDebt    = core.CreateBadDebtAuction
+	coreFillBadDebt      = core.FillBadDebtAndRepay
+	coreFillBadDebtFree  = core.FillBadDebtFree
+	tokenBalance         = dex.TokenBalance
+	latestLedger         = func(rpc *soroban.Client) (int64, error) { return rpc.LatestLedger() }
+	awaitTx              = func(rpc *soroban.Client, hash string, timeout time.Duration) error {
 		_, err := rpc.AwaitTx(hash, timeout)
 		return err
 	}
@@ -135,6 +158,15 @@ type Adapter struct {
 	cfg      Config
 	dex      dexClient
 	lastScan *adapters.ScanReport
+
+	// backstop / backstopToken cache the pool's backstop address and its LP
+	// token once resolved — both are constructor-fixed on chain (backstop is a
+	// pool __constructor arg with no setter), so caching is safe.
+	backstop      string
+	backstopToken string
+	// loggedInterestBlock dedupes the per-auction interest-deferral log line:
+	// one INFO per auction start block instead of one per 10-second cycle.
+	loggedInterestBlock int64
 }
 
 // NewAdapter builds a Blend adapter. dexc may be nil to disable all token
@@ -295,8 +327,142 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 			Data:     taskData{pool: pool, bidAssets: bidAssets, lotAssets: lotAssets},
 		})
 	}
+	tasks = append(tasks, a.scanBackstop(rpc, pool, report, suppressTasks)...)
 	a.lastScan = report
 	return tasks, nil
+}
+
+// badDebtData is the per-task payload for bad-debt tasks: the pool snapshot
+// plus the backstop identity and its LP valuation read in the same cycle.
+type badDebtData struct {
+	pool          *core.PoolState
+	backstop      string
+	backstopToken string
+	liabAssets    []string // underlying assets the backstop owes (mapped from indices)
+	spot          *core.BackstopPoolData
+}
+
+// appendNote joins operational caveats in the scan report.
+func appendNote(report *adapters.ScanReport, s string) {
+	if report.Note == "" {
+		report.Note = s
+		return
+	}
+	report.Note += "; " + s
+}
+
+// scanBackstop covers the auction kinds that live on the BACKSTOP address
+// rather than on borrower positions: bad-debt auctions (type 1 — actionable,
+// emitted as tasks) and interest auctions (type 2 — DETECTION ONLY, deferred:
+// the bid is backstop LP tokens the filler must pre-hold and pre-approve,
+// which a vault-USDC keeper does not carry; docs/FACTS.md Decisions). It also
+// reports the keeper's own backstop-LP holdings from earlier fill-and-hold
+// fills so their value stays visible every cycle. All findings go into the
+// scan report; every chain-read failure is reported, never guessed around.
+func (a *Adapter) scanBackstop(rpc *soroban.Client, pool *core.PoolState, report *adapters.ScanReport, suppressTasks bool) []adapters.Task {
+	if a.backstop == "" {
+		bs, err := coreGetBackstop(rpc, a.cfg.PoolAddr)
+		if err != nil {
+			appendNote(report, fmt.Sprintf("backstop unresolved (bad-debt/interest scan skipped): %v", err))
+			return nil
+		}
+		a.backstop = bs
+	}
+	if a.backstopToken == "" {
+		tok, err := coreGetBackstopToken(rpc, a.cfg.Passphrase, a.backstop)
+		if err != nil {
+			appendNote(report, fmt.Sprintf("backstop token unresolved (bad-debt/interest scan skipped): %v", err))
+			return nil
+		}
+		a.backstopToken = tok
+	}
+
+	// Interest auctions: awareness only, never a task. Log once per auction.
+	if ia, err := coreGetAuctionByType(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, a.backstop, core.AuctionInterest); err != nil {
+		appendNote(report, fmt.Sprintf("interest-auction check failed: %v", err))
+	} else if ia != nil {
+		appendNote(report, "interest auction seen, deferred: bid requires pre-held backstop LP inventory (docs/FACTS.md Decisions)")
+		if ia.StartBlock != a.loggedInterestBlock {
+			a.loggedInterestBlock = ia.StartBlock
+			logAuction("interest auction seen, deferred: fill bid is backstop LP tokens (~140% of interest value) the keeper would have to pre-hold and pre-approve — vault USDC cannot fill it",
+				a.cfg.PoolAddr, a.backstop, 0, ia.StartBlock)
+		}
+	}
+
+	// Value the keeper's held LP (fill-and-hold inventory) every cycle.
+	var spot *core.BackstopPoolData
+	loadSpot := func() *core.BackstopPoolData {
+		if spot != nil {
+			return spot
+		}
+		pd, err := coreBackstopPoolData(rpc, a.cfg.Passphrase, a.backstop, a.cfg.PoolAddr)
+		if err != nil {
+			appendNote(report, fmt.Sprintf("backstop pool_data unreadable: %v", err))
+			return nil
+		}
+		spot = pd
+		return spot
+	}
+	if a.cfg.KeeperAddress != "" {
+		if lpBal, err := tokenBalance(rpc, a.cfg.Passphrase, a.backstopToken, a.cfg.KeeperAddress); err == nil && lpBal > 0 {
+			if pd := loadSpot(); pd != nil {
+				lp := big.NewInt(lpBal)
+				appendNote(report, fmt.Sprintf("keeper holds %d backstop LP ≈ $%.4f spot / $%.4f after %d bps haircut (fill-and-hold, unwind deferred)",
+					lpBal, core.BackstopLPValueUSD(lp, pd.SpotPrice, 0), core.BackstopLPValueUSD(lp, pd.SpotPrice, a.cfg.BadDebtHaircutBps), a.cfg.BadDebtHaircutBps))
+			}
+		}
+	}
+
+	// Bad debt: the backstop's dToken liabilities (left behind by full fills
+	// of underwater positions) are auctionable by anyone.
+	pos, err := coreLoadPosition(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, a.backstop)
+	if err != nil {
+		appendNote(report, fmt.Sprintf("backstop positions unreadable: %v", err))
+		return nil
+	}
+	if len(pos.Liabilities) == 0 {
+		return nil
+	}
+	indexToAsset := make(map[uint32]string, len(pool.Reserves))
+	for asset, r := range pool.Reserves {
+		indexToAsset[r.Index] = asset
+	}
+	liabAssets := make([]string, 0, len(pos.Liabilities))
+	for idx := range pos.Liabilities {
+		if asset, ok := indexToAsset[idx]; ok {
+			liabAssets = append(liabAssets, asset)
+		}
+	}
+	sort.Strings(liabAssets)
+	if len(liabAssets) == 0 {
+		appendNote(report, "backstop has bad debt in unmappable reserves — skipped")
+		return nil
+	}
+	appendNote(report, fmt.Sprintf("backstop carries bad debt in %d reserve(s)", len(liabAssets)))
+	if suppressTasks {
+		return nil
+	}
+	if a.cfg.BadDebtMaxSpend <= 0 {
+		appendNote(report, "bad-debt fills disabled (BAD_DEBT_MAX_SPEND=0)")
+		return nil
+	}
+	pd := loadSpot()
+	if pd == nil {
+		return nil // LP lot cannot be valued — no fill without a price
+	}
+	return []adapters.Task{{
+		Protocol: a.Name(),
+		Type:     "bad_debt",
+		Target:   a.backstop,
+		Priority: 1, // house-cleaning: never outranks a real liquidation
+		Data: badDebtData{
+			pool:          pool,
+			backstop:      a.backstop,
+			backstopToken: a.backstopToken,
+			liabAssets:    liabAssets,
+			spot:          pd,
+		},
+	}}
 }
 
 // debtLeg is one bid asset's underlying owed: debt is the ceil'd dToken ×
@@ -322,10 +488,10 @@ func debtNeeds(pool *core.PoolState, auction *core.Auction) ([]debtLeg, error) {
 		if !ok {
 			return nil, fmt.Errorf("bid asset %s not in pool reserves", shortAddr(asset))
 		}
+		// User-liquidation and bad-debt bids are both dToken amounts
+		// (docs/FACTS.md "Auction asset flows"). Interest auctions never get
+		// here: their bid is backstop LP, and they are detection-only.
 		rate := r.DRate
-		if auction.Type == core.AuctionInterest {
-			rate = 1.0 // interest bids are backstop LP, not dTokens
-		}
 		if rate <= 0 {
 			return nil, fmt.Errorf("bid asset %s has no d_rate", shortAddr(asset))
 		}
@@ -401,6 +567,9 @@ type acqPlan struct {
 // rollback here would corrupt.
 func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.Task, vc adapters.VaultClient) (*adapters.Result, error) {
 	start := time.Now()
+	if task.Type == "bad_debt" {
+		return a.executeBadDebt(rpc, kp, task, start)
+	}
 	td, ok := task.Data.(taskData)
 	if !ok || td.pool == nil {
 		return &adapters.Result{Note: "missing pool snapshot"}, nil
@@ -734,6 +903,223 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		} else {
 			res.Note = fmt.Sprintf("%s; returned %d of %d drawn", failNote, res.Proceeds, drawAmt)
 		}
+	}
+	res.Latency = time.Since(start)
+	return res, nil
+}
+
+// executeBadDebt runs the bad-debt fill path (docs/FACTS.md Decisions,
+// "fill-and-hold"):
+//
+//  1. create the backstop's bad-debt auction if absent — permissionless
+//     new_auction(1, backstop, [settle asset], [backstop LP token], 100).
+//     Only settle-asset (vault USDC) debt legs are supported; non-USDC bad
+//     debt is skipped with a note (the lot may be auctioned by others).
+//  2. wait on the verified price curve until (LP lot value after haircut) /
+//     (assumed debt cost) ≥ MinProfit — BadDebtProfitability, using the
+//     backstop's OWN token_spot_price for the lot
+//  3. ONE atomic submit: fill + repay from the KEEPER FLOAT (never a vault
+//     draw — the LP received cannot be liquidated to vault USDC before
+//     mainnet, and vault draws must return within the registry slash
+//     timeout). Spend is capped by BadDebtMaxSpend and the available float;
+//     if the full fill doesn't fit, the fill percent is scaled down.
+//  4. past t=400 the scaled bid is empty: capture the lot for free (bare
+//     fill, no repay, no spend) instead of deleting the stale auction.
+//  5. the received LP is HELD at the keeper and reported at spot and at the
+//     configured haircut every scan; unwinding it (single-sided comet exit)
+//     is deferred until the comet's USDC leg is the vault asset (mainnet).
+//
+// No vault capital is at risk on any path here, so failures need no
+// rollback: a deterministic failure spent nothing (atomic submit), and an
+// ambiguous one is resolved by hash or left to the next cycle's re-scan.
+func (a *Adapter) executeBadDebt(rpc *soroban.Client, kp *keypair.Full, task adapters.Task, start time.Time) (*adapters.Result, error) {
+	td, ok := task.Data.(badDebtData)
+	if !ok || td.pool == nil || td.spot == nil {
+		return &adapters.Result{Note: "missing bad-debt snapshot"}, nil
+	}
+	if a.cfg.Monitor {
+		return &adapters.Result{Note: "monitor-only pool — execution disabled"}, nil
+	}
+	if a.cfg.BadDebtMaxSpend <= 0 {
+		return &adapters.Result{Note: "bad-debt fills disabled (BAD_DEBT_MAX_SPEND=0)"}, nil
+	}
+	settle := a.cfg.UsdcAddr
+	if settle == "" {
+		return &adapters.Result{Note: "no USDC/settle asset configured — cannot size a bad-debt repay"}, nil
+	}
+	if a.cfg.PoolUsdc != "" && a.cfg.PoolUsdc != settle {
+		return &adapters.Result{Note: "pool settles a different USDC — execution disabled (see FACTS.md 'USDC asset bridging')"}, nil
+	}
+
+	auction, err := coreGetAuctionByType(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, td.backstop, core.AuctionBadDebt)
+	if err != nil {
+		return nil, fmt.Errorf("get bad-debt auction: %w", err)
+	}
+	if auction == nil {
+		hasSettleLeg := false
+		for _, asset := range td.liabAssets {
+			if asset == settle {
+				hasSettleLeg = true
+				break
+			}
+		}
+		if !hasSettleLeg {
+			return &adapters.Result{Note: "backstop bad debt has no settle-asset leg — non-USDC bad debt is not fillable by this keeper (skipped)"}, nil
+		}
+		// Bid ONLY the settle-asset leg: the contract allows auctioning a
+		// subset of the backstop's debt, and a leg we cannot repay would make
+		// the whole auction unfillable for us.
+		if cerr := coreCreateBadDebt(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr,
+			td.backstop, td.backstopToken, []string{settle}); cerr != nil {
+			return nil, fmt.Errorf("create bad-debt auction: %w", cerr)
+		}
+		auction, err = coreGetAuctionByType(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, td.backstop, core.AuctionBadDebt)
+		if err != nil {
+			return nil, fmt.Errorf("get bad-debt auction: %w", err)
+		}
+		if auction == nil {
+			return &adapters.Result{Note: "bad-debt auction created but not readable"}, nil
+		}
+		logAuction("bad-debt auction created", a.cfg.PoolAddr, td.backstop, 100, auction.StartBlock)
+	}
+
+	// Every bid leg must be repayable from the float, i.e. the settle asset.
+	for asset := range auction.Bid {
+		if asset != settle {
+			return &adapters.Result{Note: fmt.Sprintf(
+				"bad-debt auction bids %s — only settle-asset bad debt is supported (skipped)", shortAddr(asset))}, nil
+		}
+	}
+
+	ledger, err := latestLedger(rpc)
+	if err != nil {
+		return nil, fmt.Errorf("latest ledger: %w", err)
+	}
+	res := &adapters.Result{Block: ledger}
+	elapsed := ledger - auction.StartBlock
+
+	// Balance baselines BEFORE acting; LP gain and USDC spend are MEASURED,
+	// never inferred from auction figures.
+	lpBefore, err := tokenBalance(rpc, a.cfg.Passphrase, td.backstopToken, kp.Address())
+	if err != nil {
+		res.Note = fmt.Sprintf("LP baseline read failed: %v — skipping", err)
+		return res, nil
+	}
+	floatBefore, err := tokenBalance(rpc, a.cfg.Passphrase, settle, kp.Address())
+	if err != nil {
+		res.Note = fmt.Sprintf("float balance read failed: %v — skipping", err)
+		return res, nil
+	}
+
+	fillStart := time.Now()
+	var fillTx string
+	var fillErr error
+	var pct int64 = 100
+	var spend int64
+	if elapsed >= 400 {
+		// Past the curve the scaled bid is EMPTY: the lot is free. Unlike
+		// user liquidations (where the repay-carrying fill reverts and we
+		// delete + re-create), the correct bad-debt move is to just take it.
+		fillTx, fillErr = coreFillBadDebtFree(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, td.backstop)
+	} else {
+		ratio := core.BadDebtProfitability(*auction, td.pool, td.backstopToken, td.spot.SpotPrice, a.cfg.BadDebtHaircutBps, ledger)
+		if ratio < a.cfg.MinProfit {
+			res.Note = fmt.Sprintf("bad debt not profitable at %d bps haircut (%.4f < %.4f)", a.cfg.BadDebtHaircutBps, ratio, a.cfg.MinProfit)
+			return res, nil
+		}
+		legs, lerr := debtNeeds(td.pool, auction)
+		if lerr != nil {
+			res.Note = fmt.Sprintf("cannot size bad-debt legs: %v", lerr)
+			return res, nil
+		}
+		if len(legs) != 1 || legs[0].asset != settle {
+			res.Note = "bad-debt bid legs not settle-only after sizing — skipping"
+			return res, nil
+		}
+		// The bid map is at 100% time scale; the modifier only shrinks it
+		// after t=200, so scaling by the CURRENT bidPct still upper-bounds the
+		// debt assumed at landing (drawBufferBps covers d_rate accrual and the
+		// contract's double round-up).
+		_, _, bidPct := core.PhaseAt(elapsed)
+		scaledNeed := int64(math.Ceil(float64(legs[0].need) * bidPct))
+		if scaledNeed <= 0 {
+			res.Note = "scaled bad-debt need is zero before t=400 — skipping cycle"
+			return res, nil
+		}
+		spendCap := a.cfg.BadDebtMaxSpend
+		if floatBefore < spendCap {
+			spendCap = floatBefore
+		}
+		if scaledNeed > spendCap {
+			pct = spendCap * 100 / scaledNeed
+			if pct < 1 {
+				res.Note = fmt.Sprintf("keeper float cannot cover bad-debt fill: need %d, spendable %d (float %d, cap %d)",
+					scaledNeed, spendCap, floatBefore, a.cfg.BadDebtMaxSpend)
+				return res, nil
+			}
+		}
+		spend = (scaledNeed*pct + 99) / 100
+		if spend > spendCap {
+			spend = spendCap
+		}
+		fillTx, fillErr = coreFillBadDebt(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr,
+			td.backstop, pct, []core.RepayLeg{{Asset: settle, Amount: spend}})
+	}
+
+	switch {
+	case fillErr == nil:
+		res.Success = true
+		res.TxHash = fillTx
+	case errors.Is(fillErr, core.ErrAlreadyFilled):
+		res.Note = "bad-debt auction no longer fillable (raced, or an earlier ambiguous submit landed)"
+		res.Latency = time.Since(start)
+		return res, nil
+	case soroban.IsTxStatusUnknown(fillErr):
+		hash, landed, failedDet := ambiguity(rpc, fillErr)
+		switch {
+		case landed:
+			res.Success = true
+			res.TxHash = hash
+		case failedDet:
+			res.Note = fmt.Sprintf("bad-debt fill definitively failed: %v", fillErr)
+			res.Latency = time.Since(start)
+			return res, nil
+		default:
+			// Only keeper float is at stake (no draw, no acquisitions): hold
+			// and let the next cycle's re-scan see whatever actually landed.
+			res.Note = fmt.Sprintf("bad-debt fill outcome UNKNOWN (tx may land): %v — keeper float at stake, re-checking next cycle", fillErr)
+			res.Latency = time.Since(start)
+			return res, nil
+		}
+	default:
+		res.Note = fmt.Sprintf("bad-debt fill failed: %v", fillErr)
+		res.Latency = time.Since(start)
+		return res, nil
+	}
+	res.ResponseTimeMs = time.Since(fillStart).Milliseconds()
+
+	// Measure what actually moved. Vault accounting stays zero on purpose:
+	// no capital was drawn and no USDC proceeds exist — the LP is held.
+	lpGained, spent := int64(0), int64(0)
+	if lpNow, berr := tokenBalance(rpc, a.cfg.Passphrase, td.backstopToken, kp.Address()); berr == nil {
+		lpGained = lpNow - lpBefore
+	} else {
+		res.Note = fmt.Sprintf("fill landed but LP balance unreadable: %v", berr)
+	}
+	if floatNow, berr := tokenBalance(rpc, a.cfg.Passphrase, settle, kp.Address()); berr == nil {
+		spent = floatBefore - floatNow
+	}
+	lp := big.NewInt(lpGained)
+	note := fmt.Sprintf("bad-debt fill %d%%: spent %d USDC keeper float, received %d backstop LP ≈ $%.4f spot / $%.4f after %d bps haircut — LP held (fill-and-hold, unwind deferred: FACTS.md Decisions)",
+		pct, spent, lpGained, core.BackstopLPValueUSD(lp, td.spot.SpotPrice, 0),
+		core.BackstopLPValueUSD(lp, td.spot.SpotPrice, a.cfg.BadDebtHaircutBps), a.cfg.BadDebtHaircutBps)
+	if elapsed >= 400 {
+		note += " (past-curve free capture: empty bid, no repay)"
+	}
+	if res.Note != "" {
+		res.Note = note + "; " + res.Note
+	} else {
+		res.Note = note
 	}
 	res.Latency = time.Since(start)
 	return res, nil

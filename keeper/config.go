@@ -44,6 +44,17 @@ type Config struct {
 	// this floor is ever considered sellable.
 	XlmReserve int64
 
+	// BadDebtMaxSpend (stroops) caps the keeper-float USDC committed to one
+	// bad-debt auction fill; 0 disables bad-debt fills. Bad-debt fills never
+	// use vault capital: the fill pays the assumed debt in USDC and receives
+	// backstop LP tokens, which cannot be liquidated to vault USDC before
+	// mainnet — vault draws would hit the registry slash timeout. Fill-and-
+	// hold is therefore keeper-operator risk, bounded by this cap.
+	BadDebtMaxSpend int64
+	// BadDebtHaircutBps discounts the backstop LP spot valuation in the
+	// bad-debt profitability check (5000 = value LP at 50% of spot).
+	BadDebtHaircutBps int
+
 	// Testnet USDC faucet (payments from a treasury account; NOT a mint —
 	// Circle USDC is not mintable by us). Empty FaucetSecret disables.
 	FaucetSecret       string
@@ -135,6 +146,22 @@ func LoadConfig() Config {
 		os.Exit(1)
 	}
 	c.XlmReserve = xlmRes
+
+	bdSpendStr := envOr("BAD_DEBT_MAX_SPEND", "1000000000") // 100.0000000 USDC
+	bdSpend, err := strconv.ParseInt(bdSpendStr, 10, 64)
+	if err != nil || bdSpend < 0 {
+		fmt.Fprintf(os.Stderr, "BAD_DEBT_MAX_SPEND=%q must be a non-negative integer (stroops; 0 disables)\n", bdSpendStr)
+		os.Exit(1)
+	}
+	c.BadDebtMaxSpend = bdSpend
+
+	bdHairStr := envOr("BAD_DEBT_LP_HAIRCUT_BPS", "5000")
+	bdHair, err := strconv.Atoi(bdHairStr)
+	if err != nil || bdHair < 0 || bdHair > 10000 {
+		fmt.Fprintf(os.Stderr, "BAD_DEBT_LP_HAIRCUT_BPS=%q out of range [0,10000]\n", bdHairStr)
+		os.Exit(1)
+	}
+	c.BadDebtHaircutBps = bdHair
 
 	if raw := os.Getenv("KNOWN_DEPOSITORS"); raw != "" {
 		for _, addr := range strings.Split(raw, ",") {

@@ -220,24 +220,41 @@ func TestAllAuctionTypes_CoversAllVariants(t *testing.T) {
 	}
 }
 
-// TestProfitability_AuctionTypeAgnostic asserts that the same Profitability
-// formula applies regardless of auction kind — only the lot/bid amounts and
-// oracle prices matter, never the type discriminant.
-func TestProfitability_AuctionTypeAgnostic(t *testing.T) {
+// TestProfitability_BackstopLPLegs_NeverGreenlit replaces the deleted
+// TestProfitability_AuctionTypeAgnostic, whose premise was false: the
+// formula is NOT type-agnostic (legRate branches on the kind), and its
+// apparent agnosticism only held because that test pinned BRate=DRate=1.0.
+// The property that actually matters: for REALISTIC type-1/2 auctions —
+// whose lot (bad debt) or bid (interest) is the backstop LP token, never a
+// pool reserve — the generic Profitability must report 0, not a green light.
+// Bad-debt auctions are priced by BadDebtProfitability instead; interest
+// auctions are detection-only (deferred).
+func TestProfitability_BackstopLPLegs_NeverGreenlit(t *testing.T) {
 	pool := makePool(1.0)
-	build := func(kind AuctionType) Auction {
-		return Auction{
-			Type:       kind,
-			StartBlock: 1000,
-			Lot:        map[string]*big.Int{"XLM": makeBigInt(1_0000000)},
-			Bid:        map[string]*big.Int{"USDC": makeBigInt(1_0000000)},
-		}
+	lpToken := "LP_TOKEN_NOT_A_RESERVE"
+
+	// Bad debt: bid = dTokens of a real reserve, lot = backstop LP.
+	bad := Auction{
+		Type:       AuctionBadDebt,
+		StartBlock: 1000,
+		Lot:        map[string]*big.Int{lpToken: makeBigInt(2_0000000)},
+		Bid:        map[string]*big.Int{"USDC": makeBigInt(1_0000000)},
 	}
-	user := Profitability(build(AuctionUserLiquidation), pool, 1200)
-	bad := Profitability(build(AuctionBadDebt), pool, 1200)
-	intr := Profitability(build(AuctionInterest), pool, 1200)
-	if math.Abs(user-bad) > 1e-9 || math.Abs(user-intr) > 1e-9 {
-		t.Errorf("Profitability must be type-agnostic, got user=%f bad=%f int=%f", user, bad, intr)
+	// t=300: bid half off — the point a naive valuation would green-light.
+	if got := Profitability(bad, pool, 1300); got != 0 {
+		t.Errorf("bad-debt auction: generic Profitability must be 0 (LP lot unpriced here), got %f", got)
+	}
+
+	// Interest: lot = underlying of a real reserve, bid = backstop LP. An
+	// unpriced BID means the COST is unknown — 0, never +Inf.
+	intr := Auction{
+		Type:       AuctionInterest,
+		StartBlock: 1000,
+		Lot:        map[string]*big.Int{"USDC": makeBigInt(2_0000000)},
+		Bid:        map[string]*big.Int{lpToken: makeBigInt(1_0000000)},
+	}
+	if got := Profitability(intr, pool, 1300); got != 0 {
+		t.Errorf("interest auction: generic Profitability must be 0 (LP bid unpriceable), got %f", got)
 	}
 }
 

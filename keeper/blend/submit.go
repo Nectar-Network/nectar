@@ -16,6 +16,7 @@ const (
 	ReqWithdrawCollateral  uint32 = 3
 	ReqRepay               uint32 = 5
 	ReqFillUserLiquidation uint32 = 6
+	ReqFillBadDebt         uint32 = 7
 )
 
 // MaxWithdraw asks the pool for more collateral than can exist;

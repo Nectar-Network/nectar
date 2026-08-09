@@ -253,16 +253,19 @@ func main() {
 	cfg.BlendPools = verifySettleAssets(rpc, cfg)
 	for _, pc := range cfg.BlendPools {
 		k.protocols = append(k.protocols, blendadapter.NewAdapter(blendadapter.Config{
-			PoolAddr:      pc.Addr,
-			Monitor:       pc.Monitor,
-			PoolUsdc:      pc.PoolUsdc,
-			NativeSAC:     k.nativeSAC,
-			SlippageBps:   cfg.SlippageBps,
-			MinProfit:     cfg.MinProfit,
-			HorizonURL:    cfg.HorizonURL,
-			Passphrase:    cfg.Passphrase,
-			UsdcAddr:      cfg.UsdcAddr,
-			EventLookback: cfg.EventLookback,
+			PoolAddr:          pc.Addr,
+			Monitor:           pc.Monitor,
+			PoolUsdc:          pc.PoolUsdc,
+			NativeSAC:         k.nativeSAC,
+			SlippageBps:       cfg.SlippageBps,
+			MinProfit:         cfg.MinProfit,
+			HorizonURL:        cfg.HorizonURL,
+			Passphrase:        cfg.Passphrase,
+			UsdcAddr:          cfg.UsdcAddr,
+			EventLookback:     cfg.EventLookback,
+			KeeperAddress:     kp.Address(),
+			BadDebtMaxSpend:   cfg.BadDebtMaxSpend,
+			BadDebtHaircutBps: cfg.BadDebtHaircutBps,
 		}, dexc))
 		logInfo("blend pool configured", "pool", short(pc.Addr), "mode", poolMode(pc.Monitor), "pool_usdc", short(pc.PoolUsdc))
 	}

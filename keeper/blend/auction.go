@@ -300,9 +300,12 @@ const FullFillPct int64 = 100
 // dToken debt (docs/FACTS.md "Auction asset flows") — so "fill, then swap the
 // collateral" was operating on collateral the keeper never held, and a bare
 // interest fill would revert without the backstop-LP pre-approval it never
-// performed. The only supported fill path is the atomic FillAndUnwind in
-// submit.go. Auction DETECTION for all three kinds (DetectAuctions,
-// GetAuctionByType) remains.
+// performed. The supported fill paths are atomic submits only: FillAndUnwind
+// (user liquidation, submit.go) and FillBadDebtAndRepay / FillBadDebtFree
+// (bad debt, baddebt.go). Interest auctions remain DETECTION-ONLY: their bid
+// is backstop LP tokens the keeper would have to pre-hold and pre-approve
+// (backstop_interest_auction.rs:72-74, 86-119 @ ba22b48), which a vault-USDC
+// keeper does not carry — see docs/FACTS.md Decisions.
 
 // AuctionPhase describes which scaling phase a Blend Dutch auction is in.
 type AuctionPhase int
@@ -332,10 +335,15 @@ func PhaseAt(elapsed int64) (AuctionPhase, float64, float64) {
 
 // Profitability computes lot_value/bid_cost for a Blend Dutch auction at
 // currentBlock. The auction follows Blend v2's two-phase Dutch model: the
-// "fair price" point is at elapsed=200 where both legs are at 100 %. Profit
-// math is identical across the three auction kinds — the only difference is
-// what the lot/bid maps contain (collateral vs. backstop interest vs. bad
-// debt), which the caller has already populated by the time this runs.
+// "fair price" point is at elapsed=200 where both legs are at 100 %. The
+// formula shape is shared across auction kinds, but this function only
+// prices POOL-RESERVE legs: a bad-debt auction's lot and an interest
+// auction's bid are the backstop LP token, which is not a reserve, so this
+// reports 0 for both kinds (an unpriced lot contributes nothing; an unpriced
+// bid makes the cost unknowable) — deliberately never a green light. Bad-debt
+// auctions are priced by BadDebtProfitability (baddebt.go), which values the
+// LP lot at the backstop's own spot price minus a haircut; interest auctions
+// are detection-only (deferred).
 func Profitability(auction Auction, pool *PoolState, currentBlock int64) float64 {
 	elapsed := currentBlock - auction.StartBlock
 	_, lotPct, bidPct := PhaseAt(elapsed)
