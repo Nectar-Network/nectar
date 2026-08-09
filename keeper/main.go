@@ -126,6 +126,11 @@ type Keeper struct {
 	protocols []adapters.ProtocolAdapter
 }
 
+// nativeSweepMargin (stroops) is kept ABOVE the XLM fee floor when recovery
+// sells native holdings: headroom for the sweep tx's own fee and for any
+// in-flight transaction legs landing between the balance read and the swap.
+const nativeSweepMargin = 10_000_000 // 1 XLM
+
 // recoverySwapper is the one dex.SwapClient method stale-draw recovery needs;
 // an interface so recovery tests can fake the DEX.
 type recoverySwapper interface {
@@ -234,9 +239,11 @@ func main() {
 	if dexc != nil { // typed-nil guard: a nil *dex.SwapClient must stay a nil interface
 		k.dexc = dexc
 	}
-	// The native SAC identifies which pool reserve is the keeper's fee asset.
-	// If the derivation ever fails, collateral sweeps are disabled entirely —
-	// fail-safe: recovery must never risk selling the fee balance.
+	// The native SAC identifies which asset is the keeper's fee asset — its
+	// balance deltas are depressed by tx fees (adapter acquisitions pad for
+	// it) and recovery must never sell its fee-floor balance. If the
+	// derivation ever fails, collateral sweeps are disabled entirely —
+	// fail-safe over fail-open.
 	if nativeSAC, err := soroban.NativeContractID(cfg.Passphrase); err != nil {
 		logErr("native SAC derivation failed — recovery collateral sweeps disabled", "err", err)
 	} else {
@@ -249,6 +256,7 @@ func main() {
 			PoolAddr:      pc.Addr,
 			Monitor:       pc.Monitor,
 			PoolUsdc:      pc.PoolUsdc,
+			NativeSAC:     k.nativeSAC,
 			SlippageBps:   cfg.SlippageBps,
 			MinProfit:     cfg.MinProfit,
 			HorizonURL:    cfg.HorizonURL,
@@ -403,7 +411,12 @@ func (k *Keeper) sweepHeldCollateral() bool {
 				continue
 			}
 			if asset == k.nativeSAC {
-				bal -= k.cfg.XlmReserve
+				// Extra margin above the floor: the sweep tx's own fee comes
+				// out of this same balance after the read, and a still-pending
+				// leg from an ambiguous fill could land in the gap — selling
+				// the exact excess could dip below the fee floor
+				// (adversarial-review finding, 2026-08-09).
+				bal -= k.cfg.XlmReserve + nativeSweepMargin
 				if bal <= 0 {
 					continue
 				}

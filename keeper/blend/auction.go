@@ -34,8 +34,10 @@ var AllAuctionTypes = []AuctionType{
 	AuctionInterest,
 }
 
-// requestTypeFor returns the Blend submit() request_type that fills the given
-// auction kind. Blend's Request.request_type is u32 on-chain.
+// requestType returns the Blend submit() request_type that fills the given
+// auction kind (docs/FACTS.md RequestType table). Retained as the canonical
+// enum↔auction mapping even though the standalone fill path was deleted; the
+// ABI-lock tests assert against it.
 func (t AuctionType) requestType() uint32 {
 	switch t {
 	case AuctionUserLiquidation:

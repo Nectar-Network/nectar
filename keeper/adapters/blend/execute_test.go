@@ -82,9 +82,6 @@ type fakeDex struct {
 	convertCalls []int64 // amountOut passed to ConvertExactOut
 }
 
-func (f *fakeDex) Swap(kp *keypair.Full, from, to string, amount, ref int64) (*dex.SwapResult, error) {
-	panic("Swap not expected in these tests")
-}
 func (f *fakeDex) QuoteConvertIn(from, to string, amountOut int64) (int64, error) {
 	panic("QuoteConvertIn not expected in these tests")
 }
@@ -823,4 +820,99 @@ func TestExecute_StaleAuction_DeletedAndRecreated(t *testing.T) {
 		t.Fatalf("no draw in the recreate cycle: %v", fv.draws)
 	}
 	_ = res
+}
+
+// Acquiring the NATIVE asset must request extra headroom (nativeFeePad): the
+// swap tx's own fee depresses the measured balance delta, and without the
+// pad a `got < debt` check would spuriously roll back every native debt leg
+// whose fee exceeds the 1% draw buffer (adversarial-review finding).
+func TestExecute_NativeDebtLeg_FeePadded(t *testing.T) {
+	const xlmDebt = int64(400_000_000)
+	const xlmNeed = int64(404_000_000)    // 1% draw buffer
+	const xlmAsk = xlmNeed + nativeFeePad // + 1 XLM fee headroom
+	const swapFee = int64(6_000_000)      // 0.6 XLM tx fee > 1% pad alone? (4.04)
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	var quotedOut int64
+	fd.quoteFn = func(from, to string, out int64) (int64, error) {
+		quotedOut = out
+		return 41_500_000, nil // under the oracle cap (41.4 ask × $0.10 + 1%)
+	}
+	fd.convFn = func(from, to string, out, maxIn int64) (*dex.SwapResult, error) {
+		if out != xlmAsk {
+			return nil, fmt.Errorf("exact-out request %d, want padded %d", out, xlmAsk)
+		}
+		bal.add(tUSDC, -41_500_000)
+		bal.add(tXLM, out-swapFee) // the fee bites the measured delta
+		return &dex.SwapResult{OutputAmount: out - swapFee, Route: "soroswap"}, nil
+	}
+	fd.swapFn = func(token string, amount, ref int64) (*dex.SwapResult, error) {
+		out := amount / 10 * 97 / 100
+		bal.add(token, -amount)
+		bal.add(tUSDC, out)
+		return &dex.SwapResult{OutputAmount: out, Route: "soroswap"}, nil
+	}
+	auction := usdcAuction()
+	auction.Bid[tXLM] = big.NewInt(xlmDebt)
+	repaysGot := installSeams(t, bal, auction, func(repays []core.RepayLeg, collateral []string) (string, error) {
+		bal.add(tUSDC, -50_000_000)
+		bal.add(tXLM, -200_000_000+seizedXLM)
+		return "filltx", nil
+	})
+	fv := &fakeVault{bal: bal}
+
+	a := NewAdapter(Config{
+		PoolAddr:    tPool,
+		MinProfit:   1.02,
+		Passphrase:  "test",
+		UsdcAddr:    tUSDC,
+		NativeSAC:   tXLM, // XLM is the native asset in these fixtures
+		SlippageBps: 100,
+	}, nil)
+	a.dex = fd
+
+	res, err := a.Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("fee-padded native leg must succeed, got %+v", res)
+	}
+	if quotedOut != xlmAsk {
+		t.Fatalf("route quote must use the padded ask: got %d want %d", quotedOut, xlmAsk)
+	}
+	// The repay leg carries the measured (fee-depressed) amount — still >= debt.
+	if len(*repaysGot) != 2 || (*repaysGot)[1].Amount != xlmAsk-swapFee {
+		t.Fatalf("repays: %v (want XLM leg %d)", *repaysGot, xlmAsk-swapFee)
+	}
+	if (*repaysGot)[1].Amount < xlmDebt {
+		t.Fatal("measured acquisition must still cover the debt")
+	}
+}
+
+// Without a NativeSAC configured, non-native legs get NO pad (exact need).
+func TestExecute_NonNativeDebtLeg_NotPadded(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	var quotedOut int64
+	fd.quoteFn = func(from, to string, out int64) (int64, error) {
+		quotedOut = out
+		return 0, dex.ErrNoRoute // stop before any draw; we only assert the ask
+	}
+	auction := usdcAuction()
+	auction.Bid[tXLM] = big.NewInt(400_000_000)
+	installSeams(t, bal, auction, nil)
+	fv := &fakeVault{bal: bal}
+
+	a := NewAdapter(Config{
+		PoolAddr: tPool, MinProfit: 1.02, Passphrase: "test",
+		UsdcAddr: tUSDC, NativeSAC: "CNOTNATIVEXLM", SlippageBps: 100,
+	}, nil)
+	a.dex = fd
+	if _, err := a.Execute(nil, mustKPExec(t), mkTask(), fv); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if quotedOut != 404_000_000 {
+		t.Fatalf("non-native ask must be the unpadded need: got %d", quotedOut)
+	}
 }

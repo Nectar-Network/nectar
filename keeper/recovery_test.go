@@ -128,12 +128,13 @@ func TestRecovery_USDCCoversDraw_ReturnsWithoutSweep(t *testing.T) {
 }
 
 // USDC short, XLM held above the fee floor: sweep only the excess over the
-// floor, then return.
+// floor PLUS the native sweep margin (headroom for the sweep tx's own fee
+// and in-flight legs), then return.
 func TestRecovery_SweepsXLMAboveFeeFloor(t *testing.T) {
 	vc := &recVault{}
 	balances := map[string]int64{rUSDC: 5_0000000, rXLM: 150_0000000} // 5 USDC, 150 XLM
 	sw := &recSwap{fn: func(token string, amount, ref int64) (*dex.SwapResult, error) {
-		balances[rUSDC] += 4_8000000 // 50 XLM → 4.8 USDC
+		balances[rUSDC] += 4_8000000 // ~49 XLM → 4.8 USDC
 		balances[rXLM] -= amount
 		return &dex.SwapResult{OutputAmount: 4_8000000, TxHash: "sweeptx"}, nil
 	}}
@@ -143,12 +144,13 @@ func TestRecovery_SweepsXLMAboveFeeFloor(t *testing.T) {
 	if len(sw.calls) != 1 {
 		t.Fatalf("expected one sweep call, got %v", sw.calls)
 	}
-	if sw.calls[0].token != rXLM || sw.calls[0].amount != 50_0000000 {
-		t.Fatalf("must sweep only the 50 XLM above the fee floor: %+v", sw.calls[0])
+	wantSell := int64(150_0000000 - 100_0000000 - nativeSweepMargin) // 49 XLM
+	if sw.calls[0].token != rXLM || sw.calls[0].amount != wantSell {
+		t.Fatalf("must sweep only the excess above floor+margin (%d): %+v", wantSell, sw.calls[0])
 	}
-	// Oracle anchor: 50 XLM at $0.10 = 5 USDC reference.
-	if sw.calls[0].ref != 5_0000000 {
-		t.Fatalf("oracle reference: got %d want 5_0000000", sw.calls[0].ref)
+	// Oracle anchor: 49 XLM at $0.10 = 4.9 USDC reference.
+	if sw.calls[0].ref != 4_9000000 {
+		t.Fatalf("oracle reference: got %d want 4_9000000", sw.calls[0].ref)
 	}
 	// Post-sweep USDC (9.8) still < draw (20): return everything available.
 	if len(vc.returns) != 1 || vc.returns[0] != 9_8000000 {

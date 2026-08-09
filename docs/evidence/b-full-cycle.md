@@ -119,3 +119,20 @@ stale-auction unit tests.
 - **Sandbox state after this run**: borrower consumed (re-arm with
   `run.sh 03 0.42 && run.sh 02 0 && run.sh 03 0.098`); oracle restored to
   $0.42 resting.
+
+## Adversarial review (45-agent workflow: 5 lenses → 2 refuters per finding)
+
+20 raw findings → **9 confirmed** (majority non-refuted), 3 contested.
+Disposition:
+
+| Finding | Status |
+|---|---|
+| Ambiguous `ConvertExactOut` rolled back instead of held (3 lenses) | **Fixed** — acquisition loop resolves by hash (AwaitTx over the tx's remaining timebound life): landed → continue with measured delta; failed → rollback; unknown → hold. 5 new tests |
+| Native-XLM fee contaminates `ConvertExactOut`'s measured output → spurious `got < debt` rollback loop | **Fixed** — native acquisitions padded by `nativeFeePad` (1 XLM) through quote, oracle cap and exact-out request; adapter Config gains `NativeSAC`. 2 new tests |
+| Recovery sweep sells into the XLM fee floor from a stale balance snapshot | **Fixed** — `nativeSweepMargin` (1 XLM) reserved above the floor |
+| `SubmitRequests` retry masks an earlier ambiguous attempt behind a later transient error | **Fixed** — `RetryAmbiguous=false`; ambiguity now surfaces faithfully and Execute resolves it by hash |
+| Post-draw failure notes logged at INFO only | **Fixed** — WARN + SSE event when `Drew > 0` |
+| e2e retry gate voided by test rename (vacuous `-run` pattern) | **Fixed** — pattern updated, 8 tests match again |
+| Past-curve (t≥400) auctions are free to capture instead of delete+recreate | **Deferred** (minor) — free-capture needs a no-repay/no-draw fill path and a drawn==0 return; delete+recreate is safe and proven live |
+| Cross-restart profit stranding (recovery caps at drawn) | **Documented** known limitation (above) |
+| Dead-code nits (`requestType` doc, unused `dexClient.Swap`) | **Fixed** — doc corrected, unused interface method removed |

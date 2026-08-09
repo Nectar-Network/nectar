@@ -69,8 +69,17 @@ func SubmitRequests(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pa
 	if err != nil {
 		return "", err
 	}
+	// RetryAmbiguous is OFF: InvokeWithRetry surfaces only the LAST attempt's
+	// error, so re-broadcasting after an ambiguous attempt could mask that
+	// ambiguity behind a later transient failure — the caller would then treat
+	// a possibly-landed submit as deterministic and roll back against it.
+	// Returning the ambiguity faithfully lets the adapter resolve it by hash
+	// (AwaitTx) instead. A genuinely dropped submit is simply retried by the
+	// next keeper cycle, which re-checks the auction first.
+	retry := soroban.DefaultRetry()
+	retry.RetryAmbiguous = false
 	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "submit",
-		soroban.DefaultRetry(), fromVal, fromVal, fromVal, reqVal)
+		retry, fromVal, fromVal, fromVal, reqVal)
 	if err != nil {
 		if isAlreadyFilled(err.Error()) {
 			return "", ErrAlreadyFilled

@@ -43,6 +43,12 @@ type Config struct {
 	// vault's UsdcAddr. Such pools are monitor-only (FACTS.md "USDC asset
 	// bridging"): a fill would strand pre-converted capital.
 	PoolUsdc string
+	// NativeSAC is the network's native-XLM Stellar Asset Contract
+	// (soroban.NativeContractID). Balance deltas of THIS asset are depressed
+	// by the measuring transaction's own fee, so acquisitions of it are
+	// padded by nativeFeePad. Empty disables the pad (native debt legs then
+	// risk spurious under-acquisition rollbacks).
+	NativeSAC string
 	// EventLookback is how many ledgers of pool events to scan for position
 	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
 	EventLookback int64
@@ -57,10 +63,20 @@ type Config struct {
 // slightly larger draw.
 const drawBufferBps = 100
 
-// dexClient is the slice of dex.SwapClient the adapter uses; an interface so
-// failure-injection tests can fake the DEX without an RPC server.
+// nativeFeePad (stroops) is added to exact-out acquisitions of the NATIVE
+// asset: the swap tx's own fee is paid from the same balance whose delta
+// measures the output, so without headroom the measured amount comes up
+// short of the request by the fee and a `got < debt` check would spuriously
+// roll back (adversarial-review finding, 2026-08-09). 1 XLM comfortably
+// covers observed Soroban resource fees (~0.05–0.6 XLM); the excess is
+// refunded by the pool's repay and swept back to USDC with the leftovers.
+const nativeFeePad = 10_000_000
+
+// dexClient is the slice of dex.SwapClient the adapter actually calls; an
+// interface so failure-injection tests can fake the DEX without an RPC
+// server. (dex.SwapClient's generic Swap/SwapFromUSDC remain public API for
+// other callers.)
 type dexClient interface {
-	Swap(kp *keypair.Full, from, to string, amount, refValueOut int64) (*dex.SwapResult, error)
 	SwapToUSDC(kp *keypair.Full, tokenAddr string, amount, refValueUSDC int64) (*dex.SwapResult, error)
 	QuoteIn(from, to string, amountOut int64) (int64, error)
 	ConvertExactOut(kp *keypair.Full, from, to string, amountOut, maxIn int64) (*dex.SwapResult, error)
@@ -351,12 +367,13 @@ func padBps(v int64, bps int) int64 {
 	return p.Int64()
 }
 
-// acqPlan is one pre-fill acquisition: buy need of asset for at most maxIn
-// USDC so the atomic submit can repay a non-USDC debt leg.
+// acqPlan is one pre-fill acquisition: buy ask of asset (need, plus
+// nativeFeePad for the native asset) for at most maxIn USDC so the atomic
+// submit can repay a non-USDC debt leg.
 type acqPlan struct {
 	asset string
 	debt  int64
-	need  int64
+	ask   int64
 	maxIn int64
 }
 
@@ -498,12 +515,19 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 			return &adapters.Result{Block: ledger,
 				Note: fmt.Sprintf("debt leg in %s but no DEX configured — skipping", shortAddr(leg.asset))}, nil
 		}
-		requiredIn, qerr := a.dex.QuoteIn(settleAsset, leg.asset, leg.need)
+		// Balance deltas of the native asset are depressed by the measuring
+		// tx's own fee — ask for headroom so the NET delta still covers the
+		// debt (see nativeFeePad).
+		ask := leg.need
+		if a.cfg.NativeSAC != "" && leg.asset == a.cfg.NativeSAC {
+			ask += nativeFeePad
+		}
+		requiredIn, qerr := a.dex.QuoteIn(settleAsset, leg.asset, ask)
 		if qerr != nil {
 			return &adapters.Result{Block: ledger,
 				Note: fmt.Sprintf("no route to acquire debt asset %s: %v — skipping", shortAddr(leg.asset), qerr)}, nil
 		}
-		oracleCost := oracleValueUSDC(pool, leg.asset, leg.need)
+		oracleCost := oracleValueUSDC(pool, leg.asset, ask)
 		if oracleCost <= 0 {
 			return &adapters.Result{Block: ledger,
 				Note: fmt.Sprintf("debt asset %s unpriced by oracle — skipping", shortAddr(leg.asset))}, nil
@@ -513,7 +537,7 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 			return &adapters.Result{Block: ledger,
 				Note: fmt.Sprintf("acquiring %s costs %d USDC > oracle cap %d — skipping", shortAddr(leg.asset), requiredIn, maxIn)}, nil
 		}
-		plans = append(plans, acqPlan{asset: leg.asset, debt: leg.debt, need: leg.need, maxIn: maxIn})
+		plans = append(plans, acqPlan{asset: leg.asset, debt: leg.debt, ask: ask, maxIn: maxIn})
 		drawAmt += maxIn
 	}
 	if drawAmt <= 0 {
@@ -583,7 +607,7 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		}
 	}
 	for _, p := range plans {
-		swapRes, serr := a.dex.ConvertExactOut(kp, settleAsset, p.asset, p.need, p.maxIn)
+		swapRes, serr := a.dex.ConvertExactOut(kp, settleAsset, p.asset, p.ask, p.maxIn)
 		var got int64
 		switch {
 		case serr == nil:
