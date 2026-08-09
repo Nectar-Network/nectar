@@ -75,6 +75,7 @@ var (
 	coreFindLiqPct    = core.FindLiquidationPercent
 	coreCreateAuction = core.CreateAuction
 	coreFillAndUnwind = core.FillAndUnwind
+	coreDeleteStale   = core.DeleteStaleAuction
 	tokenBalance      = dex.TokenBalance
 	latestLedger      = func(rpc *soroban.Client) (int64, error) { return rpc.LatestLedger() }
 )
@@ -367,6 +368,29 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	auction, err := coreGetAuction(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, user)
 	if err != nil {
 		return nil, fmt.Errorf("get auction: %w", err)
+	}
+	if auction != nil {
+		ledger, lerr := latestLedger(rpc)
+		if lerr != nil {
+			return nil, fmt.Errorf("latest ledger: %w", lerr)
+		}
+		elapsed := ledger - auction.StartBlock
+		// Past t=400 the scaled bid is EMPTY (auction.rs:217-221): our
+		// repay-carrying atomic fill would revert on the repay leg, and
+		// re-trying it every cycle would churn vault draws. The pool's own
+		// remedy is stale deletion + re-creation (auction.rs:97-109), allowed
+		// from t=500. Between 400 and 500 nothing safe can be done — wait.
+		switch {
+		case elapsed >= core.StaleAuctionBlocks:
+			if derr := coreDeleteStale(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, user,
+				core.AuctionUserLiquidation); derr != nil {
+				return nil, fmt.Errorf("delete stale auction (age %d): %w", elapsed, derr)
+			}
+			auction = nil // fall through to re-creation below
+		case elapsed >= 400:
+			return &adapters.Result{Block: ledger, Note: fmt.Sprintf(
+				"auction past the price curve (age %d, scaled bid empty) but not yet stale-deletable — waiting for t=500", elapsed)}, nil
+		}
 	}
 	if auction == nil {
 		// Blend rejects a liquidation whose post-liq health factor misses the

@@ -106,6 +106,33 @@ func CreateAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, pas
 	return nil
 }
 
+// DeleteStaleAuction deletes an auction that has been running for at least
+// 500 blocks via the permissionless pool entry point `del_auction(
+// auction_type: u32, user: Address)` (pool/src/contract.rs:584-590 →
+// auctions::delete_stale_auction, auction.rs:97-109 @ ba22b48; panics
+// BadRequest when younger than 500 blocks or absent). Blend's own doc says a
+// stale auction "likely means something went wrong with the auction creation,
+// and it should be re-created" — past t=400 the scaled bid is empty, so the
+// normal repay-carrying fill would revert; deletion + re-creation restarts
+// the price curve.
+func DeleteStaleAuction(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind AuctionType) error {
+	userVal, err := soroban.ScvAddress(user)
+	if err != nil {
+		return err
+	}
+	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, poolAddr, "del_auction",
+		soroban.DefaultRetry(), soroban.ScvU32(uint32(kind)), userVal)
+	if err != nil {
+		return fmt.Errorf("del_auction: %w", err)
+	}
+	slog.Info("stale auction deleted", "user", user, "kind", kind.String(), "tx", tx.Hash)
+	return nil
+}
+
+// StaleAuctionBlocks is the pool's stale-deletion threshold: del_auction
+// panics BadRequest if auction.block + 500 > sequence (auction.rs:103-106).
+const StaleAuctionBlocks int64 = 500
+
 // Blend pool error codes relevant to sizing a liquidation
 // (pool/src/errors.rs @ ba22b48).
 const (

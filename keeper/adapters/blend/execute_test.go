@@ -595,3 +595,86 @@ func TestPadBps(t *testing.T) {
 		}
 	}
 }
+
+// Past t=400 the scaled bid is empty and a repay-carrying fill would revert;
+// between 400 and 500 the auction cannot be deleted yet either. Execute must
+// wait — no draw, no delete attempt.
+func TestExecute_PastCurveNotYetStale_Waits(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	auction := usdcAuction()
+	installSeams(t, bal, auction, nil)
+	// elapsed = 450: past the curve, before stale-delete eligibility.
+	latestLedger = func(rpc *soroban.Client) (int64, error) { return auction.StartBlock + 450, nil }
+	deleted := false
+	origDel := coreDeleteStale
+	t.Cleanup(func() { coreDeleteStale = origDel })
+	coreDeleteStale = func(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind core.AuctionType) error {
+		deleted = true
+		return nil
+	}
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if deleted {
+		t.Fatal("must not attempt deletion before t=500")
+	}
+	if len(fv.draws) != 0 {
+		t.Fatalf("must not draw against an empty scaled bid: %v", fv.draws)
+	}
+	if !strings.Contains(res.Note, "past the price curve") {
+		t.Fatalf("note: %q", res.Note)
+	}
+}
+
+// At t>=500 the stale auction is deleted and a fresh one created in the same
+// cycle (the pool's own documented remedy: delete + re-create).
+func TestExecute_StaleAuction_DeletedAndRecreated(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	stale := usdcAuction()
+	installSeams(t, bal, stale, nil)
+	// get_auction: first call returns the stale auction, after deletion nil.
+	calls := 0
+	coreGetAuction = func(rpc *soroban.Client, passphrase, poolAddr, user string) (*core.Auction, error) {
+		calls++
+		if calls == 1 {
+			return stale, nil
+		}
+		return nil, nil // deleted; the re-created auction is also "not readable" to end the test early
+	}
+	latestLedger = func(rpc *soroban.Client) (int64, error) { return stale.StartBlock + 100_000, nil }
+	deleted := false
+	origDel, origFind, origCreate := coreDeleteStale, coreFindLiqPct, coreCreateAuction
+	t.Cleanup(func() { coreDeleteStale, coreFindLiqPct, coreCreateAuction = origDel, origFind, origCreate })
+	coreDeleteStale = func(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, kind core.AuctionType) error {
+		deleted = true
+		return nil
+	}
+	found := false
+	coreFindLiqPct = func(rpc *soroban.Client, passphrase, poolAddr, user string, bid, lot []string) (int, error) {
+		found = true
+		return 100, nil
+	}
+	created := false
+	coreCreateAuction = func(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, poolAddr, user string, pct int, bid, lot []string) error {
+		created = true
+		return nil
+	}
+	fv := &fakeVault{bal: bal}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !deleted || !found || !created {
+		t.Fatalf("expected delete+resize+recreate, got deleted=%v found=%v created=%v", deleted, found, created)
+	}
+	if len(fv.draws) != 0 {
+		t.Fatalf("no draw in the recreate cycle: %v", fv.draws)
+	}
+	_ = res
+}
