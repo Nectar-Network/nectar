@@ -87,6 +87,14 @@ const drawBufferBps = 100
 // refunded by the pool's repay and swept back to USDC with the leftovers.
 const nativeFeePad = 10_000_000
 
+// badDebtBoundaryLedgers is the no-fill margin before the t=400 curve end for
+// bad-debt repay-carrying fills. A fill built at t=399 can land at t≥400,
+// where the scaled bid is empty: nothing is assumed, the repay leg has no
+// dTokens to burn, and the submit reverts InvalidDTokenBurnAmount (#1219) —
+// observed live (docs/evidence/c-bad-debt.md). Inside the margin the keeper
+// waits the few remaining ledgers for the strictly-better free capture.
+const badDebtBoundaryLedgers = 2
+
 // dexClient is the slice of dex.SwapClient the adapter actually calls; an
 // interface so failure-injection tests can fake the DEX without an RPC
 // server. (dex.SwapClient's generic Swap/SwapFromUSDC remain public API for
@@ -1016,12 +1024,22 @@ func (a *Adapter) executeBadDebt(rpc *soroban.Client, kp *keypair.Full, task ada
 	var fillErr error
 	var pct int64 = 100
 	var spend int64
-	if elapsed >= 400 {
+	switch {
+	case elapsed >= 400:
 		// Past the curve the scaled bid is EMPTY: the lot is free. Unlike
 		// user liquidations (where the repay-carrying fill reverts and we
 		// delete + re-create), the correct bad-debt move is to just take it.
 		fillTx, fillErr = coreFillBadDebtFree(rpc, a.cfg.HorizonURL, kp, a.cfg.Passphrase, a.cfg.PoolAddr, td.backstop)
-	} else {
+	case elapsed >= 400-badDebtBoundaryLedgers:
+		// t=400 boundary: a repay-carrying fill built now can land after the
+		// bid scales to empty, where the repay leg has no dTokens to burn and
+		// the whole submit reverts InvalidDTokenBurnAmount (#1219) — observed
+		// live on the sandbox (docs/evidence/c-bad-debt.md). Waiting the last
+		// ledgers out costs nothing: the free capture is strictly better.
+		res.Note = fmt.Sprintf("at the t=400 boundary (elapsed %d) — waiting for the free-capture window", elapsed)
+		res.Latency = time.Since(start)
+		return res, nil
+	default:
 		ratio := core.BadDebtProfitability(*auction, td.pool, td.backstopToken, td.spot.SpotPrice, a.cfg.BadDebtHaircutBps, ledger)
 		if ratio < a.cfg.MinProfit {
 			res.Note = fmt.Sprintf("bad debt not profitable at %d bps haircut (%.4f < %.4f)", a.cfg.BadDebtHaircutBps, ratio, a.cfg.MinProfit)
