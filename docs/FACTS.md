@@ -133,6 +133,19 @@ Additional verified behavior:
 | Interest-auction free-lot edge | after block 400 (bid=0) an interest fill transfers the lot for free (corroborating test `test_fill_interest_auction_empty_bid`) | 2026-08-03 | `backstop_interest_auction.rs:86-119, 1347+` |
 | Donate/draw guards | `execute_donate`: `from` may not be the pool or the backstop itself; `execute_draw` requires pool auth + nonnegative amount | 2026-08-03 | `backstop/src/backstop/fund_management.rs:25-30, 44-50` |
 
+## Bad-debt auction creation & backstop LP (Session C)
+
+All source refs @ blend-contracts-v2 `ba22b48` unless noted; verified 2026-08-09.
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| `new_auction` is permissionless | No `require_auth` anywhere in the path: `contract.rs:564-578` → `auctions::create_auction` (`auction.rs:75-95`) → `create_bad_debt_auction_data`. Anyone can create any auction type (validation, not auth, constrains it) | 2026-08-09 | `pool/src/contract.rs:564-578`; `pool/src/auctions/auction.rs:75-95` |
+| Bad-debt creation: required args | `new_auction(1, user=backstop, bid, lot, percent=100)`. `bid` = underlying asset addresses where the backstop's liability > 0 — EVERY listed asset must have a positive backstop liability or `InvalidBid`; empty bid or zero debt value also `InvalidBid`; `bid.len() < max_positions`. `lot` must be EXACTLY `[backstop_token]` or `InvalidLot` | 2026-08-09 | `pool/src/auctions/bad_debt_auction.rs:14-74` |
+| Bad-debt lot sizing | `lot_amount = debt_value ×fixed_mul_floor 1.2 ÷fixed_div_floor token_spot_price`, then `min(backstop tokens)`; `debt_value` = Σ oracle price × dToken→underlying per bid asset; `token_spot_price` from `backstop.pool_data()` | 2026-08-09 | `bad_debt_auction.rs:59-96` |
+| Bad-debt fill mechanics | Scaled bid dTokens move backstop→filler positions (NO tokens transferred; filler must handle the debt, e.g. atomic Repay in the same submit — type-7 fill IS health-checked); scaled lot LP drawn `backstop.draw(pool, lot, filler)`. Full fill (100 of the scaled auction) deletes the auction; UNSCALED remainder debt stays with the backstop (defaults only if backstop tokens < 0_0000003 threshold) | 2026-08-09 | `bad_debt_auction.rs:98-127`; `pool/src/pool/bad_debt.rs:59-75` |
+| Sandbox backstop HAS real bad debt | `get_positions(backstop CCT4FMLH…)` on pool `CBUBTHATT…` → `liabilities {0: 235995067}` (23.5995067 Circle-USDC dTokens, residue of the Sprint-B full fill `ff90b7a2…`); `pool_data` → `token_spot_price=12500000` ($1.25/LP), `tokens=500010000000` (50,001 LP) | 2026-08-09 | live `stellar contract invoke … --send=no` reads (simulation only) |
+| Deployed Comet (sandbox `CAMYNQY4…`) exit/valuation interface | `exit_pool(pool_amount_in, min_amounts_out, user)` (proportional exit); `wdr_tokn_amt_in_get_lp_tokns_out(token_out, pool_amount_in, min_amount_out, user)` (single-sided exit, exact LP in); `wdr_tokn_amt_out_get_lp_tokns_in(token_out, token_amount_out, max_pool_amount_in, user)`; `swap_exact_amount_in/out`; getters `get_total_supply`, `get_balance(token)`, `get_normalized_weight(token)`, `get_spot_price(in,out)`, `get_swap_fee` | 2026-08-09 | `stellar contract info interface --id CAMYNQY4… --network testnet` (deployed wasm, authoritative for the artifact we hold) |
+
 ## Testnet addresses
 
 ### Pool public read interface (from pinned source)
