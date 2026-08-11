@@ -77,8 +77,11 @@ type VaultClient interface {
 ```
 
 The keeper passes a concrete `vault.Client`. Use it only when your task consumes
-Nectar capital. **Only return proceeds when you actually drew** — the vault's
-`drawn==0` path would otherwise book the return as cost-free profit.
+Nectar capital. **Only return proceeds when you actually drew** — the vault
+rejects a return from a keeper with no outstanding draw (`NoDraw`, error 13,
+the VLT-2 anti-donation guard), so the call reverts. A corollary: work funded
+from the operator's own float rather than a vault draw (the bad-debt path)
+cannot be credited to the vault, and its profit accrues to the operator.
 
 ## Conventions (match the existing adapters)
 

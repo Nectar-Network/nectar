@@ -53,11 +53,17 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 // retry budget than Draw because returning capital is the safer side: the
 // keeper has the funds in hand and we want to ensure they reach the vault.
 //
+// Requires an OUTSTANDING DRAW: the vault rejects a return from a keeper with
+// drawn == 0 (NoDraw, error 13 — the VLT-2 anti-donation guard). Proceeds from
+// float-funded work (the bad-debt path) therefore cannot be credited to
+// depositors through here at all.
+//
 // Post-send-ambiguous failures are NOT retried: if the first return actually
-// landed it cleared the draw, and a re-broadcast would transfer the keeper's
-// funds again and book them as donated profit. The next keeper cycle's
-// stale-draw recovery is the safe retry path — it re-reads get_keeper_draw
-// first, so it is a no-op when the first return landed.
+// landed and fully settled the draw, a re-broadcast would transfer the
+// keeper's funds again — and against a now-zero draw it reverts NoDraw, so the
+// retry is useless as well as unsafe. The next keeper cycle's stale-draw
+// recovery is the safe retry path — it re-reads get_keeper_draw first, so it
+// is a no-op when the first return landed.
 //
 // responseTimeMs is the keeper-observed elapsed time from draw → fill → here.
 // Pass 0 when the keeper did not actually execute (e.g. another bot beat it
