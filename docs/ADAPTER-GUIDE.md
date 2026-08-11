@@ -166,8 +166,15 @@ them differently — "same logic, different request type" is NOT how Blend works
   float (capped by `BAD_DEBT_MAX_SPEND`, 0 disables) and holds the LP, whose
   value is logged every scan at the backstop's `token_spot_price` and at the
   configured haircut (`BAD_DEBT_LP_HAIRCUT_BPS`, default 50%). Unwinding the
-  LP (single-sided comet exit into its USDC leg) is deferred to mainnet,
-  where that leg IS the vault's Circle USDC.
+  LP (single-sided comet exit into its USDC leg) is deferred: on mainnet
+  that leg IS the vault's Circle USDC and the exit is one verified call
+  costing ~0.24% at small size (docs/FACTS.md "Mainnet LP unwind"). Note
+  that the exit alone does **not** turn bad-debt profit into depositor
+  yield: `NectarVault.return_proceeds` rejects a keeper with no outstanding
+  draw (`NoDraw`, the VLT-2 anti-donation guard), and these fills are
+  float-funded, so `drawn == 0`. **Bad-debt profit currently accrues to the
+  operator, not the vault.** Crediting depositors needs a vault entry point
+  that accepts proceeds without a prior draw — a contract change.
 - **Interest (type 2) — detected, never filled (deferred).** Here the LP
   token is the **bid**: the filler must pre-hold backstop LP worth ~120% of
   the auctioned interest and pre-approve the backstop to pull it. A keeper

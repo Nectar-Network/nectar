@@ -14,8 +14,11 @@ docs/evidence/c-bad-debt.md.
 > the backstop's auction atomically with the debt repay from its own operator
 > float (never vault capital), and holds the backstop-LP lot it receives,
 > valued at the backstop's spot price minus a configurable haircut; unwinding
-> the LP into vault USDC is deferred to mainnet, where the comet's USDC leg is
-> the vault's settlement asset. **Interest auctions are detected but
+> the LP is deferred to mainnet, where the comet's USDC leg is the vault's
+> settlement asset and the exit is a single verified call. Bad-debt fills
+> therefore use operator capital and return operator profit — crediting that
+> profit to depositors additionally requires a vault entry point that accepts
+> proceeds without a prior draw, which is not built. **Interest auctions are detected but
 > deliberately not filled**: their bid is backstop LP tokens (120% of the
 > auctioned interest at spot) that a vault-USDC keeper does not hold — the
 > keeper logs the deferral and never attempts a fill.
