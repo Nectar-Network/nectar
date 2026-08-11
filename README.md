@@ -214,18 +214,29 @@ Pooled USDC vault that funds liquidations. Depositors receive LP shares proporti
 
 ### LiquidationLab (`contracts/liquidation-lab/`)
 
-Blend-compatible pool contract that the Go keeper interacts with directly — same interface as a real Blend pool. Admin can set positions and control auctions for testing.
+A simplified pool stand-in used by early keeper tests. It models the **read**
+side of a Blend pool faithfully and enough of the auction lifecycle to
+exercise the keeper's decoding, but it is **not** interface-identical to
+Blend v2 (see the mismatch note below).
 
 | Function | Description |
 |----------|-------------|
 | `get_reserve_list()` | List reserve assets (XLM, USDC) |
 | `get_reserve(asset)` | Reserve config (collateral/liability factors, rates) |
 | `get_positions(user)` | User's collateral and liability maps |
-| `new_liquidation_auction(user, pct)` | Create Dutch auction for underwater position |
+| `new_liquidation_auction(user, pct)` | Create a Dutch auction (lab-only entry point) |
 | `get_auction(type, user)` | Fetch active auction data |
-| `submit(from, spender, to, requests)` | Fill auction (keeper submits fill request) |
+| `submit(from, spender, to, requests)` | Fill a user-liquidation auction (type 6 only) |
 
-The Go keeper needs **zero code changes** to switch between a real Blend pool and LiquidationLab — just change the `BLEND_POOL` env var.
+> **Superseded for end-to-end work.** Blend v2 creates auctions through
+> `new_auction(auction_type, user, bid, lot, percent)` and deletes stale ones
+> with `del_auction` — neither exists on the lab, and the keeper calls both
+> ([keeper/blend/auction.go](keeper/blend/auction.go), [keeper/blend/baddebt.go](keeper/blend/baddebt.go)).
+> The lab also models no backstop, so bad-debt and interest auctions cannot
+> occur on it at all. Real end-to-end validation therefore runs against the
+> **Nectar Sandbox** — our own Blend V2 stack on testnet
+> (docs/evidence/a4-sandbox.md), where every result in
+> docs/evidence/b-full-cycle.md and docs/evidence/c-bad-debt.md was produced.
 
 ## Go Keeper
 

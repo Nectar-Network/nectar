@@ -76,8 +76,8 @@ export default function Architecture() {
               {/* Blend Pool box (right of vault) */}
               <rect x="290" y="38" width="170" height="88" rx="1" fill="hsl(220,12%,10%)" stroke="hsl(220,15%,20%)" strokeWidth="1" />
               <text x="375" y="58" textAnchor="middle" fill="hsl(220,20%,75%)" fontSize="9" fontFamily="DM Mono, monospace" fontWeight="500">Blend Pool</text>
-              <text x="375" y="74" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">new_liquidation_auction()</text>
-              <text x="375" y="87" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">submit() — fill</text>
+              <text x="375" y="74" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">new_auction()</text>
+              <text x="375" y="87" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">submit() — fill + repay</text>
               <text x="375" y="100" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">get_positions()</text>
               <text x="375" y="113" textAnchor="middle" fill="hsl(220,10%,40%)" fontSize="8" fontFamily="DM Mono, monospace">Dutch · 0–400 ledgers</text>
 
