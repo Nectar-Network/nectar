@@ -1,0 +1,1369 @@
+23:34:18.869 [] INFO parsing keypair key_len=56 prefix=S
+23:34:18.872 [] INFO registering keeper name=keeper-alpha
+23:34:20.915 [] INFO registered name=keeper-alpha
+23:34:21.278 [] INFO blend pool configured pool=CBUB..CK3V mode=active pool_usdc=
+23:34:21.278 [] INFO adapters registered count=1
+23:34:21.279 [] INFO API server listening addr=:8091
+23:34:21.280 [] INFO keeper started pools=1 interval=10
+23:34:39.009 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=0
+23:34:39.013 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:34:39.013 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:34:39.013 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:34:39.013 [] INFO no positions visible pool=CBUB..CK3V
+23:34:39.013 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+2026/08/09 23:34:47 INFO bad-debt auction created backstop=CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH bid_assets=1 tx=80f1c64c3e21fd8fc1bd6af7f7c8164aedcde27b145591f7d175c42ffd468e7d
+23:34:48.402 [] INFO bad-debt auction created pool=CBUB..CK3V user=CCT4..6PTH percent=100 start_block=4055575
+23:34:50.678 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0000 < 1.0200)
+23:35:00.792 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:00.792 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:00.792 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:00.792 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:00.792 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:00.792 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:35:02.738 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0060 < 1.0200)
+23:35:11.480 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:11.481 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:11.481 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:11.481 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:11.481 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:11.481 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:35:13.529 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0120 < 1.0200)
+23:35:22.615 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:22.615 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:22.615 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:22.615 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:22.615 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:22.615 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:35:25.778 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0180 < 1.0200)
+23:35:35.917 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:35.917 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:35.917 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:35.917 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:35.917 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:35.917 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:35:38.206 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0270 < 1.0200)
+23:35:47.417 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:47.417 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:47.417 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:47.417 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:47.417 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:47.417 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:35:49.515 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0330 < 1.0200)
+23:35:58.290 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:35:58.290 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:35:58.290 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:35:58.290 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:35:58.290 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:35:58.290 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:36:01.049 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0390 < 1.0200)
+23:36:10.590 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:36:10.590 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:36:10.590 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:36:10.590 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:36:10.590 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:36:10.590 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:36:12.638 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0480 < 1.0200)
+23:36:21.817 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:36:21.818 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:36:21.818 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:36:21.818 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:36:21.818 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:36:21.818 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:36:23.845 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0540 < 1.0200)
+23:38:52.858 [] WARN history index update failed err=latest ledger: Post "https://soroban-testnet.stellar.org:443": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+23:40:22.862 [] WARN get tasks failed protocol=blend:CBUB..CK3V err=load pool: get_config: Post "https://soroban-testnet.stellar.org:443": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+23:40:43.097 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:40:43.097 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:40:43.097 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:40:43.097 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:40:43.097 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:40:43.097 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:40:45.356 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2100 < 1.0200)
+23:40:53.759 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:40:53.759 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:40:53.759 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:40:53.759 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:40:53.759 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:40:53.759 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:40:56.328 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2160 < 1.0200)
+23:41:06.305 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:41:06.305 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:41:06.305 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:41:06.305 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:41:06.305 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:41:06.305 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:41:08.923 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2250 < 1.0200)
+23:41:17.832 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:41:17.832 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:41:17.832 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:41:17.832 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:41:17.832 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:41:17.832 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:41:19.902 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2310 < 1.0200)
+23:41:29.867 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:41:29.867 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:41:29.867 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:41:29.867 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:41:29.867 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:41:29.867 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:41:32.373 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2370 < 1.0200)
+23:41:41.743 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:41:41.743 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:41:41.743 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:41:41.743 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:41:41.743 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:41:41.743 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:41:44.024 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2460 < 1.0200)
+23:41:53.878 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:41:53.878 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:41:53.878 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:41:53.878 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:41:53.878 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:41:53.878 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:41:56.056 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2520 < 1.0200)
+23:42:04.830 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:42:04.830 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:42:04.830 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:42:04.830 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:42:04.830 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:42:04.830 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:42:06.885 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2580 < 1.0200)
+23:42:16.371 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:42:16.371 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:42:16.371 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:42:16.371 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:42:16.371 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:42:16.371 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:42:19.169 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2670 < 1.0200)
+23:42:27.653 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:42:27.653 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:42:27.653 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:42:27.653 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:42:27.653 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:42:27.653 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:42:31.277 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2730 < 1.0200)
+23:42:39.244 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:42:39.244 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:42:39.244 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:42:39.244 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:42:39.244 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:42:39.244 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:42:41.481 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2790 < 1.0200)
+23:42:51.532 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:42:51.532 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:42:51.532 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:42:51.532 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:42:51.532 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:42:51.532 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:42:53.575 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2880 < 1.0200)
+23:43:01.817 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:01.817 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:01.817 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:01.817 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:01.817 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:01.817 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:03.843 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2940 < 1.0200)
+23:43:12.664 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:12.664 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:12.664 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:12.664 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:12.664 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:12.664 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:14.774 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3000 < 1.0200)
+23:43:23.103 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:23.103 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:23.103 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:23.103 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:23.103 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:23.103 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:25.186 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3060 < 1.0200)
+23:43:34.493 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:34.493 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:34.493 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:34.493 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:34.493 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:34.493 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:36.521 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3120 < 1.0200)
+23:43:44.113 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:44.113 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:44.113 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:44.113 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:44.113 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:44.113 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:46.415 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3180 < 1.0200)
+23:43:55.631 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:43:55.631 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:43:55.631 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:43:55.631 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:43:55.631 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:43:55.632 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:43:58.294 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3240 < 1.0200)
+23:44:06.719 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:44:06.719 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:44:06.719 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:44:06.719 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:44:06.719 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:44:06.719 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:44:09.391 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3330 < 1.0200)
+23:44:18.225 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:44:18.225 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:44:18.225 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:44:18.226 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:44:18.226 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:44:18.226 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:44:20.341 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3390 < 1.0200)
+23:44:28.675 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:44:28.676 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:44:28.676 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:44:28.676 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:44:28.676 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:44:28.676 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:44:30.718 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3450 < 1.0200)
+23:44:38.781 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:44:38.782 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:44:38.782 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:44:38.782 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:44:38.782 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:44:38.782 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:44:41.205 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3510 < 1.0200)
+23:44:49.249 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:44:49.249 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:44:49.250 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:44:49.250 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:44:49.250 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:44:49.250 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:44:52.259 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3570 < 1.0200)
+23:45:00.469 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:00.469 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:00.469 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:00.469 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:00.469 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:00.469 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:02.501 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3630 < 1.0200)
+23:45:10.566 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:10.566 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:10.566 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:10.566 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:10.566 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:10.566 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:12.751 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3690 < 1.0200)
+23:45:22.158 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:22.158 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:22.158 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:22.158 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:22.158 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:22.158 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:24.524 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3780 < 1.0200)
+23:45:33.106 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:33.106 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:33.106 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:33.106 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:33.106 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:33.106 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:35.252 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3840 < 1.0200)
+23:45:44.482 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:44.482 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:44.482 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:44.482 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:44.482 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:44.482 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:47.094 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3900 < 1.0200)
+23:45:56.259 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:45:56.259 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:45:56.259 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:45:56.259 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:45:56.259 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:45:56.259 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:45:59.227 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3990 < 1.0200)
+23:46:08.112 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:46:08.112 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:46:08.112 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:46:08.112 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:46:08.112 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:46:08.112 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:46:10.207 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4050 < 1.0200)
+23:46:18.717 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:46:18.717 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:46:18.717 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:46:18.717 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:46:18.717 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:46:18.717 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:46:21.011 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4110 < 1.0200)
+23:46:29.720 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:46:29.721 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:46:29.721 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:46:29.721 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:46:29.721 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:46:29.721 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:46:31.817 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4170 < 1.0200)
+23:46:40.292 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:46:40.292 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:46:40.292 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:46:40.292 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:46:40.292 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:46:40.292 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:46:42.493 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4230 < 1.0200)
+23:46:51.469 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:46:51.469 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:46:51.469 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:46:51.469 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:46:51.469 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:46:51.469 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:46:54.116 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4320 < 1.0200)
+23:47:02.876 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:02.876 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:02.876 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:02.876 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:02.876 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:02.876 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:04.851 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4380 < 1.0200)
+23:47:12.717 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:12.717 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:12.717 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:12.717 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:12.717 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:12.717 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:14.903 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4440 < 1.0200)
+23:47:23.022 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:23.022 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:23.022 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:23.022 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:23.022 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:23.022 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:25.040 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4500 < 1.0200)
+23:47:34.769 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:34.769 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:34.769 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:34.769 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:34.769 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:34.769 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:36.919 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4560 < 1.0200)
+23:47:45.368 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:45.368 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:45.368 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:45.368 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:45.368 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:45.368 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:47.891 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4620 < 1.0200)
+23:47:56.771 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:47:56.771 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:47:56.771 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:47:56.771 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:47:56.771 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:47:56.771 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:47:58.892 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4710 < 1.0200)
+23:48:08.272 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:48:08.272 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:48:08.272 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:48:08.272 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:48:08.272 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:48:08.272 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:48:10.901 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4770 < 1.0200)
+23:48:20.720 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:48:20.720 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:48:20.720 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:48:20.720 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:48:20.720 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:48:20.720 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:48:22.946 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4830 < 1.0200)
+23:48:31.869 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:48:31.869 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:48:31.869 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:48:31.869 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:48:31.869 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:48:31.869 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:48:34.143 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4920 < 1.0200)
+23:48:43.651 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:48:43.651 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:48:43.651 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:48:43.651 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:48:43.651 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:48:43.651 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:48:45.838 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4980 < 1.0200)
+23:48:54.283 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:48:54.284 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:48:54.284 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:48:54.284 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:48:54.284 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:48:54.284 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:48:56.309 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5040 < 1.0200)
+23:49:04.455 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:49:04.455 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:49:04.455 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:49:04.455 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:49:04.455 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:49:04.455 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:49:06.494 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5100 < 1.0200)
+23:49:14.852 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:49:14.852 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:49:14.852 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:49:14.852 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:49:14.852 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:49:14.852 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:49:17.491 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5160 < 1.0200)
+23:49:26.214 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:49:26.214 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:49:26.214 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:49:26.214 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:49:26.214 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:49:26.214 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:49:28.211 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5220 < 1.0200)
+23:49:36.916 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:49:36.916 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:49:36.916 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:49:36.916 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:49:36.916 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:49:36.916 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:49:38.861 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5310 < 1.0200)
+23:49:47.651 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:49:47.651 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:49:47.651 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:49:47.651 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:49:47.651 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:49:47.651 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:49:50.303 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5370 < 1.0200)
+23:50:03.073 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:50:03.073 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+23:50:03.073 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:50:03.073 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:50:03.073 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+23:50:03.073 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+23:50:13.618 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5460 < 1.0200)
+23:55:57.292 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+23:55:57.292 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s); backstop pool_data unreadable: Post "https://soroban-testnet.stellar.org:443": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+23:55:57.292 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+23:55:57.292 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+23:55:57.292 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:03:52.327 [] WARN history index update failed err=latest ledger: Post "https://soroban-testnet.stellar.org:443": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+00:08:10.665 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:08:10.669 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+00:08:10.669 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:08:10.669 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:08:10.669 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:08:10.669 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:08:14.259 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad-debt fill failed: submit: submit sim: HostError: Error(Contract, #1219)
+
+Event log (newest first):
+   0: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[error, Error(Contract, #1219)], data:"escalating error to VM trap from failed host function call: fail_with_error"
+   1: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[error, Error(Contract, #1219)], data:["failing with contract error", 1219]
+   2: [Contract Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fill_auction, 1, CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, 100, {bid: {}, block: 4055575, lot: {CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD: 226738569}}]
+   3: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_return, pool_data], data:{blnd: 4997832614310, q4w_pct: 0, shares: 500010000000, token_spot_price: 12500000, tokens: 499783261431, usdc: 124945815357}
+   4: [Diagnostic Event] contract:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, topics:[fn_return, get_balance], data:125252500000
+   5: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_call, CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, get_balance], data:CAKGVZ343VNJGVNL77S5FDBBFOYZLBA4FFORNW5CXQA3YAKCH2NBVGZ6
+   6: [Diagnostic Event] contract:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, topics:[fn_return, get_balance], data:5010100000000
+   7: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_call, CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, get_balance], data:CB627JMA3N4NZWQCUOKRPZWDHYS656DOMQEUUMFQRWANP7H363UXK3PW
+   8: [Diagnostic Event] contract:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, topics:[fn_return, get_total_supply], data:501010000000
+   9: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_call, CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, get_total_supply], data:Void
+   10: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fn_call, CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, pool_data], data:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V
+   11: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_return, draw], data:Void
+   12: [Contract Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[draw, CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, 226738569]
+   13: [Diagnostic Event] contract:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, topics:[fn_return, transfer], data:Void
+   14: [Contract Event] contract:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, topics:[transfer, CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF], data:226738569
+   15: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_call, CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD, transfer], data:[CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, 226738569]
+   16: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fn_call, CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, draw], data:[CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, 226738569, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF]
+   17: [Diagnostic Event] contract:CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, topics:[fn_return, backstop_token], data:CAMYNQY4L6BM45HJ6KJMNAX7SK474QHAFJWQBBAKCGV7XP7VJGZ7RUFD
+   18: [Diagnostic Event] contract:CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, topics:[fn_call, CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, backstop_token], data:Void
+   19: [Diagnostic Event] topics:[fn_call, CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V, submit], data:[GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF, [{address: CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH, amount: 100, request_type: 7}, {address: CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA, amount: 1192742, request_type: 5}]]
+
+00:08:21.786 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:08:21.786 [] WARN pool scan note pool=CBUB..CK3V note=backstop carries bad debt in 1 reserve(s)
+00:08:21.786 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:08:21.787 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:08:21.787 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:08:21.787 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+2026/08/10 00:08:31 INFO pool submit landed requests=1 tx=6ba804e809fe54cd67b8d7718f6ad486add7826cb8f918e3475ae20ab190a8dd
+00:08:32.270 [] INFO task executed protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH drew=0 proceeds=0 profit=0 response_ms=8328
+00:08:40.676 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:08:40.676 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:08:40.676 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:08:40.676 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:08:40.676 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:08:40.676 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+2026/08/10 00:08:46 INFO bad-debt auction created backstop=CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH bid_assets=1 tx=e1be3367c691b4e875223cec73cfb180b2f25415d1c615670cc14860d952b516
+00:08:46.476 [] INFO bad-debt auction created pool=CBUB..CK3V user=CCT4..6PTH percent=100 start_block=4055982
+00:08:48.178 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0000 < 1.0200)
+00:08:55.197 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:08:55.197 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:08:55.197 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:08:55.197 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:08:55.197 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:08:55.197 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:08:56.558 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0030 < 1.0200)
+00:09:05.492 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:05.492 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:05.492 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:05.492 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:05.492 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:05.492 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:07.812 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0090 < 1.0200)
+00:09:14.888 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:14.888 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:14.888 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:14.888 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:14.888 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:14.888 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:16.335 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0150 < 1.0200)
+00:09:26.110 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:26.110 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:26.110 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:26.110 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:26.110 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:26.110 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:27.862 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0210 < 1.0200)
+00:09:34.513 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:34.513 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:34.513 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:34.513 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:34.513 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:34.513 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:35.929 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0270 < 1.0200)
+00:09:45.522 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:45.522 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:45.522 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:45.522 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:45.522 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:45.522 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:47.441 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0330 < 1.0200)
+00:09:55.619 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:09:55.619 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:09:55.619 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:09:55.619 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:09:55.619 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:09:55.619 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:09:57.014 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0390 < 1.0200)
+00:10:04.423 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:04.423 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:04.423 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:04.423 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:04.423 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:04.423 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:05.927 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0450 < 1.0200)
+00:10:15.237 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:15.237 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:15.237 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:15.237 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:15.237 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:15.237 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:16.830 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0510 < 1.0200)
+00:10:25.846 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:25.846 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:25.846 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:25.846 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:25.846 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:25.846 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:28.099 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0570 < 1.0200)
+00:10:35.339 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:35.339 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:35.339 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:35.339 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:35.339 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:35.339 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:36.858 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0630 < 1.0200)
+00:10:45.245 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:45.245 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:45.245 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:45.245 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:45.245 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:45.245 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:46.819 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0690 < 1.0200)
+00:10:55.015 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:10:55.015 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:10:55.015 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:10:55.015 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:10:55.015 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:10:55.015 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:10:56.415 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0750 < 1.0200)
+00:11:06.741 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:06.741 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:06.741 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:06.741 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:06.741 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:06.741 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:08.316 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0810 < 1.0200)
+00:11:15.127 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:15.127 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:15.127 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:15.127 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:15.127 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:15.127 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:16.794 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0870 < 1.0200)
+00:11:24.752 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:24.752 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:24.752 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:24.752 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:24.752 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:24.752 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:26.471 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0930 < 1.0200)
+00:11:35.218 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:35.218 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:35.224 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:35.225 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:35.225 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:35.225 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:36.957 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0990 < 1.0200)
+00:11:45.188 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:45.189 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:45.189 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:45.189 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:45.189 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:45.189 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:46.651 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1050 < 1.0200)
+00:11:56.046 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:11:56.046 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:11:56.046 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:11:56.046 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:11:56.046 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:11:56.046 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:11:57.967 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1110 < 1.0200)
+00:12:05.683 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:05.683 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:05.683 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:05.683 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:05.684 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:05.684 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:08.083 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1170 < 1.0200)
+00:12:15.617 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:15.617 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:15.617 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:15.617 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:15.617 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:15.617 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:17.076 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1230 < 1.0200)
+00:12:25.958 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:25.958 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:25.958 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:25.958 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:25.958 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:25.958 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:27.897 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1290 < 1.0200)
+00:12:35.177 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:35.177 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:35.178 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:35.178 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:35.178 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:35.178 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:36.804 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1350 < 1.0200)
+00:12:45.931 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:45.931 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:45.931 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:45.931 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:45.931 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:45.931 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:47.975 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1410 < 1.0200)
+00:12:56.129 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:12:56.129 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:12:56.129 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:12:56.129 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:12:56.129 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:12:56.129 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:12:57.510 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1470 < 1.0200)
+00:13:05.484 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:05.484 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:05.484 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:05.484 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:05.484 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:05.484 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:07.227 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1530 < 1.0200)
+00:13:16.046 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:16.046 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:16.046 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:16.047 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:16.047 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:16.047 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:17.487 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1590 < 1.0200)
+00:13:25.672 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:25.672 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:25.672 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:25.672 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:25.672 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:25.672 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:27.384 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1650 < 1.0200)
+00:13:34.803 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:34.803 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:34.803 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:34.803 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:34.803 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:34.803 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:36.236 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1710 < 1.0200)
+00:13:45.927 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:45.927 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:45.927 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:45.927 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:45.927 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:45.927 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:47.534 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1770 < 1.0200)
+00:13:55.558 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:13:55.559 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:13:55.559 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:13:55.559 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:13:55.559 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:13:55.559 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:13:57.468 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1830 < 1.0200)
+00:14:05.800 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:05.800 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:05.800 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:05.800 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:05.800 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:05.800 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:07.958 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1890 < 1.0200)
+00:14:16.551 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:16.551 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:16.551 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:16.551 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:16.551 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:16.551 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:18.620 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.1950 < 1.0200)
+00:14:25.871 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:25.871 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:25.871 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:25.871 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:25.871 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:25.871 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:27.746 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2010 < 1.0200)
+00:14:34.766 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:34.766 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:34.766 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:34.766 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:34.766 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:34.766 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:36.315 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2070 < 1.0200)
+00:14:45.122 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:45.122 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:45.122 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:45.122 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:45.122 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:45.122 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:47.493 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2130 < 1.0200)
+00:14:54.961 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:14:54.961 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:14:54.961 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:14:54.961 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:14:54.961 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:14:54.961 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:14:56.368 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2190 < 1.0200)
+00:15:05.285 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:15:05.285 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:15:05.285 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:15:05.285 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:15:05.285 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:15:05.285 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:15:07.182 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2250 < 1.0200)
+00:15:15.242 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:15:15.242 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:15:15.242 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:15:15.242 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:15:15.242 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:15:15.242 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:15:17.070 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2310 < 1.0200)
+00:15:25.764 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:15:25.764 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:15:25.764 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:15:25.764 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:15:25.764 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:15:25.764 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:15:27.821 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2370 < 1.0200)
+00:15:34.816 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:15:34.816 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:15:34.816 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:15:34.816 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:15:34.816 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:15:34.816 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:15:36.211 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2430 < 1.0200)
+00:15:45.807 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:15:45.807 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:15:45.807 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:15:45.807 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:15:45.807 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:15:45.807 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:15:47.243 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2490 < 1.0200)
+00:16:11.504 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:11.504 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:11.504 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:11.504 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:11.504 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:11.504 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:16:13.465 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2640 < 1.0200)
+00:16:20.455 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:20.455 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:20.455 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:20.455 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:20.455 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:20.455 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:16:22.164 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2700 < 1.0200)
+00:16:29.570 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:29.570 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:29.570 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:29.570 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:29.570 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:29.570 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:16:31.173 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2760 < 1.0200)
+00:16:38.993 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:38.993 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:38.993 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:38.993 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:38.993 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:38.993 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:16:40.855 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2790 < 1.0200)
+00:16:49.116 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:49.116 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:49.116 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:49.116 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:49.116 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:49.116 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:16:50.513 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2850 < 1.0200)
+00:16:59.818 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:16:59.818 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:16:59.818 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:16:59.818 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:16:59.818 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:16:59.818 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:01.687 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.2940 < 1.0200)
+00:17:09.740 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:17:09.740 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:17:09.740 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:17:09.740 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:17:09.740 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:17:09.740 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:11.257 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3000 < 1.0200)
+00:17:18.657 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:17:18.657 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:17:18.657 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:17:18.657 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:17:18.657 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:17:18.657 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:20.381 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3030 < 1.0200)
+00:17:28.962 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:17:28.962 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:17:28.962 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:17:28.962 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:17:28.962 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:17:28.962 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:30.910 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3090 < 1.0200)
+00:17:39.069 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:17:39.069 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:17:39.069 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:17:39.069 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:17:39.069 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:17:39.069 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:40.520 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3150 < 1.0200)
+00:17:50.113 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:17:50.113 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:17:50.113 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:17:50.113 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:17:50.113 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:17:50.113 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:17:52.208 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3240 < 1.0200)
+00:18:00.027 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:00.028 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:00.028 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:00.028 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:00.028 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:00.028 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:01.658 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3300 < 1.0200)
+00:18:09.207 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:09.207 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:09.207 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:09.207 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:09.207 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:09.207 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:11.030 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3330 < 1.0200)
+00:18:18.935 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:18.935 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:18.935 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:18.935 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:18.935 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:18.935 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:20.470 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3390 < 1.0200)
+00:18:28.892 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:28.892 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:28.892 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:28.892 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:28.892 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:28.892 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:31.736 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3450 < 1.0200)
+00:18:39.688 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:39.688 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:39.688 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:39.688 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:39.688 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:39.688 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:41.769 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3540 < 1.0200)
+00:18:50.961 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:18:50.961 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:18:50.961 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:18:50.961 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:18:50.961 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:18:50.961 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:18:53.159 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3600 < 1.0200)
+00:19:02.816 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:02.816 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:02.816 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:02.816 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:02.816 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:02.816 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:05.629 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3660 < 1.0200)
+00:19:13.260 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:13.260 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:13.260 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:13.260 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:13.261 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:13.261 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:15.338 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3720 < 1.0200)
+00:19:23.857 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:23.857 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:23.857 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:23.857 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:23.857 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:23.857 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:26.213 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3780 < 1.0200)
+00:19:35.531 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:35.531 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:35.531 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:35.531 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:35.531 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:35.531 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:37.629 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3870 < 1.0200)
+00:19:46.796 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:46.796 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:46.796 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:46.796 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:46.796 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:46.796 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:48.535 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3930 < 1.0200)
+00:19:57.130 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:19:57.130 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:19:57.130 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:19:57.130 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:19:57.130 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:19:57.130 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:19:59.213 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.3990 < 1.0200)
+00:20:08.676 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:20:08.676 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:20:08.676 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:20:08.676 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:20:08.676 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:20:08.676 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:20:10.956 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4050 < 1.0200)
+00:20:19.660 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:20:19.660 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:20:19.660 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:20:19.660 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:20:19.660 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:20:19.660 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:20:22.327 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4140 < 1.0200)
+00:20:31.277 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:20:31.278 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:20:31.278 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:20:31.278 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:20:31.278 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:20:31.278 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:20:33.896 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4200 < 1.0200)
+00:20:42.204 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:20:42.204 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:20:42.204 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:20:42.204 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:20:42.204 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:20:42.204 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:20:44.301 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4260 < 1.0200)
+00:20:53.215 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:20:53.215 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:20:53.215 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:20:53.215 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:20:53.215 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:20:53.215 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:20:55.178 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4320 < 1.0200)
+00:21:03.018 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:03.018 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:03.018 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:03.018 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:03.018 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:03.018 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:05.271 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4380 < 1.0200)
+00:21:13.713 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:13.713 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:13.713 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:13.713 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:13.713 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:13.713 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:15.918 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4440 < 1.0200)
+00:21:24.145 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:24.145 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:24.145 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:24.145 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:24.145 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:24.145 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:26.263 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4500 < 1.0200)
+00:21:34.755 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:34.755 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:34.755 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:34.755 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:34.755 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:34.755 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:37.252 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4590 < 1.0200)
+00:21:45.683 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:45.683 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:45.683 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:45.683 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:45.683 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:45.683 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:47.533 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4650 < 1.0200)
+00:21:55.466 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:21:55.466 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:21:55.466 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:21:55.467 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:21:55.467 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:21:55.467 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:21:58.277 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4710 < 1.0200)
+00:22:06.502 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:22:06.502 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:22:06.502 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:22:06.502 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:22:06.502 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:22:06.502 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:22:09.058 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4770 < 1.0200)
+00:22:17.120 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:22:17.120 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:22:17.120 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:22:17.120 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:22:17.120 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:22:17.120 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:22:19.252 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4830 < 1.0200)
+00:22:28.283 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:22:28.283 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:22:28.283 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:22:28.283 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:22:28.283 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:22:28.283 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:22:30.271 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.4890 < 1.0200)
+00:22:45.430 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:22:45.430 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:22:45.430 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:22:45.430 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:22:45.430 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:22:45.430 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:22:47.737 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5010 < 1.0200)
+00:24:21.122 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:24:21.122 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:24:21.122 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:24:21.122 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:24:21.122 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:24:21.122 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:24:24.061 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5580 < 1.0200)
+00:24:33.820 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:24:33.820 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:24:33.820 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:24:33.820 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:24:33.820 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:24:33.820 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:24:35.924 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5640 < 1.0200)
+00:24:44.898 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:24:44.898 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:24:44.898 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:24:44.898 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:24:44.898 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:24:44.898 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:24:47.866 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5730 < 1.0200)
+00:24:57.939 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:24:57.939 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:24:57.939 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:24:57.939 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:24:57.939 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:24:57.939 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:00.041 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5790 < 1.0200)
+00:25:08.759 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:25:08.759 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:25:08.759 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:25:08.759 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:25:08.759 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:25:08.759 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:10.908 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5850 < 1.0200)
+00:25:18.987 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:25:18.987 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:25:18.988 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:25:18.988 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:25:18.988 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:25:18.988 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:21.034 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.5910 < 1.0200)
+00:25:30.792 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:25:30.792 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:25:30.792 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:25:30.792 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:25:30.792 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:25:30.792 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:32.947 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6000 < 1.0200)
+00:25:41.459 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:25:41.459 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:25:41.459 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:25:41.459 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:25:41.459 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:25:41.459 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:44.085 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6061 < 1.0200)
+00:25:53.656 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:25:53.656 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:25:53.656 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:25:53.656 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:25:53.656 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:25:53.656 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:25:55.831 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6122 < 1.0200)
+00:26:05.047 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:26:05.047 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:26:05.047 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:26:05.047 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:26:05.047 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:26:05.047 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:26:07.149 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6186 < 1.0200)
+00:26:16.070 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:26:16.070 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:26:16.070 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:26:16.070 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:26:16.070 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:26:16.070 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:26:18.027 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6283 < 1.0200)
+00:26:27.300 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:26:27.300 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:26:27.300 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:26:27.300 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:26:27.300 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:26:27.300 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:26:29.538 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6349 < 1.0200)
+00:26:37.952 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:26:37.952 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:26:37.952 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:26:37.952 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:26:37.952 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:26:37.952 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:26:40.066 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6417 < 1.0200)
+00:26:50.497 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:26:50.497 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:26:50.497 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:26:50.497 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:26:50.497 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:26:50.497 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:26:53.308 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6522 < 1.0200)
+00:27:02.422 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:27:02.422 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:27:02.422 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:27:02.422 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:27:02.422 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:27:02.422 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:27:04.468 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6593 < 1.0200)
+00:27:13.789 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:27:13.789 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:27:13.790 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:27:13.790 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:27:13.790 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:27:13.790 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:27:16.042 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6667 < 1.0200)
+00:27:24.972 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:27:24.972 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:27:24.972 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:27:24.972 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:27:24.972 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:27:24.972 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:27:29.191 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6742 < 1.0200)
+00:27:42.094 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:27:42.094 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:27:42.095 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:27:42.095 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:27:42.095 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:27:42.095 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:27:44.714 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6897 < 1.0200)
+00:27:55.163 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:27:55.163 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:27:55.163 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:27:55.163 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:27:55.163 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:27:55.163 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:27:57.309 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.6977 < 1.0200)
+00:28:07.726 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:28:07.726 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:28:07.726 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:28:07.726 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:28:07.726 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:28:07.726 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:28:10.891 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7101 < 1.0200)
+00:28:19.675 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:28:19.676 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:28:19.676 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:28:19.676 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:28:19.676 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:28:19.676 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:28:22.090 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7186 < 1.0200)
+00:28:32.024 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:28:32.024 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:28:32.024 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:28:32.024 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:28:32.024 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:28:32.024 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:28:35.064 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7317 < 1.0200)
+00:28:43.765 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:28:43.765 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:28:43.765 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:28:43.765 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:28:43.765 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:28:43.765 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:28:45.847 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7407 < 1.0200)
+00:28:55.528 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:28:55.528 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:28:55.528 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:28:55.528 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:28:55.528 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:28:55.528 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:28:58.137 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7547 < 1.0200)
+00:29:07.109 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:29:07.109 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:29:07.109 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:29:07.109 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:29:07.109 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:29:07.109 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:29:09.608 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7643 < 1.0200)
+00:29:19.128 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:29:19.128 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:29:19.128 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:29:19.128 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:29:19.128 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:29:19.128 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:29:21.120 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7742 < 1.0200)
+00:29:30.688 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:29:30.688 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:29:30.688 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:29:30.688 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:29:30.688 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:29:30.688 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:29:32.851 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.7895 < 1.0200)
+00:29:41.611 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:29:41.611 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:29:41.611 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:29:41.611 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:29:41.611 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:29:41.611 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:29:44.524 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8000 < 1.0200)
+00:29:54.267 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:29:54.267 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:29:54.267 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:29:54.267 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:29:54.267 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:29:54.267 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:29:56.811 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8108 < 1.0200)
+00:30:06.010 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:30:06.010 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:30:06.010 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:30:06.010 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:30:06.010 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:30:06.010 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:30:08.507 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8276 < 1.0200)
+00:30:19.135 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:30:19.135 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:30:19.135 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:30:19.135 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:30:19.135 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:30:19.135 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:30:21.696 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8392 < 1.0200)
+00:30:31.424 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:30:31.424 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:30:31.424 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:30:31.424 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:30:31.424 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:30:31.424 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:30:33.469 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8571 < 1.0200)
+00:30:42.584 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:30:42.584 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:30:42.584 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:30:42.584 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:30:42.584 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:30:42.584 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:30:45.349 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8696 < 1.0200)
+00:30:55.497 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:30:55.497 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:30:55.497 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:30:55.497 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:30:55.497 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:30:55.497 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:30:57.483 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.8889 < 1.0200)
+00:31:06.649 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:31:06.649 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:31:06.649 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:31:06.649 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:31:06.649 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:31:06.649 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:31:09.132 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9023 < 1.0200)
+00:31:18.630 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:31:18.630 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:31:18.630 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:31:18.630 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:31:18.630 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:31:18.630 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:31:21.191 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9160 < 1.0200)
+00:31:31.140 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:31:31.141 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:31:31.141 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:31:31.141 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:31:31.141 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:31:31.141 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:31:33.462 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9375 < 1.0200)
+00:31:43.212 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:31:43.212 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:31:43.212 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:31:43.212 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:31:43.212 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:31:43.212 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:31:45.868 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9524 < 1.0200)
+00:31:55.617 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:31:55.617 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:31:55.617 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:31:55.617 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:31:55.617 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:31:55.617 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:31:57.733 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9756 < 1.0200)
+00:32:07.736 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:32:07.736 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:32:07.736 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:32:07.736 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:32:07.736 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:32:07.736 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:32:10.304 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.9917 < 1.0200)
+00:32:19.536 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:32:19.536 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:32:19.536 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:32:19.536 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:32:19.536 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:32:19.536 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:32:21.729 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (1.0084 < 1.0200)
+00:32:31.302 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:32:31.303 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 226738569 backstop LP ≈ $28.3423 spot / $14.1712 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:32:31.303 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:32:31.303 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:32:31.303 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:32:31.303 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+2026/08/10 00:32:43 INFO pool submit landed requests=2 tx=a2bd3aaaabcf844697f293d7ee5e5ed825a11875bfbcca088cfc5b170c6a5388
+00:32:44.812 [] INFO task executed protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH drew=0 proceeds=0 profit=0 response_ms=10141
+00:32:54.273 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:32:54.273 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 453477586 backstop LP ≈ $56.6847 spot / $28.3423 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:32:54.273 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:32:54.273 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:32:54.273 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:32:54.273 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+2026/08/10 00:33:03 INFO bad-debt auction created backstop=CCT4FMLHPJVYBC6SCAOFIRSYU74ZBU36ADREQUQEFCN5C5MRG26S6PTH bid_assets=1 tx=6c472da1d8406c48ee15f99c35fce147aa98854e4c01dfcd2be13dc23dbdef7b
+00:33:03.562 [] INFO bad-debt auction created pool=CBUB..CK3V user=CCT4..6PTH percent=100 start_block=4056273
+00:33:05.179 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0000 < 1.0200)
+00:33:14.772 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:33:14.772 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 453477586 backstop LP ≈ $56.6847 spot / $28.3423 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:33:14.772 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:33:14.772 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:33:14.772 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:33:14.772 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:33:16.903 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0030 < 1.0200)
+00:33:27.041 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:33:27.042 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 453477586 backstop LP ≈ $56.6847 spot / $28.3423 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:33:27.042 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:33:27.042 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:33:27.042 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:33:27.042 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:33:29.499 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0120 < 1.0200)
+00:33:39.590 [] INFO pool scan pool=CBUB..CK3V mode=active status=0 reserves=2 oracle_decimals=7 positions=1
+00:33:39.590 [] WARN pool scan note pool=CBUB..CK3V note=keeper holds 453477586 backstop LP ≈ $56.6847 spot / $28.3423 after 5000 bps haircut (fill-and-hold, unwind deferred); backstop carries bad debt in 1 reserve(s)
+00:33:39.590 [] INFO reserve price pool=CBUB..CK3V asset=CBIE..DAMA usd=1.0000000
+00:33:39.590 [] INFO reserve price pool=CBUB..CK3V asset=CDLZ..CYSC usd=0.4200000
+00:33:39.591 [] INFO position pool=CBUB..CK3V addr=CCT4..6PTH hf=0.0000
+00:33:39.591 [] INFO executing task protocol=blend:CBUB..CK3V type=bad_debt target=CCT4..6PTH priority=1
+00:33:41.992 [] INFO task not executed protocol=blend:CBUB..CK3V target=CCT4..6PTH note=bad debt not profitable at 5000 bps haircut (0.0180 < 1.0200)
