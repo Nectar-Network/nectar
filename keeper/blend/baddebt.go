@@ -101,9 +101,18 @@ func FillBadDebtFree(rpc *soroban.Client, horizonURL string, kp *keypair.Full, p
 // own token_spot_price, discounted by haircutBps. The haircut is the honesty
 // margin on an asset the keeper cannot yet liquidate: spot assumes the comet
 // pool's implied BLND price holds for the whole position, and the unwind
-// (single-sided comet exit, then only on mainnet where the comet's USDC leg
-// IS the vault asset) pays swap fees and slippage. haircutBps=5000 values LP
-// at half of spot; 0 takes spot at face value; >=10000 values it at zero.
+// (single-sided comet exit, only on mainnet, where the comet's USDC leg is
+// the same asset the vault settles in) pays swap fees and slippage — and
+// still pays OUT TO THE OPERATOR, since the vault refuses draw-less proceeds.
+// haircutBps=5000 values LP at half of spot; 0 takes spot at face value;
+// >=10000 values it at zero.
+//
+// NOTE (verified 2026-08-11, docs/evidence/c-lp-unwind.md): the real mainnet
+// exit cost is ~0.24% at small size but CONVEX in lot size (~1.6% at $22k of
+// bad debt, ~6.3% at $100k), which a linear haircut cannot track. The better
+// mechanism is to simulate the exit for the actual lot at decision time — a
+// non-holder simulation returns the true quote — and use that instead of a
+// flat percentage. Until that lands, keep the conservative 5000 bps default.
 func BackstopLPValueUSD(lpAmount *big.Int, spotPrice float64, haircutBps int) float64 {
 	if lpAmount == nil || lpAmount.Sign() <= 0 || spotPrice <= 0 {
 		return 0

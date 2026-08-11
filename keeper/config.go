@@ -47,9 +47,12 @@ type Config struct {
 	// BadDebtMaxSpend (stroops) caps the keeper-float USDC committed to one
 	// bad-debt auction fill; 0 disables bad-debt fills. Bad-debt fills never
 	// use vault capital: the fill pays the assumed debt in USDC and receives
-	// backstop LP tokens, which cannot be liquidated to vault USDC before
-	// mainnet — vault draws would hit the registry slash timeout. Fill-and-
-	// hold is therefore keeper-operator risk, bounded by this cap.
+	// backstop LP tokens, which cannot be liquidated into the vault's
+	// settlement asset before mainnet — vault draws would hit the registry
+	// slash timeout. Fill-and-hold is therefore keeper-operator risk, bounded
+	// by this cap, and operator REWARD too: the unwound USDC can never be
+	// credited to the vault, since return_proceeds rejects a keeper with no
+	// outstanding draw (NoDraw).
 	BadDebtMaxSpend int64
 	// BadDebtHaircutBps discounts the backstop LP spot valuation in the
 	// bad-debt profitability check (5000 = value LP at 50% of spot).

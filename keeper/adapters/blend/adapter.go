@@ -58,9 +58,12 @@ type Config struct {
 	// BadDebtMaxSpend caps the keeper-FLOAT USDC (7-dec stroops) committed to
 	// one bad-debt fill; 0 disables bad-debt fills entirely. Bad-debt fills
 	// never draw vault capital: the fill pays USDC (debt repay) and receives
-	// backstop LP tokens that cannot be liquidated to vault USDC before
-	// mainnet, while vault draws must return within the registry's
-	// slash_timeout — so the LP position is keeper-operator risk by design
+	// backstop LP tokens that cannot be liquidated into the vault's settlement
+	// asset before mainnet, while vault draws must return within the registry's
+	// slash_timeout — so the LP position is keeper-operator risk by design.
+	// The reward is operator-side too: even after the mainnet comet exit the
+	// USDC stays with the operator, because return_proceeds rejects a keeper
+	// with no outstanding draw (VLT-2 NoDraw)
 	// (docs/FACTS.md Decisions, fill-and-hold).
 	BadDebtMaxSpend int64
 	// BadDebtHaircutBps discounts the backstop's token_spot_price when valuing
@@ -392,7 +395,7 @@ func (a *Adapter) scanBackstop(rpc *soroban.Client, pool *core.PoolState, report
 		appendNote(report, "interest auction seen, deferred: bid requires pre-held backstop LP inventory (docs/FACTS.md Decisions)")
 		if ia.StartBlock != a.loggedInterestBlock {
 			a.loggedInterestBlock = ia.StartBlock
-			logAuction("interest auction seen, deferred: fill bid is backstop LP tokens (~140% of interest value) the keeper would have to pre-hold and pre-approve — vault USDC cannot fill it",
+			logAuction("interest auction seen, deferred: fill bid is backstop LP tokens (120% of interest value at spot) the keeper would have to pre-hold and pre-approve — vault USDC cannot fill it",
 				a.cfg.PoolAddr, a.backstop, 0, ia.StartBlock)
 		}
 	}
