@@ -88,6 +88,25 @@ type ScanReport struct {
 	Prices         map[string]float64 // asset address -> USD per whole token
 	Positions      []PositionHealth   // every position seen this pass, with HF
 	Note           string             // operational caveat (e.g. conversion route not viable)
+	Discovery      *Discovery         // how the scanned set was arrived at (nil if n/a)
+}
+
+// Discovery describes one borrower-index sweep: what was read from chain and
+// what it cost. It exists so an operator can tell "no underwater positions"
+// apart from "we never looked" — the two used to be indistinguishable in the
+// logs, and the second one is a silent liveness failure.
+type Discovery struct {
+	Backfill   bool  // swept from the RPC's oldest retained ledger
+	FromLedger int64 // first ledger this sweep asked for
+	ToLedger   int64 // covered-through mark the next sweep resumes at
+	GapAtStart int64 // ledgers unreachable because the cache predates retention
+	Events     int   // events handed to the classifier
+	Truncated  bool  // a cap or an RPC error ended the sweep early
+	Added      int   // addresses newly indexed this sweep
+	Tracked    int   // addresses indexed for this pool
+	Debtors    int   // of those, currently believed to carry debt
+	Probed     int   // get_positions reads issued this cycle
+	ProbeFails int   // of those, reads that errored
 }
 
 // ScanReporter is optionally implemented by adapters that can describe their

@@ -9,6 +9,11 @@ services:
       KEEPER_NAME: keeper-alpha
       KEEPER_SECRET: "${KEEPER_A_SECRET}"
       API_PORT: "8080"
+      # Persisted borrower index. Losing it only costs a re-backfill on the
+      # next start, never correctness — see docs/FACTS.md "Pool event schemas".
+      BORROWER_CACHE: "/app/state/borrowers.json"
+    volumes:
+      - keeper-alpha-state:/app/state
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -32,6 +37,11 @@ services:
       KEEPER_NAME: keeper-beta
       KEEPER_SECRET: "${KEEPER_B_SECRET}"
       API_PORT: "8081"
+      # Persisted borrower index. Losing it only costs a re-backfill on the
+      # next start, never correctness — see docs/FACTS.md "Pool event schemas".
+      BORROWER_CACHE: "/app/state/borrowers.json"
+    volumes:
+      - keeper-beta-state:/app/state
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -70,3 +80,9 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+volumes:
+  # Borrower index cache. Named volumes survive `docker-compose up --build`, so
+  # a rebuild resumes discovery instead of re-backfilling the retention window.
+  keeper-alpha-state:
+  keeper-beta-state:

@@ -70,6 +70,15 @@ type appMetrics struct {
 	cyclesTotal       atomic.Int64
 	liquidationsTotal atomic.Int64
 	sseActive         atomic.Int64
+	// cycleMillis / borrowersTracked / borrowersDebtors are the D3 cost
+	// signals. Discovery grows the probed set over time, and each probe is a
+	// sequential RPC round-trip, so cycle duration against POLL_INTERVAL is the
+	// number that decides whether the keeper still keeps up.
+	cycleMillis       atomic.Int64
+	cycleOverruns     atomic.Int64
+	borrowersTracked  atomic.Int64
+	borrowersDebtors  atomic.Int64
+	discoveryTruncate atomic.Int64
 }
 
 // State is the shared data bag for HTTP handlers and the keeper loop.
@@ -123,6 +132,7 @@ type Keeper struct {
 	dexc      recoverySwapper // nil when no DEX is configured
 	nativeSAC string          // native XLM SAC for this network ("" disables sweeps)
 	history   *vault.HistoryIndexer
+	borrowers *blend.BorrowerIndex
 	protocols []adapters.ProtocolAdapter
 }
 
@@ -249,6 +259,20 @@ func main() {
 	} else {
 		k.nativeSAC = nativeSAC
 	}
+	// One shared borrower index across every Blend pool. Loading the cache is
+	// best-effort by design: a missing, corrupt or stale file only costs a full
+	// backfill on the next sync, so a cold start is never a failure mode.
+	borrowers := blend.NewBorrowerIndex(cfg.BorrowerCache)
+	if err := borrowers.Load(); err != nil {
+		logWarn("borrower cache not loaded — rebuilding by backfill", "path", cfg.BorrowerCache, "err", err)
+	} else if cfg.BorrowerCache != "" {
+		logInfo("borrower cache", "path", cfg.BorrowerCache)
+	}
+	k.borrowers = borrowers
+	if len(cfg.WatchAddresses) > 0 {
+		logInfo("watch addresses (additive to event discovery)", "count", len(cfg.WatchAddresses))
+	}
+
 	// One Blend adapter per configured pool (BLEND_POOLS, or legacy BLEND_POOL).
 	cfg.BlendPools = verifySettleAssets(rpc, cfg)
 	for _, pc := range cfg.BlendPools {
@@ -262,7 +286,8 @@ func main() {
 			HorizonURL:        cfg.HorizonURL,
 			Passphrase:        cfg.Passphrase,
 			UsdcAddr:          cfg.UsdcAddr,
-			EventLookback:     cfg.EventLookback,
+			Index:             borrowers,
+			WatchAddresses:    cfg.WatchAddresses,
 			KeeperAddress:     kp.Address(),
 			BadDebtMaxSpend:   cfg.BadDebtMaxSpend,
 			BadDebtHaircutBps: cfg.BadDebtHaircutBps,
@@ -310,12 +335,36 @@ func main() {
 		select {
 		case <-ctx.Done():
 			logInfo("shutdown signal received, exiting")
+			// Persist what discovery learned before going down, so the next
+			// start resumes instead of re-backfilling the whole window.
+			if err := k.borrowers.Save(); err != nil {
+				logWarn("borrower cache not saved on shutdown", "err", err)
+			}
 			return
 		case <-ticker.C:
 			appMet.cyclesTotal.Add(1)
+			started := time.Now()
 			if err := k.cycle(); err != nil {
 				logWarn("cycle error", "err", err)
 				state.addEvent(fmt.Sprintf("cycle error: %v", err))
+			}
+			elapsed := time.Since(started)
+			appMet.cycleMillis.Store(elapsed.Milliseconds())
+			tracked, debtors := appMet.borrowersTracked.Load(), appMet.borrowersDebtors.Load()
+			// The cycle runs inline on this goroutine, so a cycle longer than
+			// the poll interval silently coalesces ticks. Say so out loud —
+			// with the set size, because that is what drives the cost.
+			if elapsed > time.Duration(cfg.PollInterval)*time.Second {
+				appMet.cycleOverruns.Add(1)
+				logWarn("cycle exceeded poll interval", "ms", elapsed.Milliseconds(),
+					"interval_ms", cfg.PollInterval*1000, "tracked", tracked, "debtors", debtors)
+			} else {
+				logInfo("cycle complete", "ms", elapsed.Milliseconds(), "tracked", tracked, "debtors", debtors)
+			}
+			// Save after the cycle rather than inside it: one write per cycle,
+			// skipped entirely when nothing changed.
+			if err := k.borrowers.Save(); err != nil {
+				logWarn("borrower cache not saved", "err", err)
 			}
 		}
 	}
@@ -482,6 +531,27 @@ func (k *Keeper) cycle() error {
 				logInfo("pool scan", "pool", short(rep.Pool), "mode", poolMode(rep.Monitor),
 					"status", rep.Status, "reserves", rep.Reserves,
 					"oracle_decimals", rep.OracleDecimals, "positions", len(rep.Positions))
+				if d := rep.Discovery; d != nil {
+					logInfo("borrower discovery", "pool", short(rep.Pool),
+						"backfill", d.Backfill, "from", d.FromLedger, "to", d.ToLedger,
+						"events", d.Events, "added", d.Added, "tracked", d.Tracked,
+						"debtors", d.Debtors, "probed", d.Probed)
+					appMet.borrowersTracked.Store(int64(d.Tracked))
+					appMet.borrowersDebtors.Store(int64(d.Debtors))
+					if d.Truncated {
+						appMet.discoveryTruncate.Add(1)
+						logWarn("borrower discovery truncated — resuming next cycle",
+							"pool", short(rep.Pool), "covered_through", d.ToLedger)
+					}
+					if d.GapAtStart > 0 {
+						logWarn("borrower cache predates RPC retention — those ledgers are unreachable",
+							"pool", short(rep.Pool), "gap_ledgers", d.GapAtStart)
+					}
+					if d.ProbeFails > 0 {
+						logWarn("position probes failed — those addresses keep their prior state",
+							"pool", short(rep.Pool), "failed", d.ProbeFails, "of", d.Probed)
+					}
+				}
 				if rep.Note != "" {
 					logWarn("pool scan note", "pool", short(rep.Pool), "note", rep.Note)
 				}
@@ -782,6 +852,16 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	fmt.Fprintf(w, "# HELP nectar_cycles_total Number of keeper poll cycles\n")
 	fmt.Fprintf(w, "nectar_cycles_total %d\n", appMet.cyclesTotal.Load())
+	fmt.Fprintf(w, "# HELP nectar_cycle_duration_ms Wall time of the most recent keeper cycle\n")
+	fmt.Fprintf(w, "nectar_cycle_duration_ms %d\n", appMet.cycleMillis.Load())
+	fmt.Fprintf(w, "# HELP nectar_cycle_overruns_total Cycles that ran longer than POLL_INTERVAL\n")
+	fmt.Fprintf(w, "nectar_cycle_overruns_total %d\n", appMet.cycleOverruns.Load())
+	fmt.Fprintf(w, "# HELP nectar_borrowers_tracked Addresses in the event-built borrower index\n")
+	fmt.Fprintf(w, "nectar_borrowers_tracked %d\n", appMet.borrowersTracked.Load())
+	fmt.Fprintf(w, "# HELP nectar_borrowers_with_debt Indexed addresses whose last probe saw liabilities\n")
+	fmt.Fprintf(w, "nectar_borrowers_with_debt %d\n", appMet.borrowersDebtors.Load())
+	fmt.Fprintf(w, "# HELP nectar_discovery_truncated_total Event sweeps that hit a cap and resumed later\n")
+	fmt.Fprintf(w, "nectar_discovery_truncated_total %d\n", appMet.discoveryTruncate.Load())
 	fmt.Fprintf(w, "# HELP nectar_liquidations_total Number of successful auction fills\n")
 	fmt.Fprintf(w, "nectar_liquidations_total %d\n", appMet.liquidationsTotal.Load())
 	fmt.Fprintf(w, "# HELP nectar_vault_tvl Vault total USDC (7 decimals)\n")

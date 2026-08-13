@@ -19,24 +19,32 @@ type BlendPoolConfig struct {
 }
 
 type Config struct {
-	RpcURL          string
-	HorizonURL      string
-	Passphrase      string
-	SecretKey       string
-	KeeperName      string
-	RegistryID      string
-	VaultID         string
-	BlendPools      []BlendPoolConfig // parsed from BLEND_POOLS (fallback: BLEND_POOL)
-	UsdcAddr        string            // USDC token contract; collateral is swapped into this
-	SoroswapRouter  string            // Soroswap router contract (primary DEX); empty disables
-	PhoenixRouter   string            // Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX); empty disables
-	DeFindexVault   string            // DeFindex vault to monitor for rebalancing; empty disables
-	APIPort         string
-	PollInterval    int
-	MinProfit       float64
-	SlippageBps     int      // max swap slippage in basis points (100 = 1%)
-	DriftBps        int      // DeFindex allocation drift threshold in bps (500 = 5%)
-	EventLookback   int64    // ledgers of pool events scanned for position discovery
+	RpcURL         string
+	HorizonURL     string
+	Passphrase     string
+	SecretKey      string
+	KeeperName     string
+	RegistryID     string
+	VaultID        string
+	BlendPools     []BlendPoolConfig // parsed from BLEND_POOLS (fallback: BLEND_POOL)
+	UsdcAddr       string            // USDC token contract; collateral is swapped into this
+	SoroswapRouter string            // Soroswap router contract (primary DEX); empty disables
+	PhoenixRouter  string            // Phoenix XYK pool (pair) contract for the collateral/USDC pair (fallback DEX); empty disables
+	DeFindexVault  string            // DeFindex vault to monitor for rebalancing; empty disables
+	APIPort        string
+	PollInterval   int
+	MinProfit      float64
+	SlippageBps    int // max swap slippage in basis points (100 = 1%)
+	DriftBps       int // DeFindex allocation drift threshold in bps (500 = 5%)
+	// BorrowerCache is where the event-indexed borrower set is persisted between
+	// restarts. Empty disables persistence: every start then rebuilds the set by
+	// backfilling the RPC's full retention window, which is slower but exactly
+	// as correct — the cache is an optimisation, never a correctness input.
+	BorrowerCache string
+	// WatchAddresses is an OPTIONAL additive list of addresses to probe every
+	// cycle regardless of what events say. It is a supplement to event-driven
+	// discovery, not the mechanism: leaving it empty is the normal case.
+	WatchAddresses  []string
 	KnownDepositors []string // comma-separated G-addresses for performance page
 	// XlmReserve (stroops) is the native XLM the keeper always keeps for
 	// transaction fees. Stale-draw recovery may sweep pool-reserve assets the
@@ -129,19 +137,21 @@ func LoadConfig() Config {
 	}
 	c.DriftBps = drift
 
-	lookbackStr := envOr("BLEND_EVENT_LOOKBACK", "1000")
-	lookback, err := strconv.ParseInt(lookbackStr, 10, 64)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%q is not a valid integer\n", lookbackStr)
-		os.Exit(1)
+	c.BorrowerCache = envOr("BORROWER_CACHE", "")
+
+	if raw := os.Getenv("WATCH_ADDRESSES"); raw != "" {
+		for _, addr := range strings.Split(raw, ",") {
+			addr = strings.TrimSpace(addr)
+			if addr == "" {
+				continue
+			}
+			if len(addr) != 56 || (addr[0] != 'G' && addr[0] != 'C') {
+				fmt.Fprintf(os.Stderr, "WATCH_ADDRESSES entry %q is not a 56-char G/C address\n", addr)
+				os.Exit(1)
+			}
+			c.WatchAddresses = append(c.WatchAddresses, addr)
+		}
 	}
-	// Observed testnet RPC retention is 120960 ledgers (~7 days), not the 24h
-	// figure this comment used to claim — docs/FACTS.md "Soroban RPC getEvents".
-	if lookback < 1 || lookback > 120000 {
-		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%d out of range [1,120000]\n", lookback)
-		os.Exit(1)
-	}
-	c.EventLookback = lookback
 
 	xlmResStr := envOr("KEEPER_XLM_RESERVE", "1000000000") // 100 XLM
 	xlmRes, err := strconv.ParseInt(xlmResStr, 10, 64)

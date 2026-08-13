@@ -25,51 +25,44 @@ type Position struct {
 	HF          float64
 }
 
-// GetPositions discovers users from pool events and loads their positions.
-//
-// Topic layouts verified at blend-contracts-v2 pool/src/events.rs @ ba22b48:
-// the user sits at topic[2] for position-changing events (["supply"|"withdraw"|
-// "supply_collateral"|"withdraw_collateral"|"borrow"|"repay", asset, from] and
-// [auction events, auction_type, user]) and at topic[1] for claim/bad_debt.
-// Both positions are scanned; asset addresses also appear in topics, so
-// anything in exclude (the pool's reserve assets, the pool itself) is dropped
-// before the per-address get_positions round-trip; empty positions are
-// dropped after.
-func GetPositions(rpc *soroban.Client, passphrase, poolAddr string, startLedger int64, exclude map[string]bool) ([]Position, error) {
-	events, err := rpc.GetEvents(startLedger, poolAddr)
-	if err != nil {
-		return nil, fmt.Errorf("get events: %w", err)
-	}
-
-	seen := make(map[string]struct{})
-	for _, ev := range events {
-		for i := 1; i < len(ev.Topic) && i <= 2; i++ {
-			var val xdr.ScVal
-			if err := xdr.SafeUnmarshalBase64(ev.Topic[i], &val); err != nil {
-				continue
-			}
-			if val.Type == xdr.ScValTypeScvAddress && val.Address != nil {
-				addr, err := soroban.ParseAddress(*val.Address)
-				if err == nil && addr != poolAddr && !exclude[addr] {
-					seen[addr] = struct{}{}
-				}
-			}
-		}
-	}
-
-	positions := make([]Position, 0, len(seen))
-	for addr := range seen {
-		pos, err := loadPosition(rpc, passphrase, poolAddr, addr)
-		if err != nil {
-			continue
-		}
-		if len(pos.Collateral) == 0 && len(pos.Supply) == 0 && len(pos.Liabilities) == 0 {
-			continue // address appeared in events but holds no position
-		}
-		positions = append(positions, *pos)
-	}
-	return positions, nil
+// ProbeResult is one get_positions read. Err distinguishes "this address holds
+// nothing" (Pos set, all maps empty) from "we could not find out" (Err set) —
+// the caller must not record a failed read as a debt-free position, or a
+// transient RPC error would quietly retire a real borrower from the index.
+type ProbeResult struct {
+	Address string
+	Pos     *Position
+	Err     error
 }
+
+// ProbePositions reads positions for an explicit address list.
+//
+// Discovery is deliberately NOT done here any more: which addresses are worth
+// asking about is the BorrowerIndex's job (index.go), because that answer has
+// to accumulate across cycles and survive restarts. This function only does the
+// part that must be re-read from chain every time — the position itself, which
+// no event payload can tell us (docs/FACTS.md: `repay` publishes deltas only).
+//
+// Reads are sequential and each costs a simulateTransaction round-trip, so the
+// length of addrs is the cycle's dominant cost. Keep it to addresses the index
+// says are worth it.
+func ProbePositions(rpc *soroban.Client, passphrase, poolAddr string, addrs []string) []ProbeResult {
+	out := make([]ProbeResult, 0, len(addrs))
+	for _, addr := range addrs {
+		pos, err := loadPosition(rpc, passphrase, poolAddr, addr)
+		out = append(out, ProbeResult{Address: addr, Pos: pos, Err: err})
+	}
+	return out
+}
+
+// Empty reports whether a probed position holds nothing at all on this pool.
+func (p *Position) Empty() bool {
+	return len(p.Collateral) == 0 && len(p.Supply) == 0 && len(p.Liabilities) == 0
+}
+
+// HasDebt reports whether the position carries liabilities. This is the
+// authoritative answer to "is this still a borrower" — events cannot supply it.
+func (p *Position) HasDebt() bool { return len(p.Liabilities) > 0 }
 
 func loadPosition(rpc *soroban.Client, passphrase, poolAddr, user string) (*Position, error) {
 	userVal, err := soroban.ScvAddress(user)

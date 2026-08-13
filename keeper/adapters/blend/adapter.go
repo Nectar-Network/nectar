@@ -49,9 +49,15 @@ type Config struct {
 	// padded by nativeFeePad. Empty disables the pad (native debt legs then
 	// risk spurious under-acquisition rollbacks).
 	NativeSAC string
-	// EventLookback is how many ledgers of pool events to scan for position
-	// discovery. 0 means the default of 1000 (~83 min at 5s ledgers).
-	EventLookback int64
+	// Index is the shared borrower index. Discovery is event-driven and
+	// accumulating: the adapter no longer re-derives the candidate set from a
+	// trailing ledger window each cycle. Nil disables discovery entirely, and
+	// only WatchAddresses are then scanned.
+	Index *core.BorrowerIndex
+	// WatchAddresses is an OPTIONAL additive override — addresses the operator
+	// always wants probed whether or not events ever named them. It is not the
+	// discovery mechanism; the index is.
+	WatchAddresses []string
 	// KeeperAddress is the keeper's own G-address, used by scans to report the
 	// keeper's backstop-LP holdings. Empty disables that report line only.
 	KeeperAddress string
@@ -235,20 +241,75 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	if err != nil {
 		return nil, fmt.Errorf("latest ledger: %w", err)
 	}
-	lookback := a.cfg.EventLookback
-	if lookback <= 0 {
-		lookback = 1000
-	}
-	exclude := make(map[string]bool, len(pool.Reserves))
+	// Reserve assets sit in topic[1] of every action event and the backstop
+	// sits in topic[2] of every bad-debt/interest auction event; neither is a
+	// liquidatable user. The keeper itself is excluded too — it becomes a real
+	// borrower whenever it fills an auction (the filler assumes the bid dToken
+	// map, docs/FACTS.md), and self-liquidation is not a thing we do.
+	exclude := make(map[string]bool, len(pool.Reserves)+2)
 	for asset := range pool.Reserves {
 		exclude[asset] = true
 	}
-	positions, err := core.GetPositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, ledger-lookback, exclude)
-	if err != nil {
-		return nil, fmt.Errorf("get positions: %w", err)
+	if a.backstop != "" {
+		exclude[a.backstop] = true
+	}
+	if a.cfg.KeeperAddress != "" {
+		exclude[a.cfg.KeeperAddress] = true
+	}
+
+	var syncStats *core.SyncStats
+	if a.cfg.Index != nil {
+		syncStats, err = a.cfg.Index.Sync(rpc, a.cfg.PoolAddr, exclude)
+		if err != nil {
+			// Discovery failing must not blank the set built on earlier cycles:
+			// fall through and probe what we already know about.
+			logAuction(fmt.Sprintf("borrower discovery sync failed, probing the known set: %v", err),
+				a.cfg.PoolAddr, "", 0, 0)
+		}
+	}
+
+	var probeList []string
+	if a.cfg.Index != nil {
+		probeList = a.cfg.Index.ToProbe(a.cfg.PoolAddr, a.cfg.WatchAddresses)
+	} else {
+		probeList = append(probeList, a.cfg.WatchAddresses...)
+	}
+	probes := core.ProbePositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, probeList)
+
+	positions := make([]core.Position, 0, len(probes))
+	var probeFailures int
+	for _, pr := range probes {
+		if pr.Err != nil {
+			// Never record a failed read as debt-free: a transient RPC error
+			// would retire a real borrower from the index until its next event.
+			probeFailures++
+			continue
+		}
+		if a.cfg.Index != nil {
+			a.cfg.Index.RecordProbe(a.cfg.PoolAddr, pr.Address, pr.Pos.HasDebt(), ledger)
+		}
+		if pr.Pos.Empty() {
+			continue
+		}
+		positions = append(positions, *pr.Pos)
+	}
+
+	disc := &adapters.Discovery{Probed: len(probeList), ProbeFails: probeFailures}
+	if syncStats != nil {
+		disc.Backfill = syncStats.Backfill
+		disc.FromLedger = syncStats.FromLedger
+		disc.ToLedger = syncStats.ToLedger
+		disc.GapAtStart = syncStats.GapAtStart
+		disc.Events = syncStats.Events
+		disc.Truncated = syncStats.Truncated
+		disc.Added = syncStats.Added
+	}
+	if a.cfg.Index != nil {
+		disc.Tracked, disc.Debtors = a.cfg.Index.Counts(a.cfg.PoolAddr)
 	}
 
 	report := &adapters.ScanReport{
+		Discovery:      disc,
 		Pool:           a.cfg.PoolAddr,
 		Monitor:        a.cfg.Monitor,
 		Status:         pool.Status,

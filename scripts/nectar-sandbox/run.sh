@@ -6,7 +6,7 @@
 # "testnet" (selects reference/blend-utils/testnet.contracts.json as the
 # address book).
 #
-# Usage: ./run.sh 01 | 02 | 03 <xlm_price>
+# Usage: ./run.sh 01 | 02 | 03 <xlm_price> | 05 [admin_supply_usdc]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ BU="$ROOT_DIR/reference/blend-utils"
 [ -d "$BU/lib" ] || { echo "ERROR: $BU/lib missing — run 'npm i && npm run build' in reference/blend-utils" >&2; exit 1; }
 [ -f "$BU/.env" ] || { echo "ERROR: $BU/.env missing — see scripts/nectar-sandbox/README.md" >&2; exit 1; }
 
-STEP="${1:?usage: run.sh 01|02|03 [args...]}"
+STEP="${1:?usage: run.sh 01|02|03|05 [args...]}"
 shift
 
 mkdir -p "$BU/nectar"
@@ -26,5 +26,6 @@ case "$STEP" in
   01) exec node "$BU/nectar/01-deploy-sandbox.mjs" testnet "$@" ;;
   02) exec node "$BU/nectar/02-borrower.mjs" testnet "$@" ;;
   03) exec node "$BU/nectar/03-set-price.mjs" testnet "$@" ;;
+  05) exec node "$BU/nectar/05-fresh-borrower.mjs" testnet "$@" ;;
   *) echo "unknown step: $STEP" >&2; exit 1 ;;
 esac
