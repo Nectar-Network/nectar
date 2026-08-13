@@ -135,7 +135,8 @@ func LoadConfig() Config {
 		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%q is not a valid integer\n", lookbackStr)
 		os.Exit(1)
 	}
-	// Soroban RPC retains ~24h of events (17280 ledgers at 5s); cap generously.
+	// Observed testnet RPC retention is 120960 ledgers (~7 days), not the 24h
+	// figure this comment used to claim — docs/FACTS.md "Soroban RPC getEvents".
 	if lookback < 1 || lookback > 120000 {
 		fmt.Fprintf(os.Stderr, "BLEND_EVENT_LOOKBACK=%d out of range [1,120000]\n", lookback)
 		os.Exit(1)

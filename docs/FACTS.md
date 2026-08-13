@@ -262,7 +262,7 @@ Full deploy trail + rationale: `docs/evidence/a4-sandbox.md`; scripts:
 | Backstop / emitter / factory / comet | `CCT4FMLH…` / `CAHQB47P…` / `CDYY5FJ6…` / `CAMYNQY4…`; comet pairs admin-issued `BLND:GATK27P6…` (`CB627JMA…`) and `USDC:GATK27P6…` (`CAKGVZ34…`) 80/20; backstop seeded with 50,001 LP (issuer-minted 500,100 BLND + 12,501 USDC) | 2026-08-03 | a4-sandbox.md tx table |
 | Pool Active is genuine | status 0 set via `set_status(0)` AFTER the backstop met the 100k threshold — `execute_set_pool_status` has no admin bypass (`pool/src/pool/status.rs:81-90` @ ba22b48); a canonical-factory pool was impossible for us (no BLND faucet) | 2026-08-03 | status.rs source; a4-sandbox.md |
 | On-demand insolvency lever | borrower `GCCTPHRT…`: 100 XLM collateral / 20 Circle-USDC debt; `run.sh 03 0.15` → HF 0.5344 (keeper-detected, log in a4-sandbox.md), `run.sh 03 0.42` → HF ≈ 1.50 (resting) | 2026-08-03 | txs `0adf3634…`, `f33b1835…`, `a568a996…`; keeper log |
-| Pool event topic layouts | user at topic[2] for supply/withdraw/supply_collateral/withdraw_collateral/borrow/repay/flash_loan (`[action, asset, from]`) and auction events (`[action, auction_type: u32, user]`); user at topic[1] only for claim/bad_debt | 2026-08-03 | `pool/src/events.rs` @ ba22b48 (doc comments at :135-366) |
+| Pool event topic layouts | SUPERSEDED 2026-08-13 by the full section "Pool event schemas — complete emission surface (Session D1)" below, which is derived from the `publish()` calls rather than the doc comments and adds the data payloads, the `bad_debt` topic inversion, and the filler-in-data case | 2026-08-03 | `pool/src/events.rs` @ ba22b48 |
 
 ## RPC/XDR calling convention (Gate 0.7)
 
@@ -271,6 +271,86 @@ Full deploy trail + rationale: `docs/evidence/a4-sandbox.md`; scripts:
 | Our Go XDR encoding of `submit()` matches the deployed contract | Request encoded as `ScMap` with lexicographically sorted symbol keys (`address`, `amount`, `request_type`), types Address/i128/u32; `submit(from, spender, to, Vec<Request>)` simulated against live TestnetV2 pool → returns well-formed `Positions` (`ScvMap` with keys `collateral`/`liabilities`/`supply`) + 1 decodable auth entry + decodable `transactionData`. Simulation only; nothing signed or sent | 2026-08-03 | test `keeper/soroban/gate07_verification_test.go` (run: `GATE07_LIVE=1 go test ./soroban -run TestGate07SubmitSimulateEncoding`); evidence `docs/evidence/gate-0-7-simulate.json` (latestLedger 3935602) |
 | `Positions` return shape | `{ liabilities: Map<u32,i128>, collateral: Map<u32,i128>, supply: Map<u32,i128> }` keyed by reserve index | 2026-08-03 | blend-contracts-v2 `pool/src/pool/user.rs:11-15` @ `ba22b48`; live simulate result |
 | `getEvents` paginates by ledger SEGMENT, not just event count | One request scans a bounded segment (~10k ledgers) and returns `cursor` + possibly ZERO events even when events exist later in the window (observed live: startLedger=latest−17000 → `events:[]` + cursor, while 8 pool events sat 2 segments later; testnet RPC retention `oldestLedger` ≈ latest−121k). Clients MUST follow `cursor` (omitting `startLedger` on paged requests) until the cursor's TOID ledger reaches `latestLedger` | 2026-08-03 | live curl comparison in session; fix + regression test `keeper/soroban/rpc.go` `GetEvents` / `rpc_events_test.go` |
+
+## Pool event schemas — complete emission surface (Session D1)
+
+All entries verified 2026-08-13 against blend-contracts-v2 @ `ba22b48`; paths repo-relative.
+Each row was independently re-derived by an adversarial verifier that read the cited lines.
+
+**Emission surface is closed.** `grep -rn '\.publish(' pool/` returns 23 hits, all in
+`pool/src/events.rs` (lines 18, 38, 53, 66, 79, 91, 104, 118, 130, 144, 159, 172, 187, 208, 229,
+250, 265, 280, 303, 316, 337, 360, 374). Nothing in `pool/src/auctions/` publishes anything.
+`grep -rn 'contractevent'` repo-wide: zero hits (soroban-sdk 22.0.7, no SDK-23 derive macro).
+
+**`symbol_short!` is used ZERO times in the checkout.** Every `topic[0]` is
+`Symbol::new(e, "literal")`, so long names survive in full — `withdraw_collateral` (19 chars),
+`supply_collateral` (17), `defaulted_debt` (14). Topics are `ScVal::Symbol` (`ScvSymbol`),
+never `ScvString`, for both short and long names (soroban-sdk-22.0.11 `src/symbol.rs:147-161`).
+
+| Event | Topics | Data | Def site | User topic idx | Debt effect |
+|---|---|---|---|---|---|
+| `supply` | `[Sym, asset, from]` | `(i128 tokens_in, i128 b_tokens_minted)` | `events.rs:185-188` | 2 | NEUTRAL |
+| `withdraw` | `[Sym, asset, from]` | `(i128 tokens_out, i128 b_tokens_burnt)` | `events.rs:200-209` | 2 | NEUTRAL |
+| `supply_collateral` | `[Sym, asset, from]` | `(i128 tokens_in, i128 b_tokens_minted)` | `events.rs:221-230` | 2 | NEUTRAL |
+| `withdraw_collateral` | `[Sym, asset, from]` | `(i128 tokens_out, i128 b_tokens_burnt)` | `events.rs:242-251` | 2 | NEUTRAL (lowers HF) |
+| `borrow` | `[Sym, asset, from]` | `(i128 tokens_out, i128 d_tokens_minted)` | `events.rs:263-266` | 2 | **INCURS** (`actions.rs:400-401` → `user.rs:69-79`) |
+| `repay` | `[Sym, asset, from]` | `(i128 tokens_in, i128 d_tokens_burnt)` | `events.rs:278-281` | 2 | REDUCES (`actions.rs:432/437`) |
+| `flash_loan` | `[Sym, asset, from, contract]` — **4 topics** | `(i128 tokens_out, i128 d_tokens_minted)` | `events.rs:294-304` | 2 | INCURS, may be repaid in the same tx (`submit.rs:88-103`) |
+| `new_auction` | `[Sym, u32 auction_type, user]` | `(u32 percent, AuctionData)` | `events.rs:329-338` | 2 | NEUTRAL (announcement only) |
+| `fill_auction` | `[Sym, u32 auction_type, user]` | `(Address filler, i128 fill_percent, AuctionData)` | `events.rs:351-362` | 2 | **two-sided — see below** |
+| `delete_auction` | `[Sym, u32 auction_type, user]` | `()` → **ScVal Void**, not an empty vec | `events.rs:372-375` | 2 | NEUTRAL |
+| `bad_debt` | `[Sym, user, asset]` — **INVERTED vs the action events** | bare `i128 d_tokens` | `events.rs:157-160` | **1** | **CLEARS** for the user (`bad_debt.rs:65-73`) |
+| `defaulted_debt` | `[Sym, asset]` — 2 topics, **no debtor address at all** | bare `i128 d_tokens_burnt` | `events.rs:170-173` | — | CLEARS for the backstop (`bad_debt.rs:113-119`) |
+| `claim` | `[Sym, from]` — 2 topics | `(Vec<u32> reserve_token_ids, i128 amount)` | `events.rs:142-146` | 1 | NEUTRAL (BLND emissions only) |
+
+Remaining pool events are admin/config/emissions-only and carry no user position:
+`set_admin`, `update_pool`, `queue_set_reserve`, `cancel_set_reserve`, `set_reserve`,
+`set_status` (×2), `reserve_emission_update`, `gulp_emissions`, `gulp`.
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| **v1 auction event names DO NOT EXIST in v2** | `new_liquidation_auction`, `delete_liquidation_auction`, `fill_liquidation_auction` appear nowhere as Symbol literals. `grep -rn 'liquidation_auction' --include=*.rs` hits only Rust fn/test identifiers (`auction.rs:121`, `actions.rs:269`, test fn `actions.rs:1907`). v2 collapsed them into `new_auction`/`fill_auction`/`delete_auction` keyed by an `auction_type: u32` topic | 2026-08-13 | source grep @ ba22b48; corroborated by 3 independent agents + live wire capture |
+| `AuctionType` u32 discriminants | `UserLiquidation = 0`, `BadDebtAuction = 1`, `InterestAuction = 2`; `from_u32` panics `BadRequest` above 2 | 2026-08-13 | `pool/src/auctions/auction.rs:17-23` (enum), `:25-34` (from_u32) |
+| **For `auction_type` 1 and 2, `topic[2]` is ALWAYS the backstop contract, never a borrower** | Creation panics unless `user == backstop` | 2026-08-13 | `pool/src/auctions/bad_debt_auction.rs:21-24`; `pool/src/auctions/backstop_interest_auction.rs:18-21`; live-observed type-1 user = sandbox backstop `CCT4FMLH…` |
+| **The FILLER of a `fill_auction` (types 0 and 1) BECOMES A BORROWER — and is only in the DATA, never a topic** | `filler_state.add_positions(e, pool, lot, bid)` routes the `bid` d-token map through `add_liabilities`; the filler is then health-checked and the tx panics `InvalidHf` below 1.0000100. So a filler is a debt-carrying position that **cannot be found by scanning topics** and cannot be server-side filtered by `getEvents` | 2026-08-13 | `user_liquidation_auction.rs:214-216`, `bad_debt_auction.rs:109-111` → `pool/src/pool/user.rs:243-249`; health check `actions.rs:236` → `submit.rs:186-195` |
+| **"Debt reached zero" is NOT derivable from `repay` events** | `repay` publishes only deltas `(tokens_in, d_tokens_burnt)`; `apply_repay` never produces a post-action balance. An over-repay that zeroes the position is indistinguishable from a partial repay of the same size. Liabilities are also mutated by paths with different event shapes (`fill_auction` bid map, `bad_debt`, `defaulted_debt`, `flash_loan`). **Consequence: events are triggers; `get_positions` is the authority on remaining liability** | 2026-08-13 | `events.rs:278-281`; `actions.rs:415-441`; `user.rs:89-97`; `contract.rs:448-450` |
+| Two events whose payload IS the full remaining liability | `bad_debt` and `defaulted_debt` both iterate the entire liabilities map and emit the full per-asset `liability_balance`, which is then removed in full. After `bad_debt(user, asset)` that user's liability for that asset is exactly 0 by construction. `bad_debt` is gated on `has_liabilities() && !has_collateral()` | 2026-08-13 | `pool/src/pool/bad_debt.rs:59`, `:65-73`, `:113-119` |
+| `bad_debt` fires INSIDE a full liquidation fill, before `fill_auction` | Two emit paths: the standalone `bad_debt` entry point (`contract.rs:592-596`) and the full-fill path (`user_liquidation_auction.rs:218-220`). Published during `auctions::fill` (`actions.rs:208-215`), i.e. BEFORE the `fill_auction` publish at `actions.rs:218-225` | 2026-08-13 | source read @ ba22b48 |
+| A liquidation fill emits **no** supply/withdraw/borrow/repay events | Positions move directly via `rm_positions`/`add_positions`. An indexer keyed only on the six action events misses every position change caused by a fill | 2026-08-13 | `user_liquidation_auction.rs:214-216` |
+| **No event outside the pool contract names a pool borrower** | Backstop events (`deposit`, `queue_withdrawal`, `dequeue_withdrawal`, `withdraw`, `claim`) key on `UserBalance(PoolUserKey{pool,user})` holding LP **shares** — a ledger disjoint from pool debt. `distribute`/`rw_zone_*`/`gulp_emissions`/factory `deploy` carry contract addresses or none. `draw`'s `to` (the bad-debt filler) does acquire debt, but that address is already in `fill_auction` data | 2026-08-13 | `backstop/src/storage.rs:69-72,77`; `backstop/src/events.rs` (11 publish sites); `backstop/src/contract.rs:315-322` |
+| `emitter/` has no source in this pin | Contains only `README.md`; not a workspace member. v2 reuses the v1 Emitter. Its event shapes are **UNVERIFIED** from this pin | 2026-08-13 | `reference/blend-contracts-v2/emitter/README.md`; root `Cargo.toml` members |
+| Doc-comment brackets in `events.rs` are decorative — single-value payloads publish as BARE ScVals | `bad_debt` doc says `[d_tokens: i128]` (`:151`) but `:159` publishes the scalar. Same mismatch at `:164/172` (defaulted_debt), `:124/130` (gulp_emissions), `:308/316` (gulp), `:11/18` (set_admin), `:85/91` + `:97/104` (set_status), `:59/66` (cancel_set_reserve). Trust the `publish()` call, never the bracket | 2026-08-13 | source read + live wire capture (`bad_debt` body decoded as `SCV_I128`) |
+| `AuctionData` declaration order vs wire order differ | Declared `bid: Map<Address,i128>` (`:46`), `lot: Map<Address,i128>` (`:54`), `block: u32` (`:57`). On the wire it serializes as an `SCV_MAP` with keys in **alphabetical** symbol order `bid, block, lot`. (The ScMap ordering is soroban-sdk behavior, not fixed by blend source — recorded here from live decode) | 2026-08-13 | `pool/src/auctions/auction.rs:36-58`; live decode of a sandbox `new_auction` |
+| **`AuctionData.bid` can legitimately be an EMPTY map on a real `fill_auction`** | Observed live at sandbox ledger 4055978 (`block_dif` 403 > 400): `scale_auction` only writes a bid entry `if to_fill_scaled > 0`, and past t=400 the bid modifier is 0, so the entry is dropped rather than stored as 0. Code that indexes `bid[0]` or divides by a bid amount panics or divides by zero on real data | 2026-08-13 | `pool/src/auctions/auction.rs:214-221`, `:238-242`; live event decode |
+| Live-observed vs source-only event names | **Observed on the wire (11)**: `new_auction`, `fill_auction`, `delete_auction`, `bad_debt`, `supply`, `withdraw`, `supply_collateral`, `withdraw_collateral`, `borrow`, `repay`, `claim`. **Source-defined but NOT observed (11)**: `set_admin`, `update_pool`, `queue_set_reserve`, `cancel_set_reserve`, `set_reserve`, `set_status`, `reserve_emission_update`, `gulp_emissions`, `defaulted_debt`, `flash_loan`, `gulp` — their wire shapes are source-derived only. Auction type 2 was not observed either | 2026-08-13 | live `getEvents` over the full retention window on `CBUBTHAT…` (12 events) and `CCEBVDYM…` (1560 events) |
+
+## Soroban RPC `getEvents` — limits observed live (Session D1)
+
+All measured 2026-08-13 by direct `curl` against `https://soroban-testnet.stellar.org:443`.
+These are **observations, not documentation**; every row names the error text actually returned.
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| Max `pagination.limit` | **10000 inclusive**. 10001 → code `-32602`, `"limit must not exceed 10000"`. `limit: 0` is accepted and means "no limit" (returns the whole segment). `limit: -1` → `-32602` `"json: cannot unmarshal number -1 into Go struct field PaginationOptions.pagination.limit of type uint"` | 2026-08-13 | live curl binary search (200/1000/5000/10000/10001) |
+| `startLedger` valid range | Must lie in `[oldestLedger, latestLedger]` **inclusive**; both endpoints accepted. Outside → code `-32600`, `"startLedger must be within the ledger range: <oldest> - <latest>"`. **The window slides ~1 ledger / 5 s**, so a `startLedger` computed from a slightly stale `getHealth` can be rejected seconds later (observed: 4003580 rejected 3 s after being read, oldest had advanced to 4003583) | 2026-08-13 | live curl at oldestLedger, oldestLedger−1, latestLedger, latestLedger+1 |
+| **Retention window** | `ledgerRetentionWindow` = **120960 ledgers (~7 days)**, and `latestLedger − oldestLedger + 1` held at exactly 120960 throughout the session. **This supersedes the repo's stale "~24h / 17280 ledgers" claim** (was in `keeper/config.go:138` and `.env.example`) — a backfill sized off 17280 under-reaches by 7× | 2026-08-13 | `getHealth`: latest 4124536 / oldest 4003577 at session start, 4124594 / 4003635 at end |
+| **Per-request ledger SEGMENT** | Exactly **10000 ledgers**, constant across start points, **independent of `pagination.limit`**, and not extendable | 2026-08-13 | repeated live probes from different start points |
+| Cursor has TWO distinct semantics | (a) **segment exhausted** → cursor is the synthetic sentinel `"<toid>-4294967295"` with `tx = 0xFFFFF`, `op = 0xFFF`, where `toid` encodes `endLedger = startLedger + 9999`. (b) **limit reached first** → cursor is the id of the last RETURNED event, so the ledger advance is data-dependent and much smaller | 2026-08-13 | live probes; limit=12 → last-event cursor, limit=13 → sentinel, same 12 events |
+| **The exactly-`limit` ambiguity is a real correctness hazard** | If a page returns exactly `limit` events you CANNOT conclude the segment is drained; skipping ahead silently drops events. Page until a cursor ending in `-4294967295` | 2026-08-13 | limit=11/12/13 boundary test on `CBUBTHAT…` |
+| `startLedger` and `pagination.cursor` are mutually exclusive | Both → `-32602` `"ledger ranges and cursor cannot both be set"`. Neither → `-32602` `"startLedger must be positive"`. Cursor alone resumes correctly | 2026-08-13 | live curl |
+| `endLedger` is supported and **exclusive** | `startLedger=4050000, endLedger=4050100` → sentinel at ledger 4050099. Values beyond `startLedger+10000` are silently clamped to the 10000 cap. `endLedger < startLedger` returns empty with no error | 2026-08-13 | live curl |
+| Filter fan-out ceiling | **5 contractIds per filter** (6 → `-32602` `"filter 1 invalid: maximum 5 contract IDs per filter"`) and **5 filters per request** (6 → `"maximum 5 filters per request"`). Combined ceiling **25 contracts per request** | 2026-08-13 | live curl at 1/5/6/7 ids and 1/5/6 filters |
+| Cursor TOID encoding | `"<toid>-<idx>"`, `toid = ledger<<32 \| tx<<12 \| op`, so `ledger = toid >> 32`. Confirmed against each event's own integer `ledger` field | 2026-08-13 | live decode |
+| Response field names (this RPC version) | Topics under **`topic`** (singular) as an array of base64 ScVal; body under **`value`** as a plain base64 string (NOT an object with an `xdr` field). Also `id`, `txHash`, `ledger`, `operationIndex`, `transactionIndex`, `inSuccessfulContractCall` | 2026-08-13 | live response inspection |
+| Minimum cost of a full-retention backfill | `ceil(120960 / 10000)` = **13 requests per contract**, at any limit. Cannot be done in one call | 2026-08-13 | derived from the 10000-ledger segment |
+
+### Measured cost of the pre-D2 discovery path (the reason D2 exists)
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| **The shipped default lookback (1000 ledgers) discovers ZERO positions on the Nectar Sandbox** | The sandbox pool's entire retained event history sits in ledgers 4054311–4056272, ~68k–70k ledgers behind head. `GetPositions(lookback=1000)` → 0 positions in 554 ms; `lookback=114000` → 1 position, 5.5 s | 2026-08-13 | live run against `CBUBTHAT…` |
+| **A full-window scan on the Blend testnet V2 pool costs 34.75 s — 3.5× the 10 s poll interval** | 1446 events over 12 pages → 53 distinct decoded addresses → 49 non-empty positions in 34.75 s (≈670 ms per address, strictly sequential). **Only 3 of the 49 carry any liability**; the other 46 `get_positions` round-trips are pure waste | 2026-08-13 | live run against `CCEBVDYM…` |
+| The borrower set was derived, never remembered | A borrower who last transacted more than `BLEND_EVENT_LOOKBACK` ledgers ago is invisible regardless of how underwater it is; widening the lookback pays the full rediscovery cost every cycle and still cannot reach past the 120960-ledger retention window | 2026-08-13 | `keeper/adapters/blend/adapter.go:234-246`; `keeper/blend/positions.go:38-72` |
 
 ## Decisions
 
