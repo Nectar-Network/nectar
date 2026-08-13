@@ -233,10 +233,12 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	if a.cfg.PoolAddr == "" {
 		return nil, nil
 	}
+	loadStart := time.Now()
 	pool, err := core.LoadPool(rpc, a.cfg.Passphrase, a.cfg.PoolAddr)
 	if err != nil {
 		return nil, fmt.Errorf("load pool: %w", err)
 	}
+	loadMs := time.Since(loadStart).Milliseconds()
 	ledger, err := rpc.LatestLedger()
 	if err != nil {
 		return nil, fmt.Errorf("latest ledger: %w", err)
@@ -257,6 +259,7 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 		exclude[a.cfg.KeeperAddress] = true
 	}
 
+	syncStart := time.Now()
 	var syncStats *core.SyncStats
 	if a.cfg.Index != nil {
 		syncStats, err = a.cfg.Index.Sync(rpc, a.cfg.PoolAddr, exclude)
@@ -274,7 +277,11 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 	} else {
 		probeList = append(probeList, a.cfg.WatchAddresses...)
 	}
+	syncMs := time.Since(syncStart).Milliseconds()
+
+	probeStart := time.Now()
 	probes := core.ProbePositions(rpc, a.cfg.Passphrase, a.cfg.PoolAddr, probeList)
+	probeMs := time.Since(probeStart).Milliseconds()
 
 	positions := make([]core.Position, 0, len(probes))
 	var probeFailures int
@@ -294,7 +301,13 @@ func (a *Adapter) GetTasks(rpc *soroban.Client) ([]adapters.Task, error) {
 		positions = append(positions, *pr.Pos)
 	}
 
-	disc := &adapters.Discovery{Probed: len(probeList), ProbeFails: probeFailures}
+	disc := &adapters.Discovery{
+		Probed:     len(probeList),
+		ProbeFails: probeFailures,
+		PoolLoadMs: loadMs,
+		SyncMs:     syncMs,
+		ProbeMs:    probeMs,
+	}
 	if syncStats != nil {
 		disc.Backfill = syncStats.Backfill
 		disc.FromLedger = syncStats.FromLedger

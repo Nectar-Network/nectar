@@ -9,8 +9,9 @@ services:
       KEEPER_NAME: keeper-alpha
       KEEPER_SECRET: "${KEEPER_A_SECRET}"
       API_PORT: "8080"
-      # Persisted borrower index. Losing it only costs a re-backfill on the
-      # next start, never correctness — see docs/FACTS.md "Pool event schemas".
+      # Persisted borrower index. A re-backfill recovers every borrower
+      # active inside the RPC retention window, but not one idle longer than
+      # it — hence the volume. See docs/FACTS.md "Borrower discovery".
       BORROWER_CACHE: "/app/state/borrowers.json"
     volumes:
       - keeper-alpha-state:/app/state

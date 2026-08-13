@@ -77,13 +77,18 @@ func loadPosition(rpc *soroban.Client, passphrase, poolAddr, user string) (*Posi
 		return nil, fmt.Errorf("get_positions: %s", sim.Error)
 	}
 	if len(sim.Results) == 0 {
-		return newPosition(user), nil
+		// NOT a debt-free answer. A simulate that returns no result at all is a
+		// read we could not complete, and reporting it as "holds nothing" is
+		// how a live borrower gets retired from the index: the index would
+		// record Debt=false, and an idle underwater position emits no further
+		// events to revive it, so it would never be probed again.
+		return nil, fmt.Errorf("get_positions: simulate returned no results")
 	}
 	var val xdr.ScVal
 	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
 		return nil, err
 	}
-	return parsePositions(val, user), nil
+	return parsePositions(val, user)
 }
 
 func newPosition(user string) *Position {
@@ -95,10 +100,13 @@ func newPosition(user string) *Position {
 	}
 }
 
-func parsePositions(val xdr.ScVal, user string) *Position {
+// parsePositions decodes the pool's Positions struct. A value that is not the
+// expected map is an unreadable answer, not an empty position — same reasoning
+// as the no-results case above.
+func parsePositions(val xdr.ScVal, user string) (*Position, error) {
 	pos := newPosition(user)
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {
-		return pos
+		return nil, fmt.Errorf("get_positions: expected ScvMap, got %v", val.Type)
 	}
 	for _, entry := range **val.Map {
 		key := scSymbol(entry.Key)
@@ -132,7 +140,7 @@ func parsePositions(val xdr.ScVal, user string) *Position {
 			}
 		}
 	}
-	return pos
+	return pos, nil
 }
 
 // EstimateCapital returns an upper-bound USD estimate of the capital a

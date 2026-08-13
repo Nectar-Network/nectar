@@ -259,14 +259,19 @@ func main() {
 	} else {
 		k.nativeSAC = nativeSAC
 	}
-	// One shared borrower index across every Blend pool. Loading the cache is
-	// best-effort by design: a missing, corrupt or stale file only costs a full
-	// backfill on the next sync, so a cold start is never a failure mode.
+	// One shared borrower index across every Blend pool. A cold start always
+	// works — it backfills the RPC's whole retention window — but it is not a
+	// free equivalent: borrowers idle longer than that window (~7 days) have no
+	// events left to be rediscovered from, so starting without a cache is a
+	// real, if bounded, loss of coverage. Say so rather than shrug.
 	borrowers := blend.NewBorrowerIndex(cfg.BorrowerCache)
 	if err := borrowers.Load(); err != nil {
-		logWarn("borrower cache not loaded — rebuilding by backfill", "path", cfg.BorrowerCache, "err", err)
+		logWarn("borrower cache unreadable — rebuilding by backfill; borrowers idle longer than the RPC retention window will stay invisible until they next transact",
+			"path", cfg.BorrowerCache, "err", err)
 	} else if cfg.BorrowerCache != "" {
 		logInfo("borrower cache", "path", cfg.BorrowerCache)
+	} else {
+		logWarn("BORROWER_CACHE unset — the borrower set is rebuilt from the RPC retention window on every start; borrowers idle longer than that window are not rediscoverable (pin them with WATCH_ADDRESSES)")
 	}
 	k.borrowers = borrowers
 	if len(cfg.WatchAddresses) > 0 {
@@ -515,6 +520,9 @@ func (k *Keeper) cycle() error {
 	// routine DeFindex rebalance just because of adapter registration order.
 	var planned []plannedTask
 	var posRows []posRow
+	// Borrower counts are per pool; sum them across adapters before publishing,
+	// or a multi-pool keeper reports only whichever pool happened to scan last.
+	var cycleTracked, cycleDebtors int64
 	for _, ad := range k.protocols {
 		tasks, err := ad.GetTasks(k.rpc)
 		if err != nil {
@@ -535,9 +543,10 @@ func (k *Keeper) cycle() error {
 					logInfo("borrower discovery", "pool", short(rep.Pool),
 						"backfill", d.Backfill, "from", d.FromLedger, "to", d.ToLedger,
 						"events", d.Events, "added", d.Added, "tracked", d.Tracked,
-						"debtors", d.Debtors, "probed", d.Probed)
-					appMet.borrowersTracked.Store(int64(d.Tracked))
-					appMet.borrowersDebtors.Store(int64(d.Debtors))
+						"debtors", d.Debtors, "probed", d.Probed,
+						"pool_load_ms", d.PoolLoadMs, "sync_ms", d.SyncMs, "probe_ms", d.ProbeMs)
+					cycleTracked += int64(d.Tracked)
+					cycleDebtors += int64(d.Debtors)
 					if d.Truncated {
 						appMet.discoveryTruncate.Add(1)
 						logWarn("borrower discovery truncated — resuming next cycle",
@@ -586,6 +595,9 @@ func (k *Keeper) cycle() error {
 			planned = append(planned, plannedTask{ad: ad, task: task})
 		}
 	}
+	appMet.borrowersTracked.Store(cycleTracked)
+	appMet.borrowersDebtors.Store(cycleDebtors)
+
 	sort.SliceStable(planned, func(i, j int) bool {
 		return planned[i].task.Priority > planned[j].task.Priority
 	})

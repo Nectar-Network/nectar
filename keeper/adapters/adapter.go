@@ -107,6 +107,12 @@ type Discovery struct {
 	Debtors    int   // of those, currently believed to carry debt
 	Probed     int   // get_positions reads issued this cycle
 	ProbeFails int   // of those, reads that errored
+	// Phase timings, so an over-budget cycle points at its own cause instead of
+	// leaving the operator to guess between pool reads, the event sweep and the
+	// position probes. They have very different fixes.
+	PoolLoadMs int64
+	SyncMs     int64
+	ProbeMs    int64
 }
 
 // ScanReporter is optionally implemented by adapters that can describe their

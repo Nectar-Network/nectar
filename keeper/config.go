@@ -38,8 +38,13 @@ type Config struct {
 	DriftBps       int // DeFindex allocation drift threshold in bps (500 = 5%)
 	// BorrowerCache is where the event-indexed borrower set is persisted between
 	// restarts. Empty disables persistence: every start then rebuilds the set by
-	// backfilling the RPC's full retention window, which is slower but exactly
-	// as correct — the cache is an optimisation, never a correctness input.
+	// backfilling the RPC's full retention window.
+	//
+	// That rebuild is complete for every borrower active within the window
+	// (~7 days observed) but NOT for one idle longer than that — its events have
+	// aged out of the RPC, so only the cache remembers it. Running without a
+	// cache, or losing one, means long-idle borrowers stay invisible until they
+	// next transact. Pin any that matter with WATCH_ADDRESSES.
 	BorrowerCache string
 	// WatchAddresses is an OPTIONAL additive list of addresses to probe every
 	// cycle regardless of what events say. It is a supplement to event-driven

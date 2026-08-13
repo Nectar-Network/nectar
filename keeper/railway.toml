@@ -37,9 +37,10 @@ healthcheckTimeout = 30
 #   SLIPPAGE_BPS       100 (max swap slippage AND USDC-conversion par bound; default 100 = 1%)
 #   BORROWER_CACHE     path for the persisted borrower index, e.g.
 #     /app/state/borrowers.json. Needs a Railway VOLUME mounted at that
-#     directory or the file dies with every redeploy; empty (default) disables
-#     persistence and each start re-backfills the RPC retention window, which
-#     is slower but reaches the identical borrower set.
+#     directory or the file dies with every redeploy. Empty (default) disables
+#     persistence: each start re-backfills the RPC retention window, which
+#     reaches every borrower active inside that window but CANNOT rediscover
+#     one idle longer than it (~7 days) — those live only in the cache.
 #   WATCH_ADDRESSES    comma-separated addresses always probed, ADDITIVE to
 #     event discovery (normally empty — discovery is the mechanism)
 #   FAUCET_SECRET      (mark as secret) testnet USDC faucet treasury key; empty disables

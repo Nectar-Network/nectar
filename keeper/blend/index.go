@@ -106,8 +106,19 @@ type SyncStats struct {
 // Sync brings one pool's borrower set up to date from chain events.
 //
 // On a cold start (or with no cache) it backfills from the earliest ledger the
-// RPC still retains; afterwards it reads only what is new. Either way the set
-// it produces is the same — the cache is a speed-up, never a correctness input.
+// RPC still retains; afterwards it reads only what is new.
+//
+// HOW FAR THE CACHE IS "just an optimisation" — the honest boundary. For any
+// borrower whose last on-chain event still sits INSIDE the RPC's retention
+// window (observed: 120960 ledgers, ~7 days), a cold start rebuilds exactly the
+// cached set and the cache only saves time. For a borrower that has been idle
+// LONGER than that, it is not: the events naming it have aged out, no RPC this
+// keeper talks to can return them, and the address survives only because the
+// cache remembered it. Losing the cache therefore loses coverage of long-idle
+// borrowers until they next transact — interest accrual alone emits no event.
+// WATCH_ADDRESSES exists to pin such addresses back in; see
+// TestSync_ColdStartCannotSeeBorrowersOlderThanRetention, which pins this
+// divergence rather than pretending it away.
 //
 // exclude drops addresses that are never liquidatable users: the pool itself,
 // its reserve assets (which appear in topic[1] of every action event), and the
@@ -205,24 +216,35 @@ func (ps *poolState) apply(f eventFact) bool {
 	return added
 }
 
-// evict trims the set back to max, dropping never-indebted addresses with the
-// oldest activity first. A confirmed debtor is never evicted: forgetting one is
-// exactly the failure this index exists to prevent.
+// evict trims the set back to max. A confirmed debtor is never evicted —
+// forgetting one is exactly the failure this index exists to prevent.
+//
+// Among the rest there are two different states, and conflating them would
+// throw away the more valuable one: an address a probe CONFIRMED debt-free, and
+// an address never asked about at all. The second could still be a borrower, so
+// it is evicted only after every confirmed-clean address is gone. Within each
+// group the oldest activity goes first.
 func (ps *poolState) evict(max int) int {
 	if max <= 0 || len(ps.Addrs) <= max {
 		return 0
 	}
 	type row struct {
-		addr string
-		last int64
+		addr    string
+		last    int64
+		unknown bool // never probed — we do not actually know it is debt-free
 	}
 	var cold []row
 	for addr, a := range ps.Addrs {
 		if !a.Debt {
-			cold = append(cold, row{addr, a.LastEvent})
+			cold = append(cold, row{addr, a.LastEvent, a.Probed == 0})
 		}
 	}
-	sort.Slice(cold, func(i, j int) bool { return cold[i].last < cold[j].last })
+	sort.Slice(cold, func(i, j int) bool {
+		if cold[i].unknown != cold[j].unknown {
+			return !cold[i].unknown // confirmed debt-free is discarded first
+		}
+		return cold[i].last < cold[j].last
+	})
 	n := 0
 	for _, r := range cold {
 		if len(ps.Addrs) <= max {

@@ -522,9 +522,10 @@ func TestSync_CachePredatingRetentionReportsTheGap(t *testing.T) {
 	}
 }
 
-// Cold start and cached restart must reach the SAME borrower set — that is what
-// makes the cache an optimisation rather than a correctness input.
-func TestSync_ColdAndCachedRestartAgree(t *testing.T) {
+// Inside the RPC's retention window, a cold start and a cached restart reach
+// the SAME set — this is the case where the cache really is just a speed-up.
+// The case where it is NOT is pinned separately below.
+func TestSync_ColdAndCachedRestartAgree_WithinRetention(t *testing.T) {
 	borrowEv := ev(4054311, b64(t, soroban.ScvVec(soroban.ScvI128(20), soroban.ScvI128(20))),
 		b64(t, soroban.ScvSymbol("borrow")), addrB64(t, ixUsdc), addrB64(t, ixBorrower))
 	page := eventsPage(t, 4124553, borrowEv)
@@ -559,5 +560,65 @@ func TestSync_ColdAndCachedRestartAgree(t *testing.T) {
 	got, want := restarted.ToProbe(ixPool, nil), cold.ToProbe(ixPool, nil)
 	if len(got) != len(want) || len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("cached restart %v != cold start %v", got, want)
+	}
+}
+
+// The honest boundary of the cache claim, pinned as a test so nobody re-asserts
+// the stronger version: once a borrower's last event ages out of the RPC's
+// retention window, a cold start CANNOT rediscover it. The events are simply
+// gone from every endpoint the keeper can reach, and interest accrual — which is
+// what pushes an idle position underwater — emits no event at all.
+//
+// This is a real coverage limit, not a bug to be fixed in the keeper: the fix is
+// to keep the cache on a mounted volume, or to pin the address with
+// WATCH_ADDRESSES.
+func TestSync_ColdStartCannotSeeBorrowersOlderThanRetention(t *testing.T) {
+	borrowEv := ev(4054311, b64(t, soroban.ScvVec(soroban.ScvI128(20), soroban.ScvI128(20))),
+		b64(t, soroban.ScvSymbol("borrow")), addrB64(t, ixUsdc), addrB64(t, ixBorrower))
+	path := filepath.Join(t.TempDir(), "borrowers.json")
+
+	// t0 — the borrow is inside the window. Index it, probe it, persist.
+	warm := NewBorrowerIndex(path)
+	if _, err := warm.Sync((&mockRPC{oldest: 4003584, latest: 4124553,
+		pages: []string{eventsPage(t, 4124553, borrowEv)}}).server(t), ixPool, nil); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	warm.RecordProbe(ixPool, ixBorrower, true, 4124553)
+	if err := warm.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// t0 + ~8 days. The borrower did nothing since, so its only event has now
+	// aged out: oldestLedger has moved past 4054311 and the sweep returns none.
+	const laterOldest, laterLatest = int64(4058000), int64(4178960)
+	empty := eventsPage(t, laterLatest)
+
+	cached := NewBorrowerIndex(path)
+	if err := cached.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, err := cached.Sync((&mockRPC{oldest: laterOldest, latest: laterLatest,
+		pages: []string{empty}}).server(t), ixPool, nil); err != nil {
+		t.Fatalf("cached sync: %v", err)
+	}
+
+	cold := NewBorrowerIndex("") // BORROWER_CACHE unset, or the file was lost
+	if _, err := cold.Sync((&mockRPC{oldest: laterOldest, latest: laterLatest,
+		pages: []string{empty}}).server(t), ixPool, nil); err != nil {
+		t.Fatalf("cold sync: %v", err)
+	}
+
+	cachedProbes, coldProbes := cached.ToProbe(ixPool, nil), cold.ToProbe(ixPool, nil)
+	if len(cachedProbes) != 1 || cachedProbes[0] != ixBorrower {
+		t.Fatalf("the cache must still carry the debtor, got %v", cachedProbes)
+	}
+	if len(coldProbes) != 0 {
+		t.Fatalf("cold start unexpectedly found %v — if this now passes, the "+
+			"retention limitation has changed and the docs need revisiting", coldProbes)
+	}
+
+	// And WATCH_ADDRESSES is the documented way to get it back.
+	if got := cold.ToProbe(ixPool, []string{ixBorrower}); len(got) != 1 || got[0] != ixBorrower {
+		t.Errorf("WATCH_ADDRESSES must recover a pre-retention borrower, got %v", got)
 	}
 }

@@ -4,7 +4,11 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/nectar-network/keeper/soroban"
 )
 
 func makeReserveAt(idx uint32, asset string, c, l, price float64) *Reserve {
@@ -212,5 +216,40 @@ func TestEstimateCapital_PctClampedTo100(t *testing.T) {
 	gotOver := EstimateCapital(pos, pool, 250) // clamped to 100
 	if gotOver != gotMax {
 		t.Fatalf("expected pct>100 to clamp; got %d vs %d", gotOver, gotMax)
+	}
+}
+
+// A get_positions read that comes back with nothing must be a FAILED read, not
+// a debt-free answer. The index is sticky: it records the probe result and then
+// stops asking until a new event arrives — and an idle underwater position
+// emits no events. So fabricating "holds nothing" here would retire a live
+// borrower permanently, which is exactly what this index exists to prevent.
+func TestProbePositions_EmptyOrUnreadableResultIsAnError(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"result without results", `{"jsonrpc":"2.0","id":1,"result":{"latestLedger":100}}`},
+		{"null result", `{"jsonrpc":"2.0","id":1,"result":null}`},
+		{"results present but not a map", `{"jsonrpc":"2.0","id":1,"result":{"latestLedger":100,"results":[{"xdr":"AAAAAQ=="}]}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			got := ProbePositions(soroban.NewClient(srv.URL), "Test SDF Network ; September 2015",
+				"CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V",
+				[]string{"GCC52N6U63PWM4GVUJK7T54W3X2GW2YKWOLZWN7TX7LMDU6LCOVZ3YVF"})
+			if len(got) != 1 {
+				t.Fatalf("got %d results want 1", len(got))
+			}
+			if got[0].Err == nil {
+				t.Fatalf("an unreadable position must report an error, got Pos=%+v", got[0].Pos)
+			}
+		})
 	}
 }

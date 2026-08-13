@@ -131,9 +131,10 @@ KEEPER_NAME=keeper-alpha    # Human-readable name
 REGISTRY_CONTRACT=C...      # KeeperRegistry contract ID
 VAULT_CONTRACT=C...         # NectarVault contract ID
 BLEND_POOL=C...             # Blend pool contract ID to monitor
-BORROWER_CACHE=             # path for the persisted borrower index; empty disables
-                            # (a cold start then re-backfills the RPC retention
-                            # window and reaches the identical set, just slower)
+BORROWER_CACHE=             # path for the persisted borrower index; empty disables.
+                            # A cold start re-backfills the RPC retention window and
+                            # recovers every borrower active inside it — but NOT one
+                            # idle longer than it (~7d), which lives only in the cache
 WATCH_ADDRESSES=            # OPTIONAL additive addresses always probed. Discovery
                             # is event-driven — there is no address list to maintain
 SOROBAN_RPC=https://...     # Soroban RPC endpoint
