@@ -128,21 +128,51 @@ func (c *Client) AwaitTx(hash string, timeout time.Duration) (*TxResult, error) 
 	return nil, &TxStatusUnknownError{Hash: hash, Err: fmt.Errorf("tx %s timed out", short8(hash))}
 }
 
-// GetEvents fetches contract events from startLedger to the current ledger.
+// eventPageLimit is the RPC's maximum accepted pagination.limit. Verified
+// live 2026-08-13: 10000 is accepted, 10001 returns -32602 "limit must not
+// exceed 10000" (docs/FACTS.md "Soroban RPC getEvents — limits observed live").
+const eventPageLimit = 10000
+
+// segmentSentinel is the event-index suffix the RPC puts on a cursor when it
+// drained a whole ledger segment rather than stopping at the page limit. The
+// two cases have to be told apart: a limit-bound cursor points at the last
+// RETURNED event, so the scan has NOT covered the rest of the segment, while a
+// sentinel cursor means every ledger up to its TOID is done. Verified live.
+const segmentSentinel = "-4294967295"
+
+// EventScan reports where a paged getEvents sweep actually got to.
+type EventScan struct {
+	// LastLedger is the newest ledger the sweep is known to have covered.
+	// Resuming a later sweep AT this ledger (not after it) is gapless; events
+	// re-seen across the overlap are the caller's to make idempotent.
+	LastLedger int64
+	// Truncated is true when a page or event cap stopped the sweep before it
+	// reached the RPC's latest ledger. The caller MUST keep resuming — this is
+	// the case that used to be a silent, unreported gap.
+	Truncated bool
+	// Count is how many events the visitor was handed.
+	Count int
+}
+
+// ScanEvents pages contract events from startLedger to the RPC's latest ledger,
+// handing each one to visit. It streams rather than accumulating so a busy pool
+// cannot blow the keeper's memory, and it reports where it stopped.
 //
-// getEvents scans a bounded ledger segment (~10k ledgers) per request and
-// returns a `cursor` for the next segment — a page with zero events does NOT
-// mean the window is empty (observed live on testnet: latest-17000 start →
-// first page empty + cursor, events sitting two segments later). We follow
-// the cursor until it reaches the RPC's latest ledger, an empty cursor, a
-// page cap, or an event cap.
-func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error) {
+// Two verified RPC behaviours drive the loop (docs/FACTS.md):
+//   - One request scans a bounded 10000-ledger SEGMENT. A page with zero events
+//     does NOT mean the window is empty; events may sit in a later segment.
+//   - A page returning exactly `limit` events does NOT prove the segment is
+//     drained. Only the "-4294967295" sentinel cursor proves that.
+//
+// So the sweep follows the cursor (omitting startLedger on paged requests, which
+// the RPC rejects if both are set) until a sentinel cursor reaches the latest
+// ledger, the cursor runs out, or a cap trips.
+func (c *Client) ScanEvents(startLedger int64, contractID string, visit func(Event)) (*EventScan, error) {
 	const (
-		pageLimit = 200
-		maxPages  = 64
-		maxEvents = 2000
+		maxPages  = 256
+		maxEvents = 200000
 	)
-	var all []Event
+	scan := &EventScan{LastLedger: startLedger}
 	cursor := ""
 	for page := 0; page < maxPages; page++ {
 		var r struct {
@@ -154,37 +184,67 @@ func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error
 			"filters": []map[string]any{
 				{"type": "contract", "contractIds": []string{contractID}},
 			},
+			"pagination": map[string]any{"limit": eventPageLimit},
 		}
 		if cursor == "" {
 			params["startLedger"] = startLedger
-			params["pagination"] = map[string]any{"limit": pageLimit}
 		} else {
-			// Per the RPC spec, startLedger must be omitted when paging.
-			params["pagination"] = map[string]any{"cursor": cursor, "limit": pageLimit}
+			// startLedger and cursor are mutually exclusive: sending both is
+			// -32602 "ledger ranges and cursor cannot both be set".
+			params["pagination"].(map[string]any)["cursor"] = cursor
 		}
 		if err := c.call("getEvents", params, &r); err != nil {
-			if len(all) > 0 {
+			if scan.Count > 0 {
 				// A transient failure mid-scan must not discard the pages we
-				// already have: returning them lets this cycle act on partial
-				// discovery instead of skipping the pool entirely.
-				return all, nil
+				// already walked, but it must not be reported as a completed
+				// sweep either — the caller resumes from LastLedger next cycle.
+				scan.Truncated = true
+				return scan, nil
 			}
 			return nil, err
 		}
-		all = append(all, r.Events...)
-		if r.Cursor == "" || len(all) >= maxEvents {
-			break
-		}
-		// The cursor's first field is a TOID (ledger << 32 | tx << 12 | op).
-		// Once it reaches the latest ledger we are caught up — but only if the
-		// page was not full, since a full page means the segment still has
-		// events past this cursor.
-		if len(r.Events) < pageLimit {
-			if lg := cursorLedger(r.Cursor); lg > 0 && r.LatestLedger > 0 && lg >= r.LatestLedger {
-				break
+		for _, ev := range r.Events {
+			visit(ev)
+			scan.Count++
+			if ev.Ledger > scan.LastLedger {
+				scan.LastLedger = ev.Ledger
 			}
 		}
+		if r.Cursor == "" {
+			return scan, nil
+		}
+		// The sentinel decides how far we may CLAIM to have covered; reaching
+		// the head of the chain decides when to STOP. They are different
+		// questions and conflating them is the bug: a limit-bound cursor names
+		// the last returned event, so the rest of its segment is unscanned and
+		// LastLedger must not jump to it — but if that cursor is already at the
+		// latest ledger there is nothing more to fetch this sweep either way,
+		// and the next sweep resumes from LastLedger without a gap.
+		curLg := cursorLedger(r.Cursor)
+		if strings.HasSuffix(r.Cursor, segmentSentinel) && curLg > scan.LastLedger {
+			scan.LastLedger = curLg
+		}
+		if r.LatestLedger > 0 && curLg >= r.LatestLedger {
+			return scan, nil
+		}
+		if scan.Count >= maxEvents {
+			scan.Truncated = true
+			return scan, nil
+		}
 		cursor = r.Cursor
+	}
+	scan.Truncated = true
+	return scan, nil
+}
+
+// GetEvents collects contract events from startLedger to the current ledger.
+// Prefer ScanEvents for anything that could be large — this buffers everything.
+func (c *Client) GetEvents(startLedger int64, contractID string) ([]Event, error) {
+	var all []Event
+	if _, err := c.ScanEvents(startLedger, contractID, func(ev Event) {
+		all = append(all, ev)
+	}); err != nil {
+		return nil, err
 	}
 	return all, nil
 }
@@ -201,6 +261,29 @@ func cursorLedger(cursor string) int64 {
 		return 0
 	}
 	return int64(toid >> 32)
+}
+
+// Health is the getHealth response. OldestLedger/LatestLedger bound what
+// getEvents will accept as startLedger — outside that range the RPC returns
+// -32600 "startLedger must be within the ledger range" — and the window slides
+// forward roughly one ledger every 5s, so re-read it rather than caching.
+type Health struct {
+	Status                string `json:"status"`
+	LatestLedger          int64  `json:"latestLedger"`
+	OldestLedger          int64  `json:"oldestLedger"`
+	LedgerRetentionWindow int64  `json:"ledgerRetentionWindow"`
+}
+
+// Health reports the RPC's event retention window as the node itself sees it.
+func (c *Client) Health() (*Health, error) {
+	var h Health
+	if err := c.call("getHealth", nil, &h); err != nil {
+		return nil, err
+	}
+	if h.LatestLedger <= 0 || h.OldestLedger <= 0 {
+		return nil, fmt.Errorf("getHealth returned no ledger range (status %q)", h.Status)
+	}
+	return &h, nil
 }
 
 func (c *Client) LatestLedger() (int64, error) {

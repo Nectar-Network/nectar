@@ -73,3 +73,87 @@ func TestCursorLedger(t *testing.T) {
 		t.Errorf("empty cursor: got %d want 0", got)
 	}
 }
+
+// toid builds a getEvents cursor TOID for a ledger. The RPC's segment-end
+// sentinel carries tx=0xFFFFF, op=0xFFF and event index 0xFFFFFFFF; a
+// limit-bound cursor carries the real tx/op of the last returned event.
+func toid(ledger uint64, tx, op uint64) uint64 { return ledger<<32 | tx<<12 | op }
+
+func sentinelCursor(ledger uint64) string {
+	return fmt.Sprintf("%d-4294967295", toid(ledger, 0xFFFFF, 0xFFF))
+}
+
+// A page that returns exactly `limit` events does NOT prove its 10000-ledger
+// segment is drained (verified live 2026-08-13, docs/FACTS.md). Only the
+// "-4294967295" sentinel proves that. So a limit-bound cursor must never let
+// LastLedger jump past the last event actually seen — otherwise the next
+// resume silently skips every event between them.
+func TestScanEvents_LimitBoundCursorDoesNotOverclaimCoverage(t *testing.T) {
+	const latest = int64(4124500)
+	// Page 1 stops at the limit inside the segment: cursor names event ledger
+	// 4100000, while the segment it was scanning runs to 4109999.
+	limitCursor := fmt.Sprintf("%d-0000000001", toid(4100000, 3, 1))
+
+	var requests []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Params map[string]any `json:"params"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		requests = append(requests, req.Params)
+		w.Header().Set("Content-Type", "application/json")
+		switch len(requests) {
+		case 1:
+			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":1,"result":{"events":[
+				{"type":"contract","contractId":"CBUB","topic":["dG9waWMw"],"value":"dg==","ledger":4100000}
+			],"cursor":%q,"latestLedger":%d}}`, limitCursor, latest)
+		default:
+			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":1,"result":{"events":[],"cursor":%q,"latestLedger":%d}}`,
+				sentinelCursor(uint64(latest)), latest)
+		}
+	}))
+	defer srv.Close()
+
+	var seen int
+	scan, err := NewClient(srv.URL).ScanEvents(4090000, "CBUB", func(Event) { seen++ })
+	if err != nil {
+		t.Fatalf("ScanEvents: %v", err)
+	}
+	if seen != 1 {
+		t.Fatalf("events: got %d want 1", seen)
+	}
+	if scan.Truncated {
+		t.Error("scan reached the latest ledger; Truncated must be false")
+	}
+	// After page 1 the client may only claim coverage to the last event it saw.
+	// Page 2's sentinel then carries it to the head.
+	if scan.LastLedger != latest {
+		t.Errorf("LastLedger: got %d want %d (sentinel at head)", scan.LastLedger, latest)
+	}
+	if len(requests) != 2 {
+		t.Fatalf("requests: got %d want 2 (a limit-bound cursor must not end the sweep)", len(requests))
+	}
+}
+
+// A sweep that stops on a limit-bound cursor must report where it got to, so
+// the caller resumes from there rather than assuming it is caught up.
+func TestScanEvents_StopsAtHeadAndReportsLastLedger(t *testing.T) {
+	const latest = int64(4124500)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"jsonrpc":"2.0","id":1,"result":{"events":[
+			{"type":"contract","contractId":"CBUB","topic":["dG9waWMw"],"value":"dg==","ledger":4124490}
+		],"cursor":%q,"latestLedger":%d}}`, fmt.Sprintf("%d-0000000003", toid(uint64(latest), 9, 1)), latest)
+	}))
+	defer srv.Close()
+
+	scan, err := NewClient(srv.URL).ScanEvents(4124000, "CBUB", func(Event) {})
+	if err != nil {
+		t.Fatalf("ScanEvents: %v", err)
+	}
+	// Cursor is at the head, so the sweep stops — but it was NOT a sentinel, so
+	// coverage is only claimed to the last event seen.
+	if scan.LastLedger != 4124490 {
+		t.Errorf("LastLedger: got %d want 4124490 (last event, not the cursor)", scan.LastLedger)
+	}
+}
