@@ -7,8 +7,11 @@ are invalid — do not add them.
 
 Entry format: `claim — value — date — source`.
 
-Status: SKELETON — populated by verification Gates 0.1–0.7 (see
-VERIFICATION-REPORT.md once complete).
+Status: LIVE — populated by verification Gates 0.1–0.7 (VERIFICATION-REPORT.md,
+93/93 claims confirmed) and extended by Sessions A–D. Audited entry-by-entry
+against the code that uses each fact on 2026-08-15 (Session E2); repo-code
+citations that predate a later refactor are pinned to the commit they were
+read at.
 
 ---
 
@@ -350,7 +353,7 @@ These are **observations, not documentation**; every row names the error text ac
 |---|---|---|---|
 | **The shipped default lookback (1000 ledgers) discovers ZERO positions on the Nectar Sandbox** | The sandbox pool's entire retained event history sits in ledgers 4054311–4056272, ~68k–70k ledgers behind head. `GetPositions(lookback=1000)` → 0 positions in 554 ms; `lookback=114000` → 1 position, 5.5 s | 2026-08-13 | live run against `CBUBTHAT…` |
 | **A full-window scan on the Blend testnet V2 pool costs 34.75 s — 3.5× the 10 s poll interval** | 1446 events over 12 pages → 53 distinct decoded addresses → 49 non-empty positions in 34.75 s (≈670 ms per address, strictly sequential). **Only 3 of the 49 carry any liability**; the other 46 `get_positions` round-trips are pure waste | 2026-08-13 | live run against `CCEBVDYM…` |
-| The borrower set was derived, never remembered | A borrower who last transacted more than `BLEND_EVENT_LOOKBACK` ledgers ago is invisible regardless of how underwater it is; widening the lookback pays the full rediscovery cost every cycle and still cannot reach past the 120960-ledger retention window | 2026-08-13 | `keeper/adapters/blend/adapter.go:234-246`; `keeper/blend/positions.go:38-72` |
+| The borrower set was derived, never remembered | A borrower who last transacted more than `BLEND_EVENT_LOOKBACK` ledgers ago is invisible regardless of how underwater it is; widening the lookback pays the full rediscovery cost every cycle and still cannot reach past the 120960-ledger retention window | 2026-08-13 | `keeper/adapters/blend/adapter.go:234-246` and `keeper/blend/positions.go:38-72` **@ `6c0fdb7` (pre-D2)** — this lookback path was deleted by the D2 change (`ca9ac4b`); current line numbers point at unrelated code |
 
 ## Borrower discovery — what the event index can and cannot reach (Session D)
 
