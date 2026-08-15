@@ -14,6 +14,9 @@ use types::{Depositor, VaultConfig, VaultError, VaultKey, VaultState};
 // exactly 1:1 and is negligible for a healthy pool. i128 traps on overflow.
 const VIRTUAL_OFFSET: i128 = 1_000_000;
 
+/// Fixed-window length for the per-address withdrawal rate limit (T3).
+const SECONDS_PER_DAY: u64 = 86400;
+
 /// Shares minted for `amount` USDC at the current ratio (floors, favors pool).
 fn to_shares(amount: i128, total_shares: i128, total_usdc: i128) -> i128 {
     amount * (total_shares + VIRTUAL_OFFSET) / (total_usdc + VIRTUAL_OFFSET)
@@ -109,6 +112,8 @@ impl NectarVault {
                 shares: 0,
                 deposited_at: now,
                 last_deposit_time: now,
+                window_start: 0,
+                withdrawn_in_window: 0,
             });
         depositor.shares += shares;
         depositor.last_deposit_time = now;
@@ -178,6 +183,21 @@ impl NectarVault {
         // a negative total_usdc. The clamp keeps the invariant total_usdc >= 0.
         let usdc_out =
             to_assets(shares, state.total_shares, state.total_usdc).min(state.total_usdc);
+
+        // Per-address 24h rate limit (T3), applied to the USDC actually leaving.
+        // Fixed-window accounting: (window_start, withdrawn_in_window), reset
+        // once now - window_start >= 86400. Checked after the cooldown and
+        // before any state commit; 0 disables the limit entirely.
+        if cfg.max_withdraw_per_24h > 0 {
+            if now.saturating_sub(depositor.window_start) >= SECONDS_PER_DAY {
+                depositor.window_start = now;
+                depositor.withdrawn_in_window = 0;
+            }
+            if depositor.withdrawn_in_window + usdc_out > cfg.max_withdraw_per_24h {
+                return Err(VaultError::WithdrawalRateLimited);
+            }
+            depositor.withdrawn_in_window += usdc_out;
+        }
 
         // Effects before interaction (CEI, VLT-6 defense-in-depth): commit the
         // share burn and state before moving tokens out.

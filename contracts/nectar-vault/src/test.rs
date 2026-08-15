@@ -54,6 +54,7 @@ mod tests {
             deposit_cap: NO_CAP,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         }
     }
 
@@ -518,6 +519,7 @@ mod tests {
             deposit_cap: 500_0000000,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -537,6 +539,7 @@ mod tests {
             deposit_cap: 500_0000000,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -556,6 +559,7 @@ mod tests {
             deposit_cap: 500_0000000,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -573,6 +577,7 @@ mod tests {
             deposit_cap: 500_0000000,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -592,6 +597,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: COOLDOWN,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -616,6 +622,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: COOLDOWN,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -639,6 +646,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: COOLDOWN,
             max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -667,6 +675,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: MAX_DRAW,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -688,6 +697,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: MAX_DRAW,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
 
@@ -824,6 +834,7 @@ mod tests {
             deposit_cap: 1234_0000000,
             withdraw_cooldown: 999,
             max_draw_per_keeper: 567_0000000,
+            max_withdraw_per_24h: 0,
         };
         let (client, _, _, _) = setup_with_config(&env, cfg.clone());
         let got = client.get_config();
@@ -842,6 +853,7 @@ mod tests {
             deposit_cap: 9999_0000000,
             withdraw_cooldown: 1234,
             max_draw_per_keeper: 100_0000000,
+            max_withdraw_per_24h: 0,
         };
         client.set_config(&admin, &new_cfg);
 
@@ -926,6 +938,7 @@ mod tests {
             deposit_cap: NO_CAP,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 500_0000000,
+            max_withdraw_per_24h: 0,
         };
         let (client, admin, usdc, _) = setup_with_config(&env, cfg);
         let user = Address::generate(&env);
@@ -1100,6 +1113,177 @@ mod tests {
         assert_eq!(count_topic("asset_pause"), 1);
     }
 
+    // ── Tranche 3: per-address 24h withdrawal rate limiting (F2) ──────────
+
+    /// Config with only the rate limit active (cooldown 0) so tests isolate
+    /// the fixed-window accounting. Share price stays 1.0 in these tests, so
+    /// shares == USDC stroops exactly.
+    fn rate_limit_config(cap: i128) -> VaultConfig {
+        VaultConfig {
+            deposit_cap: NO_CAP,
+            withdraw_cooldown: 0,
+            max_draw_per_keeper: 0,
+            max_withdraw_per_24h: cap,
+        }
+    }
+
+    #[test]
+    fn test_rate_limit_blocks_over_cap_within_window() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_config(&env, rate_limit_config(100_0000000));
+        let t0 = 1_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &300_0000000);
+        client.deposit(&user, &300_0000000);
+
+        client.withdraw(&user, &60_0000000);
+        // 60 + 60 = 120 > 100 cap — blocked, and nothing was deducted.
+        set_time(&env, t0 + 100, 2);
+        assert_eq!(
+            client.try_withdraw(&user, &60_0000000),
+            Err(Ok(VaultError::WithdrawalRateLimited))
+        );
+        let (shares, _) = client.balance(&user);
+        assert_eq!(shares, 240_0000000);
+        // The remaining allowance (40) is still withdrawable.
+        client.withdraw(&user, &40_0000000);
+    }
+
+    #[test]
+    fn test_rate_limit_partials_sum_to_exact_cap() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_config(&env, rate_limit_config(100_0000000));
+        let t0 = 1_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &300_0000000);
+        client.deposit(&user, &300_0000000);
+
+        // Multiple partial withdrawals summing to EXACTLY the cap all pass…
+        client.withdraw(&user, &30_0000000);
+        client.withdraw(&user, &30_0000000);
+        client.withdraw(&user, &40_0000000);
+        // …and one more stroop inside the window is rejected.
+        assert_eq!(
+            client.try_withdraw(&user, &1),
+            Err(Ok(VaultError::WithdrawalRateLimited))
+        );
+    }
+
+    #[test]
+    fn test_rate_limit_window_rollover_boundary() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_config(&env, rate_limit_config(100_0000000));
+        let t0 = 1_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &500_0000000);
+        client.deposit(&user, &500_0000000);
+
+        // First rate-limited withdrawal opens the window at t0.
+        client.withdraw(&user, &100_0000000);
+
+        // One second BEFORE the boundary: still the same window — blocked.
+        set_time(&env, t0 + 86399, 2);
+        assert_eq!(
+            client.try_withdraw(&user, &1),
+            Err(Ok(VaultError::WithdrawalRateLimited))
+        );
+
+        // EXACTLY 86400 s after window_start: window resets, full cap again.
+        set_time(&env, t0 + 86400, 3);
+        client.withdraw(&user, &100_0000000);
+        let (shares, _) = client.balance(&user);
+        assert_eq!(shares, 300_0000000);
+    }
+
+    #[test]
+    fn test_rate_limit_and_cooldown_interact() {
+        // Cooldown and rate limit are independent gates: the cooldown (from
+        // last deposit) is checked first, then the 24h window.
+        let env = Env::default();
+        env.mock_all_auths();
+        let cfg = VaultConfig {
+            deposit_cap: NO_CAP,
+            withdraw_cooldown: COOLDOWN,
+            max_draw_per_keeper: 0,
+            max_withdraw_per_24h: 100_0000000,
+        };
+        let (client, admin, usdc, _) = setup_with_config(&env, cfg);
+        let t0 = 1_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &300_0000000);
+        client.deposit(&user, &300_0000000);
+
+        // Inside the cooldown the cooldown error wins (window untouched).
+        set_time(&env, t0 + 10, 2);
+        assert_eq!(
+            client.try_withdraw(&user, &50_0000000),
+            Err(Ok(VaultError::WithdrawalCooldown))
+        );
+
+        // Past the cooldown, the rate limit governs: 100 passes, then blocked.
+        set_time(&env, t0 + COOLDOWN, 3);
+        client.withdraw(&user, &100_0000000);
+        assert_eq!(
+            client.try_withdraw(&user, &1),
+            Err(Ok(VaultError::WithdrawalRateLimited))
+        );
+
+        // A NEW deposit restarts the cooldown but must not widen the window:
+        // after that cooldown passes, the same 24h window still blocks.
+        client.deposit(&user, &10_0000000);
+        set_time(&env, t0 + 2 * COOLDOWN, 4);
+        assert_eq!(
+            client.try_withdraw(&user, &1),
+            Err(Ok(VaultError::WithdrawalRateLimited))
+        );
+    }
+
+    #[test]
+    fn test_rate_limit_full_withdrawal_below_remaining_allowance() {
+        // A depositor whose whole balance is smaller than the remaining
+        // allowance can always exit in full.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_config(&env, rate_limit_config(100_0000000));
+        let t0 = 1_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &80_0000000);
+        client.deposit(&user, &80_0000000);
+        client.withdraw(&user, &30_0000000);
+
+        // Balance (50) < remaining allowance (70) → full exit passes.
+        let (shares, _) = client.balance(&user);
+        assert_eq!(shares, 50_0000000);
+        let out = client.withdraw(&user, &shares);
+        assert_eq!(out, 50_0000000);
+    }
+
+    #[test]
+    fn test_rate_limit_zero_disables() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup_with_config(&env, rate_limit_config(0));
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+        // Far beyond any cap in one shot — no limit configured.
+        let out = client.withdraw(&user, &1000_0000000);
+        assert_eq!(out, 1000_0000000);
+    }
+
     // ── Cross-contract integration with the real KeeperRegistry ──────────
 
     #[test]
@@ -1132,6 +1316,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 1000_0000000,
+            max_withdraw_per_24h: 0,
         };
         let vault_id = env.register(
             NectarVault,
@@ -1215,6 +1400,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 1000_0000000,
+            max_withdraw_per_24h: 0,
         };
         let vault_id = env.register(
             NectarVault,
@@ -1296,6 +1482,7 @@ mod tests {
             deposit_cap: 0,
             withdraw_cooldown: 0,
             max_draw_per_keeper: 1000_0000000,
+            max_withdraw_per_24h: 0,
         };
         let vault_id = env.register(
             NectarVault,

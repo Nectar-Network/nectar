@@ -7,6 +7,11 @@ pub struct Depositor {
     pub shares: i128,
     pub deposited_at: u64,
     pub last_deposit_time: u64,
+    // Fixed-window withdrawal rate limiting (T3): USDC withdrawn since
+    // window_start; the window resets once now - window_start >= 86400.
+    // Only maintained while VaultConfig.max_withdraw_per_24h > 0.
+    pub window_start: u64,
+    pub withdrawn_in_window: i128,
 }
 
 #[contracttype]
@@ -24,6 +29,9 @@ pub struct VaultConfig {
     pub deposit_cap: i128,
     pub withdraw_cooldown: u64,
     pub max_draw_per_keeper: i128,
+    // Per-address 24h withdrawal cap in USDC stroops (T3 rate limiting);
+    // 0 disables the limit.
+    pub max_withdraw_per_24h: i128,
 }
 
 #[contracttype]
@@ -69,4 +77,7 @@ pub enum VaultError {
     LiquidationsPaused = 14,
     // draw() declared a collateral asset the admin has individually paused.
     AssetPaused = 15,
+    // withdraw() would exceed the per-address 24h cap
+    // (VaultConfig.max_withdraw_per_24h) inside the current fixed window.
+    WithdrawalRateLimited = 16,
 }

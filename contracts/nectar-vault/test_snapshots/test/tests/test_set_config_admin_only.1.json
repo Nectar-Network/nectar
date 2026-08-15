@@ -88,6 +88,17 @@
                     },
                     {
                       "key": {
+                        "symbol": "max_withdraw_per_24h"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 0
+                        }
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "withdraw_cooldown"
                       },
                       "val": {
@@ -419,6 +430,17 @@
                                 "i128": {
                                   "hi": 0,
                                   "lo": 1000000000
+                                }
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "max_withdraw_per_24h"
+                              },
+                              "val": {
+                                "i128": {
+                                  "hi": 0,
+                                  "lo": 0
                                 }
                               }
                             },
