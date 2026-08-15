@@ -194,7 +194,7 @@ On-chain registry for keeper operators. Any operator can self-register with a ke
 
 | Function | Description |
 |----------|-------------|
-| `__constructor(admin, usdc, config)` | Atomic init at deploy (no separate initialize call to front-run); linked to the vault once via `set_vault` |
+| `__constructor(admin, config)` | Atomic init at deploy (no separate initialize call to front-run; `config` carries `usdc_token`, `min_stake`, slash params); linked to the vault once via `set_vault` |
 | `register(keeper, name)` | Register a new keeper operator — pulls `min_stake` USDC as stake |
 | `deregister(keeper)` | Remove a keeper, returning its stake (fails with an active draw) |
 | `slash(keeper)` | Permissionless after `slash_timeout`: transfers `slash_rate_bps` of stake to the vault, deactivates the keeper |
