@@ -430,6 +430,54 @@ impl NectarVault {
         Ok(())
     }
 
+    /// Donated profit from a REGISTERED keeper (T3, DECISION F-1a). Credits
+    /// float-funded profit — e.g. unwound bad-debt LP proceeds — to depositors
+    /// without an outstanding draw: exactly the path the VLT-2 `NoDraw` guard
+    /// (deliberately) blocks for anonymous callers in `return_proceeds`.
+    ///
+    /// Gate: the registry's `verify_keeper` (registered + active + stake >=
+    /// min_stake, and the registry enforces min_stake > 0 in its constructor
+    /// and set_config), so every donor is a bonded, slashable operator — not
+    /// an anonymous donor. VLT-1 virtual-offset share math keeps donation-
+    /// based share-price inflation unprofitable regardless.
+    ///
+    /// Effect: total_usdc and total_profit rise; NO shares are minted and
+    /// draw accounting, cooldowns and rate-limit windows are untouched — the
+    /// share price rises for existing holders only. Emits `profit_added`
+    /// (NOT the `return` event) so donated profit stays separable from
+    /// draw-cycle profit in accounting. Not pause-gated, like
+    /// return_proceeds: money in is always safe.
+    pub fn add_profit(env: Env, keeper: Address, amount: i128) -> Result<(), VaultError> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        require_init(&env)?;
+        keeper.require_auth();
+
+        if amount <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+        require_registered_keeper(&env, &keeper)?;
+
+        let usdc: Address = env
+            .storage()
+            .instance()
+            .get(&VaultKey::Usdc)
+            .ok_or(VaultError::NotInit)?;
+        token::Client::new(&env, &usdc).transfer(&keeper, &env.current_contract_address(), &amount);
+
+        let mut state: VaultState = env
+            .storage()
+            .instance()
+            .get(&VaultKey::State)
+            .ok_or(VaultError::NotInit)?;
+        state.total_usdc += amount;
+        state.total_profit += amount;
+        env.storage().instance().set(&VaultKey::State, &state);
+
+        env.events()
+            .publish((Symbol::new(&env, "profit_added"), keeper.clone()), amount);
+        Ok(())
+    }
+
     pub fn get_state(env: Env) -> Result<VaultState, VaultError> {
         env.storage().instance().extend_ttl(1000, 1000);
         env.storage()

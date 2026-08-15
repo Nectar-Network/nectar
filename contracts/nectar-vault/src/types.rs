@@ -91,4 +91,6 @@ pub enum VaultError {
     // withdraw() would exceed the per-address 24h cap
     // (VaultConfig.max_withdraw_per_24h) inside the current fixed window.
     WithdrawalRateLimited = 16,
+    // add_profit() with a non-positive amount.
+    InvalidAmount = 17,
 }

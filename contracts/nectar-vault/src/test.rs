@@ -1357,6 +1357,140 @@ mod tests {
         assert_eq!(client.get_keeper_draw(&keeper), (150_0000000, t0 + 300));
     }
 
+    // ── Tranche 3: add_profit — registration-gated donated profit (F3) ────
+
+    #[test]
+    fn test_add_profit_raises_share_price_without_minting() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &100_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        client.add_profit(&keeper, &100_0000000);
+
+        // total_usdc and total_profit rise; total_shares is UNCHANGED.
+        let state = client.get_state();
+        assert_eq!(state.total_usdc, 1100_0000000);
+        assert_eq!(state.total_profit, 100_0000000);
+        assert_eq!(state.total_shares, 1000_0000000);
+
+        // The whole donation accrues to the existing holder (offset dust only).
+        let (_, val) = client.balance(&user);
+        assert!(
+            (1099_9000000..=1100_0000000).contains(&val),
+            "value {}",
+            val
+        );
+    }
+
+    #[test]
+    fn test_add_profit_zero_and_negative_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &10_0000000);
+
+        assert_eq!(
+            client.try_add_profit(&keeper, &0),
+            Err(Ok(VaultError::InvalidAmount))
+        );
+        assert_eq!(
+            client.try_add_profit(&keeper, &-1),
+            Err(Ok(VaultError::InvalidAmount))
+        );
+        assert_eq!(client.get_state().total_profit, 0);
+    }
+
+    #[test]
+    fn test_add_profit_event_distinct_from_return() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &10_0000000);
+
+        client.add_profit(&keeper, &10_0000000);
+
+        // Donated profit must be separable from draw-cycle profit: the LAST
+        // invocation emitted profit_added and did NOT emit the return event.
+        let emitted = |name: &str| {
+            env.events()
+                .all()
+                .iter()
+                .any(|(_, topics, _): (Address, Vec<Val>, Val)| {
+                    topics
+                        .first()
+                        .and_then(|val| Symbol::try_from_val(&env, &val).ok())
+                        .is_some_and(|s| s == Symbol::new(&env, name))
+                })
+        };
+        assert!(emitted("profit_added"));
+        assert!(!emitted("return"));
+    }
+
+    #[test]
+    fn test_add_profit_does_not_touch_draw_accounting() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let t0 = 5_000_000;
+        set_time(&env, t0, 1);
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
+        client.deposit(&user, &1000_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
+
+        set_time(&env, t0 + 100, 2);
+        client.add_profit(&keeper, &50_0000000);
+
+        // The outstanding draw (amount AND timestamp) and active_liq are
+        // untouched — add_profit is not a return and settles nothing.
+        assert_eq!(client.get_keeper_draw(&keeper), (500_0000000, t0));
+        let state = client.get_state();
+        assert_eq!(state.active_liq, 500_0000000);
+        assert_eq!(state.total_profit, 50_0000000);
+    }
+
+    #[test]
+    fn test_add_profit_inflation_attack_still_unprofitable() {
+        // VLT-1 re-run with add_profit as the donation vector (F3): an
+        // attacker seeding 1 stroop and "donating" via add_profit still
+        // cannot profit — the virtual offset absorbs the inflation. Mock
+        // registry passes any keeper, which is the WORST case for this
+        // property (a real registry additionally demands a slashable bond).
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let attacker = Address::generate(&env);
+        let victim = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &attacker, &6000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &victim, &1000_0000000);
+
+        client.deposit(&attacker, &1); // 1 share
+        client.add_profit(&attacker, &5000_0000000); // donate to inflate
+
+        client.deposit(&victim, &1000_0000000);
+        let (_, v_val) = client.balance(&victim);
+        assert!(v_val >= 990_0000000, "victim value {}", v_val);
+        let (_, a_val) = client.balance(&attacker);
+        assert!(a_val < 1_0000000, "attacker value {}", a_val);
+
+        // Tiny-donation edge: 1-stroop add_profit on top must also stay sound
+        // (no panic, no share issuance, price never decreases).
+        let before = client.get_state();
+        client.add_profit(&attacker, &1);
+        let after = client.get_state();
+        assert_eq!(after.total_shares, before.total_shares);
+        assert_eq!(after.total_usdc, before.total_usdc + 1);
+    }
+
     // ── Cross-contract integration with the real KeeperRegistry ──────────
 
     #[test]
@@ -1519,6 +1653,81 @@ mod tests {
         );
         // Registry cleared the active draw (keeper may now deregister).
         assert!(!registry.get_keeper(&keeper).has_active_draw);
+    }
+
+    #[test]
+    fn test_add_profit_gate_against_real_registry() {
+        // F3 gate, exercised against the REAL registry: an unregistered
+        // caller and a slashed (deactivated, stake-reduced) keeper are both
+        // rejected; a registered active keeper passes. The registry error
+        // surfaces as a cross-contract trap, so we assert is_err() + state
+        // unchanged rather than a decoded VaultError.
+        use keeper_registry::{KeeperRegistry, KeeperRegistryClient, RegistryConfig};
+        use soroban_sdk::String as SorString;
+
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let usdc_admin = Address::generate(&env);
+        let usdc = env
+            .register_stellar_asset_contract_v2(usdc_admin.clone())
+            .address();
+        let usdc_admin_client = token::StellarAssetClient::new(&env, &usdc);
+
+        let reg_cfg = RegistryConfig {
+            min_stake: 100_0000000,
+            slash_timeout: 3600,
+            slash_rate_bps: 1000,
+            usdc_token: usdc.clone(),
+        };
+        let registry_id = env.register(KeeperRegistry, (admin.clone(), reg_cfg.clone()));
+        let vault_cfg = VaultConfig {
+            deposit_cap: 0,
+            withdraw_cooldown: 0,
+            max_draw_per_keeper: 1000_0000000,
+            max_withdraw_per_24h: 0,
+        };
+        let vault_id = env.register(
+            NectarVault,
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                vault_cfg.clone(),
+            ),
+        );
+        let registry = KeeperRegistryClient::new(&env, &registry_id);
+        let vault = NectarVaultClient::new(&env, &vault_id);
+        registry.set_vault(&admin, &vault_id);
+
+        let depositor = Address::generate(&env);
+        usdc_admin_client.mint(&depositor, &1000_0000000);
+        vault.deposit(&depositor, &1000_0000000);
+
+        // 1) Unregistered caller: rejected, no state change.
+        let anon = Address::generate(&env);
+        usdc_admin_client.mint(&anon, &50_0000000);
+        assert!(vault.try_add_profit(&anon, &50_0000000).is_err());
+        assert_eq!(vault.get_state().total_profit, 0);
+
+        // 2) Registered active keeper: passes.
+        let keeper = Address::generate(&env);
+        usdc_admin_client.mint(&keeper, &200_0000000);
+        registry.register(&keeper, &SorString::from_str(&env, "k1"));
+        vault.add_profit(&keeper, &10_0000000);
+        assert_eq!(vault.get_state().total_profit, 10_0000000);
+
+        // 3) Slashed keeper (drew, timed out, slashed → inactive, stake
+        //    reduced): rejected. This is the on-chain path that produces a
+        //    keeper whose stake no longer backs its registration.
+        vault.draw(&keeper, &400_0000000, &usdc);
+        set_time(&env, 4000, 100);
+        registry.slash(&keeper);
+        assert!(!registry.get_keeper(&keeper).active);
+        let profit_before = vault.get_state().total_profit;
+        assert!(vault.try_add_profit(&keeper, &10_0000000).is_err());
+        assert_eq!(vault.get_state().total_profit, profit_before);
     }
 
     #[test]
