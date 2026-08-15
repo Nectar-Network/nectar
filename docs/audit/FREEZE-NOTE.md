@@ -103,3 +103,56 @@ slash/reconcile accounting against the real registry.
   it runs the pre-Session-F interface. The audited code is deployed fresh
   (testnet re-deploy in Session H; mainnet per T3 plan). Audited code ==
   deployed code holds at those deployments, not at the legacy pair.
+
+## LOC count (Session G, tool-measured)
+
+Measured 2026-08-16 with **tokei 14.0.0** on the working tree at this tag
+(contracts/ byte-identical to `audit-freeze-v1`). Exact command:
+
+```
+tokei contracts/nectar-vault/src/lib.rs contracts/nectar-vault/src/types.rs \
+      contracts/keeper-registry/src/lib.rs contracts/keeper-registry/src/types.rs --files
+```
+
+Functional LOC = tokei "Code" lines (comments and blanks excluded; markdown
+inside doc comments counted as comments). The LOC table at the top of this
+note counts RAW lines (code + comments + blanks) — both are correct, they
+measure different things.
+
+| File | Code | Comments | Blanks | Raw lines |
+|---|---|---|---|---|
+| `nectar-vault/src/lib.rs` | 606 | 148 (82 + 66 doc-md) | 80 | 834 |
+| `nectar-vault/src/types.rs` | 66 | 27 | 6 | 99 |
+| `keeper-registry/src/lib.rs` | 350 | 38 (24 + 14 doc-md) | 64 | 452 |
+| `keeper-registry/src/types.rs` | 49 | 0 | 4 | 53 |
+| **NectarVault total** | **672** | | | 933 |
+| **KeeperRegistry total** | **399** | | | 505 |
+| **Functional total** | **1,071** | 208 | 159 | **1,438** |
+
+## Audit scope statement (for the intake form)
+
+**Scope:** two Soroban contracts at tag `audit-freeze-v1`
+(commit `dbf0e5cd0a0c11bd123643fe72cf45ca2f35ccf5`) —
+`contracts/nectar-vault/` (672 functional LOC) and
+`contracts/keeper-registry/` (399 functional LOC); **1,071 functional LOC
+total** (1,438 raw), soroban-sdk 22.x, frozen optimized wasm hashes above.
+Out of scope: the Go keeper daemon, frontend, scripts, and the two test-only
+crates (`mock-token`, `liquidation-lab`) — see "Explicitly OUT of scope".
+**Tests at the tag:** 113 workspace tests passing, of which **96 are
+audit-scope** (vault 69 — including 4 property suites × 2000 cases — and
+registry 27); keeper `go test -race ./...` (9 packages) all ok; frontend
+build clean; clippy clean on production code (suite table above; re-verified
+green 2026-08-16, Session G).
+
+**System description:** Nectar Network is a pooled liquidation protocol for
+Soroban DeFi on Stellar. Depositors pool Circle USDC in the NectarVault and
+receive shares under inflation-resistant virtual-offset accounting; operators
+bond a USDC stake in the KeeperRegistry to gain the right to draw bounded
+vault capital, fill Blend Protocol liquidation auctions off-chain, and return
+measured proceeds — profit accrues to the share price. The registry enforces
+performance tracking and permissionless timeout-gated slashing (with atomic
+vault reconciliation of defaulted draws); the vault enforces deposit caps,
+withdrawal cooldowns and per-address rate limits, per-keeper cumulative draw
+caps, an emergency pause, and global/per-asset liquidation circuit-breaker
+flags — with the standing invariant that depositor exit is never blocked by
+a liquidation pause.
