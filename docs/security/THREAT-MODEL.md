@@ -1,171 +1,313 @@
-# Nectar Network — STRIDE Threat Model
+# Nectar Network — STRIDE Threat Model (audit-freeze-v1)
 
-**Scope:** the two on-chain Soroban contracts (`KeeperRegistry`, `NectarVault`) and their
-interaction with the off-chain Go keeper daemon and external protocols (Blend, Soroswap,
-Reflector). Prepared for the SCF Audit Bank and the Tranche 3 mainnet launch.
+**Scope:** the two frozen Soroban contracts (`KeeperRegistry`, `NectarVault`) at tag
+**`audit-freeze-v1`** (commit `dbf0e5cd0a0c11bd123643fe72cf45ca2f35ccf5`), their
+cross-contract surface, the off-chain Go keeper daemon, and the admin surface.
+Prepared for the SCF Soroban Security Audit Bank.
 
-**Version:** 2026-06-22 · **Network:** Stellar testnet (mainnet in Tranche 3) ·
-**Functional LOC audited:** ~933 (contracts, excl. tests) — KeeperRegistry 420, NectarVault 513.
+**Version:** 2026-08-16 (Session G — supersedes the 2026-06-22 pre-hardening model) ·
+**Network:** Stellar testnet today, mainnet in Tranche 3 ·
+**Functional LOC:** 1,071 Rust code lines (tokei 14.0.0, excl. tests; NectarVault 672,
+KeeperRegistry 399; 1,438 raw lines incl. comments/blanks — see
+[FREEZE-NOTE.md](../audit/FREEZE-NOTE.md)).
 
-> This document is intentionally candid: it lists real weaknesses we found while preparing
-> for audit, with existing mitigations and the fixes we plan to land before mainnet. Line
-> references are to `contracts/keeper-registry/src/lib.rs` (REG) and
-> `contracts/nectar-vault/src/lib.rs` (VLT).
+**Method:** the [Stellar threat-modeling guidance](https://developers.stellar.org/docs/build/security-docs/threat-modeling)
+(fetched 2026-08-16) — its four questions ("What are we working on?", "What can go
+wrong?", "What are we going to do about it?", "Did we do a good job?") with STRIDE per
+component. Threat IDs keep this repo's established series (VLT-x, REG-x, ORA-1, DEX-1,
+NEW-x, T3-x) for cross-document consistency with
+[SCOUT-REPORT.md](./SCOUT-REPORT.md), [FREEZE-NOTE.md](../audit/FREEZE-NOTE.md) and
+[CORRECTION-REPORT.md](../CORRECTION-REPORT.md); each row carries its STRIDE class.
 
-> **Remediation status (2026-06-22):** the findings below were adversarially re-verified, then
-> remediated in code; the fixes were adversarially reviewed again (which surfaced and closed an
-> additional High, NEW‑drain). **VLT‑1, VLT‑2, VLT‑3, VLT‑4, VLT‑6, NEW‑cap, NEW‑reconcile,
-> NEW‑drain and NEW‑init are FIXED** (80/80 tests pass, both contracts build to deployable wasm).
-> NEW‑init is closed by converting both contracts to an atomic soroban-sdk 22 `__constructor`
-> (registry↔vault linked via a one-time admin-gated `set_vault`). Still open for Tranche 3:
-> **VLT‑5** (admin multisig) and **ORA‑1** (oracle circuit breaker). See
-> [SCOUT-REPORT.md](./SCOUT-REPORT.md) for the per-finding status.
+Line references (`VLT:` = `contracts/nectar-vault/src/lib.rs`,
+`VLT-t:` = `contracts/nectar-vault/src/types.rs`, `REG:` =
+`contracts/keeper-registry/src/lib.rs`) are **at the frozen tag** — the working tree
+these were read from is byte-identical to `audit-freeze-v1` for `contracts/`.
+
+> Candor note: this model imports the residual limitations from
+> [CORRECTION-REPORT.md](../CORRECTION-REPORT.md) verbatim rather than restating them
+> favorably. Nothing below is invented for volume; nothing real is omitted for optics.
 
 ---
 
-## 1. System Overview
+## 1. What are we working on? (System overview)
+
+Nectar Network is a pooled liquidation protocol: depositors pool USDC in a vault,
+registered keeper operators draw that capital to fill Blend Protocol liquidation
+auctions, and measured profits return to the pool as depositor yield.
 
 ### Components
-| Component | Type | Role |
-|---|---|---|
-| **NectarVault** | Soroban contract | Holds pooled USDC; mints/burns shares; lends capital to keepers via `draw`; books profit on `return_proceeds`. |
-| **KeeperRegistry** | Soroban contract | Operator registration + USDC staking; tracks executions; slashes delinquent keepers. |
-| **Keeper daemon** | Off-chain Go | Monitors Blend positions, decides profitability, calls `draw`/fill/swap/`return_proceeds`. Stateless. |
-| **Frontend** | Next.js | Read-only dashboard + Freighter-signed deposit/withdraw. Holds no keys. |
-| **USDC token** | SAC | Mock SAC on testnet; **Circle USDC** on mainnet (Tranche 3). |
-| Blend pool | External | Liquidation auction source. |
-| Soroswap router | External | Collateral → USDC conversion. |
-| Reflector oracle | External | Price feed; basis for the Tranche 3 circuit breaker. |
 
-### Trust boundaries
-1. **On-chain ↔ off-chain** — the keeper daemon is untrusted from the contract's view; every privileged action requires an on-chain signature and passes contract checks.
-2. **User ↔ vault** — users authorize their own deposits/withdrawals only (`user.require_auth()`).
-3. **Keeper ↔ vault** — a keeper can `draw` only if registered and within limits; `draw`/`return_proceeds` require the keeper's signature.
-4. **Vault ↔ registry** — only the vault may call `mark_draw`/`clear_draw`/`record_execution` (`require_vault`, REG:356). Only the registry-configured vault address is accepted.
-5. **Admin ↔ contracts** — a single admin key controls config + registry pause (multisig planned, Tranche 3).
-6. **Contracts ↔ external protocols** — Blend/Soroswap/Reflector are separate trust zones; the keeper mediates, never the vault directly.
+| Component | Type | Role at the frozen tag |
+|---|---|---|
+| **NectarVault** | Soroban contract (in scope) | Holds pooled USDC; mints/burns shares (virtual-offset math); lends capital via `draw(keeper, amount, asset)`; books profit on `return_proceeds`; accepts registration-gated donations via `add_profit`; enforces deposit cap, withdraw cooldown, per-address 24h rate limit, per-keeper cumulative draw cap, emergency pause, global + per-asset liquidation pause. |
+| **KeeperRegistry** | Soroban contract (in scope) | Operator registration with a USDC stake bond (`min_stake`, enforced > 0); performance counters; permissionless timeout-gated `slash` that deactivates the keeper and atomically reconciles the vault. |
+| **Keeper daemon** | Off-chain Go (out of audit scope) | Monitors Blend pools via an event-driven borrower index, sizes liquidations by on-chain simulation, checks the vault pause flags before creating auctions and before drawing (fail closed), executes ONE atomic fill+repay+withdraw, swaps collateral under an oracle-anchored floor, returns proceeds. Stateless except the borrower cache. |
+| **Frontend** | Next.js on Vercel (out of scope) | Read-only dashboard + Freighter-signed deposit/withdraw. Holds no keys, no privileged authority. |
+| **USDC token** | Stellar Asset Contract (external) | Circle testnet USDC today; Circle mainnet USDC at T3. Not our code. |
+| **Blend pool + backstop + comet** | External protocol | Liquidation auction source (two-phase 400-ledger Dutch auctions). Audited upstream: [Code4rena Blend V2 + Certora formal verification](https://code4rena.com/audits/2025-02-blend-v2-audit-certora-formal-verification) (Feb–Mar 2025). |
+| **Soroswap router** | External protocol | Collateral → USDC conversion during unwind. |
+| **Price oracle** | External | Testnet: Blend's admin-settable `oraclemock` (NOT Reflector — wasm-hash proven, FACTS.md). Mainnet T3: real Reflector feed + circuit breaker (ORA-1, not yet built). |
+| **Faucet** | Keeper HTTP endpoint (testnet-only) | Dispenses test USDC from a dedicated treasury key with per-address cooldown (`keeper/faucet.go`). Does not exist on mainnet. |
 
 ### Assets to protect
-- Pooled vault USDC (`total_usdc`) and the integrity of `active_liq` accounting.
-- Keeper stakes held in the registry.
-- Share-price integrity (`total_usdc / total_shares`) — every depositor's claim.
-- Admin authority (config, pause, future multisig).
+
+1. **Pooled vault USDC** (`VaultState.total_usdc`) and the `active_liq` liability ledger.
+2. **Keeper stakes** held by the registry.
+3. **Share-accounting integrity** — the `total_usdc/total_shares` ratio is every
+   depositor's claim; inflation or underflow of either side is direct theft/loss.
+4. **Pause/admin controls** — the VLT-4 emergency pause, the T3 liquidation
+   circuit-breaker flags, and the config parameters (caps, cooldown, rate limit,
+   slash economics).
+5. **Depositor exit liveness** — the invariant that a liquidation pause NEVER blocks
+   `withdraw` (VLT:559-562 doc + `require_liq_allowed` being absent from the
+   withdraw path, VLT:137-226).
+
+### Actors
+
+| Actor | Trust level | Capabilities |
+|---|---|---|
+| Depositor | Untrusted | `deposit`/`withdraw` own funds only (`user.require_auth()`). |
+| Keeper operator | Untrusted but **bonded** | `register` (stakes `min_stake`), `draw` (verified + capped), `return_proceeds`, `add_profit`, `deregister` (blocked while a draw is outstanding). Misbehavior backstop: slashing + deactivation. |
+| Admin | Trusted, **2-of-3 multisig** | `set_config`, `pause`/`unpause`, `set_global_pause`, `set_asset_pause`, registry `set_config`/`pause`/`set_vault`. Multisig enforcement verified live at the classic auth layer (`docs/evidence/f5-multisig.md`: 1 sig rejected `OpBadAuth`, any 2 of 3 accepted). |
+| Anyone (anonymous) | Untrusted | `slash(keeper)` — permissionless by design, gated by `has_active_draw` + `slash_timeout` (REG:350-357). Read-only getters. |
+| External protocols | Own trust zones | Blend, Soroswap, oracle. The vault never reads them; only the keeper mediates, and the vault only ever sees keeper-signed USDC transfers. |
 
 ---
 
-## 2. Data Flow Diagram
+## 2. Trust boundaries
 
-```mermaid
-flowchart TD
-    subgraph OFFCHAIN["Off-chain (untrusted)"]
-        U[User + Freighter]
-        K[Keeper daemon]
-    end
-    subgraph ONCHAIN["On-chain (Soroban)"]
-        V[NectarVault]
-        R[KeeperRegistry]
-        T[USDC SAC / Circle USDC]
-    end
-    subgraph EXT["External protocols (separate trust zones)"]
-        B[Blend pool]
-        S[Soroswap router]
-        O[Reflector oracle]
-    end
+Aligned 1:1 with the zones in [DATAFLOW.md](./DATAFLOW.md).
 
-    U -- deposit/withdraw (signed) --> V
-    V <-- transfer --> T
-    K -- draw (signed) --> V
-    V -- mark_draw / clear_draw / record_execution --> R
-    K -- register / stake (signed) --> R
-    R <-- stake transfer --> T
-    anyone[Anyone] -- slash (timeout-gated) --> R
-    K -- fill auction --> B
-    K -- swap collateral --> S
-    K -- read price --> O
-    K -- return_proceeds (signed) --> V
-
-    classDef ext fill:#eee,stroke:#999,stroke-dasharray:5 5;
-    class B,S,O ext;
-```
-
-**Trust-boundary crossings (where validation happens):**
-- `deposit`/`withdraw`: `user.require_auth()` + cap/cooldown checks (VLT:48,66,133).
-- `draw`: `keeper.require_auth()` + draw-limit + available-capital + registry keeper check (VLT:208,215,224,228).
-- `return_proceeds`: `keeper.require_auth()` + token pull from keeper (VLT:271,278). **Not** registry-gated (see VLT‑2).
-- `mark_draw`/`clear_draw`/`record_execution`: `require_vault` (REG:356) — only the vault.
-- `slash`: permissionless, but requires `has_active_draw` + `now − last_draw_time > slash_timeout` (REG:296‑303).
+1. **B1 Depositor ↔ Vault** — `require_auth` + cap/cooldown/rate-limit checks
+   (VLT:71, 89, 159, 191-200).
+2. **B2 Keeper ↔ Vault** — `require_auth` + registry verification + pause gates +
+   cumulative draw cap (VLT:262-311, 463-471).
+3. **B3 Vault ↔ Registry (mutual)** — the registry accepts `mark_draw`/`clear_draw`/
+   `record_execution` only from the stored vault address (`require_vault`,
+   REG:440-451); the vault accepts `reconcile_default` only from the stored registry
+   address (`require_registry`, VLT:758-769). Both sides pin the counterparty at
+   construction/one-time-set (`set_vault` is one-time, REG:51-60).
+4. **B4 Admin ↔ Contracts** — identity check against stored admin THEN
+   `require_auth` (VLT:711-722, REG:427-438); the signature policy itself lives at
+   the Stellar account layer (2-of-3 multisig, verified live).
+5. **B5 Keeper ↔ External protocols** — Blend/Soroswap/oracle are separate zones;
+   nothing they return can move vault funds without a keeper-signed vault call that
+   passes B2's checks.
+6. **B6 Browser ↔ Frontend ↔ Keeper API** — read-only data + SSE log stream + the
+   testnet faucet endpoint; no privileged path.
+7. **B7 Anyone ↔ Registry (slash)** — permissionless entry, on-chain-gated.
 
 ---
 
-## 3. STRIDE Analysis by Component
+## 3. What can go wrong? (STRIDE by component)
 
 ### 3.1 NectarVault
-- **Spoofing** — `deposit`/`withdraw`/`draw`/`return_proceeds` all call `require_auth()` on the acting address; a caller cannot act as another user or keeper. Keeper legitimacy is delegated to the registry (`require_registered_keeper`, VLT:403) — but that helper **discards the result** and only relies on `get_keeper` trapping on a missing record; it does not check `active` (see VLT‑3).
-- **Tampering** — share math floors in the pool's favor (VLT:72‑76, 150). This protects existing holders but **enables a share-inflation attack** on new depositors when combined with donatable profit (VLT‑1). `active_liq` is protected against cross-keeper deduction via per-keeper `KeeperDraw` tracking (VLT:288‑304).
-- **Repudiation** — every state change emits an event (`deposit`, `withdraw`, `draw`, `return`); actions are auditable.
-- **Information disclosure** — no secrets on-chain; all state is intentionally public.
-- **Denial of service** — `draw` is bounded by `max_draw_per_keeper` and `available = total_usdc − active_liq`; a single keeper cannot drain the pool in one call. **No emergency pause exists on the vault** (VLT‑4).
-- **Elevation of privilege** — `set_config` is admin-gated (VLT:359‑369). A keeper cannot become admin. Single-admin risk tracked as VLT‑5.
+
+- **Spoofing** — every money-moving entry point (`deposit`, `withdraw`, `draw`,
+  `return_proceeds`, `add_profit`) calls `require_auth()` on the acting address
+  (VLT:71, 140, 267, 364, 466). Keeper legitimacy is an explicit cross-contract
+  `verify_keeper` — registered AND active AND `stake >= min_stake` (REG:196-218,
+  called at VLT:771-785) — the VLT-3 class (implicit existence-only check) is closed.
+- **Tampering** — share math floors toward the pool on both sides with a symmetric
+  virtual offset (VLT:15-28); donation-based inflation is economically irrational
+  (VLT-1 defense) and proven unprofitable by a 2000-case property test.
+  `return_proceeds` caps principal repayment at the calling keeper's own outstanding
+  draw so one keeper's return can never clear another's liability (VLT:396-404).
+  `withdraw` clamps payout at `total_usdc` and `reconcile_default` clamps the loss
+  write-down at zero — both preventing a persisted negative `total_usdc`
+  (VLT:174-185, 659-667).
+- **Repudiation** — every state change emits an event: `deposit`, `withdraw`,
+  `draw` (now including the declared asset), `return`, `profit_added` (distinct from
+  draw-cycle profit by design), `write_off`, `liq_pause`, `asset_pause`
+  (VLT:129, 221, 346, 439, 497, 573, 595, 672).
+- **Information disclosure** — no secrets on-chain; all state deliberately public.
+- **Denial of service** — `draw` is bounded by available capital and the CUMULATIVE
+  per-keeper cap (VLT:292-309). The admin can pause deposits+draws (VLT-4) and
+  liquidation draws globally/per-asset (F-2a) — but **cannot pause `withdraw`**:
+  no pause flag is read anywhere in the withdraw path, so depositor exit survives
+  every admin state (the withdraw-during-pause invariant is pinned by test).
+  The withdrawal rate limit (VLT:191-200) is itself a DoS-shaped control — see
+  T3-2 for the abuse analysis in both directions.
+- **Elevation of privilege** — `set_config`/pauses are admin-gated (identity check
+  before `require_auth`, VLT:711-722); `reconcile_default` is registry-only
+  (VLT:758-769). A keeper cannot reach any admin function.
 
 ### 3.2 KeeperRegistry
-- **Spoofing** — `register`/`deregister` require the operator's auth (REG:48,111). `mark_draw`/`clear_draw`/`record_execution` require the vault's auth (`require_vault`, REG:356). Admin functions require admin auth (`require_admin`, REG:343).
-- **Tampering** — performance counters use `saturating_add` (REG:264‑271), no overflow. Stakes are only moved by `register` (in), `deregister` (refund), `slash` (to vault).
-- **Repudiation** — `registered`, `deregistered`, `draw_marked`, `draw_cleared`, `execution`, `slashed` events cover all transitions.
-- **Information disclosure** — none (public metrics by design).
-- **Denial of service** — `register` respects a `Paused` flag (REG:41‑46); `slash` is permissionless but self-limiting (after a slash, `has_active_draw=false`, so it can't be re-run — REG:296).
-- **Elevation of privilege** — admin config changes are gated; the only cross-contract writer is the configured vault. Governance risk is the single admin key (VLT‑5 / REG‑2).
 
-### 3.3 Keeper daemon (off-chain)
-- **Spoofing** — holds `KEEPER_SECRET`; compromise = that operator's stake at risk (bounded by stake + slashing), not the pool. Panic-isolated per adapter.
-- **Tampering / DoS** — stateless; restarts safely; retries are gated so a broadcast-but-unknown swap is never re-sent (no double-sell). Cannot exceed on-chain limits regardless of bugs.
-- **Elevation** — cannot bypass any contract check; the contracts are the source of truth.
+- **Spoofing** — `register`/`deregister` require the operator's auth (REG:76, 139);
+  vault-only entry points pin the caller to the one-time-set vault address
+  (REG:440-451); admin functions pin the stored admin (REG:427-438).
+- **Tampering** — performance counters use `saturating_add` (REG:319-325); stake
+  moves only via `register` (in), `deregister` (refund, blocked while
+  `has_active_draw`, REG:146-148), `slash` (to the vault). `slash_rate_bps` is
+  capped at 10,000 and `min_stake > 0` is enforced in BOTH the constructor and
+  `set_config` (REG:29-39, 407-414) — no config state can mint a zero-bond keeper,
+  which the vault's `add_profit` gate relies on.
+- **Repudiation** — `registered`, `deregistered`, `draw_marked`, `draw_cleared`,
+  `execution`, `slashed` events cover every transition.
+- **Information disclosure** — none; metrics are public by design.
+- **Denial of service** — `register` respects the `Paused` flag (REG:69-74). The
+  keeper list is an unbounded `Vec<Address>` — growth-griefing needs ~3,300 staked
+  registrations (~330k USDC locked), triaged as economically absurd
+  (SCOUT-REPORT, `dynamic_storage`, accepted).
+- **Elevation of privilege** — `slash` deactivates the keeper (REG:369-375), so a
+  slashed operator cannot re-draw the cap each timeout window (NEW-drain closed);
+  re-registering costs a fresh full stake.
 
-### 3.4 Cross-contract interaction (Vault → Registry)
-- Only the vault address stored at registry init is accepted as `caller` (`require_vault`). The vault forwards `env.current_contract_address()` and the sub-call carries the vault's auth. A third party cannot forge `mark_draw`/`clear_draw`.
+### 3.3 Keeper daemon (off-chain, out of audit scope — modeled for completeness)
+
+- **Spoofing** — holds `KEEPER_SECRET`; compromise exposes that operator's stake and
+  outstanding draw (bounded by `max_draw_per_keeper` + slashing), never the pool
+  directly.
+- **Tampering/DoS** — stateless against chain state each cycle; restarts safely.
+  Pause flags are read before creating auctions AND before drawing, failing closed
+  on read errors (`keeper/adapters/blend/adapter.go:704, 864`). It cannot bypass
+  any contract check regardless of bugs.
+- **Repudiation** — every on-chain action is a signed transaction; the daemon also
+  keeps structured logs + Prometheus counters (e.g. `nectar_cycle_overruns_total`).
+- **Elevation** — none available; contracts are the source of truth.
+- Known operational limits (imported, not hidden): one process per keeper address
+  (chain-derived stale-draw recovery cannot tell a crashed sibling from an in-flight
+  one — observed live, no funds lost); cycle time can overrun the 10 s poll
+  interval (11–12 s observed, `LoadPool` dominates); borrowers idle past the ~7-day
+  RPC retention window are reachable only via the borrower cache or
+  `WATCH_ADDRESSES`.
+
+### 3.4 Cross-contract surface (Vault ⇄ Registry)
+
+- The draw path is consistency-locked: `draw` rejects `amount <= 0` so the
+  vault-side `DrawInfo.since` and the registry's `last_draw_time` always move
+  together (VLT:269-279, 340-344 — the zero-amount desync was a freeze-review
+  finding, fixed pre-tag). Partial returns preserve `since` so a 1-stroop return
+  cannot push out slash eligibility (VLT:412-430).
+- `slash` and `reconcile_default` are atomic: the registry cross-calls the vault
+  inside `slash` and a vault rejection reverts the whole slash (REG:381-394), so
+  vault and registry accounting never drift (NEW-reconcile closed).
+- Neither contract ever calls an address supplied by an untrusted caller: the vault
+  invokes only its stored registry (VLT:771-828) and the registry only its stored
+  vault (REG:343) — no confused-deputy path.
+
+### 3.5 Admin surface (incl. the new T3 controls)
+
+- **Pause-flag abuse (malicious/compromised admin):** the worst an admin can do
+  with the T3 flags is stop NEW liquidation draws (`set_global_pause`,
+  `set_asset_pause` — VLT:563-598) and, with the VLT-4 pause, stop deposits+draws.
+  Withdraw and `return_proceeds` are exempt from every flag by construction, so an
+  admin cannot trap depositor funds or prevent keepers settling debts. Every flip
+  emits an event (`liq_pause`, `asset_pause`), so silent throttling is not possible.
+- **Config abuse:** `set_config` can re-parameterize caps/cooldown/rate-limit
+  (VLT:518-533) and slash economics (REG:404-417, bounded: rate ≤ 100%, min_stake
+  > 0). A hostile config (e.g. `max_withdraw_per_24h = 1`) can throttle exits to a
+  crawl — this is the accepted residual admin-trust risk that the 2-of-3 multisig
+  (and a T3 timelock candidate) bounds; it cannot steal funds directly.
+- **Multisig key loss/compromise:** enforcement is at the Stellar account layer
+  (verified live — `docs/evidence/f5-multisig.md`). Loss of ONE key of three keeps
+  full control (any 2 of 3 sign; the master key holds no extra privilege beyond its
+  weight); the operational procedure is to rotate the lost key out via a
+  medium/high-threshold `set_options` signed by the two remaining keys.
+  Compromise of TWO keys is full admin compromise — bounded by the "what can admin
+  actually do" analysis above (throttle, pause, re-parameterize — not confiscate).
+  The signing runbook (build → simulate → per-signer sign → send) is recorded in
+  f5-multisig.md.
 
 ---
 
-## 4. Identified Threats
+## 4. Threat table
 
-| ID | Component | STRIDE | Threat | Severity | Status / Mitigation |
-|---|---|---|---|---|---|
-| **VLT‑1** | Vault | Tampering | **Share-inflation / first-depositor attack.** First deposit mints shares 1:1 with no dead-shares floor; `return_proceeds` with no prior draw treats the whole amount as donated profit (VLT:305‑310), inflating `total_usdc` without minting shares. A later depositor's `amount × total_shares / total_usdc` (VLT:72‑76) rounds to **0 shares**, gifting their deposit to the attacker's share. | **High** | **Open — fix before mainnet.** Plan: virtual shares/assets offset (OZ ERC‑4626 style) **or** mint dead-shares on first deposit **and** a minimum first-deposit. Also VLT‑2 removes the donation vector. |
-| **VLT‑2** | Vault | Spoofing/Tampering | **`return_proceeds` is not gated to registered keepers.** Any address can call it (`keeper.require_auth()` only, VLT:271) and, with `drawn == 0`, donate USDC booked as `total_profit` (VLT:305). Enables VLT‑1 and lets non-keepers distort share price/metrics. | **Medium** | **Open.** Plan: require the caller be a registered keeper **with** an outstanding `KeeperDraw > 0`; reject unsolicited donations (or route them explicitly). |
-| **VLT‑3** | Vault | Spoofing | **Keeper verification discards the result.** `require_registered_keeper` (VLT:403‑415) invokes `get_keeper` and ignores the return — it relies on the sub-call *trapping* on a missing record and never checks `active`. Fragile and implicit. | **Medium** | **Open.** Plan: bind the returned `KeeperInfo`, assert `active == true` and (optionally) `stake ≥ min`, and handle the error explicitly. |
-| **VLT‑4** | Vault | DoS | **No emergency pause on the vault.** The registry has `pause/unpause` (REG:195) but the vault has none; deposits/draws can't be halted during an incident. | **Medium** | **Open — Tranche 3 hardening.** Plan: add admin `pause` gating `deposit`/`draw` (and, ideally, a per-asset oracle circuit-breaker pause). |
-| **VLT‑5** | Both | Elevation | **Single admin key.** `set_config`, registry `pause`, and parameter changes hinge on one key; compromise re-parameterizes the protocol. | **Medium** | **Open — Tranche 3.** Plan: 2‑of‑3 admin multisig for all privileged ops; timelock on config changes. |
-| **VLT‑6** | Vault | Tampering | **CEI ordering in `draw`.** USDC is transferred to the keeper (VLT:235) *before* `active_liq += amount` (VLT:245). A reentrant token could observe stale `available`. | **Low** | **Mitigated** (trusted SAC / Circle USDC is non-reentrant) + `require_auth`. Plan: reorder to effects-before-interactions for defense in depth. |
-| **REG‑1** | Registry | DoS | Permissionless `slash`. | **Info** | **By design & safe** — gated by `has_active_draw` + `slash_timeout`; self-limiting (single slash per draw). Documented so auditors don't mis-flag it. |
-| **REG‑2** | Registry | Elevation | Admin can set `slash_rate_bps`, `min_stake`, `slash_timeout` arbitrarily via `set_config`. | **Low/Med** | Bundled with VLT‑5 (multisig + timelock). |
-| **ORA‑1** | Keeper/ext | Tampering | **Oracle manipulation → bad liquidation** (the Feb‑2026 YieldBlox class of attack). Keeper valuations depend on price feeds. | **Med/High** | **Tranche 3 deliverable** — Reflector cross-reference circuit breaker; auto-pause on deviation. |
-| **DEX‑1** | Keeper/ext | Tampering | **Swap slippage / sandwich** during collateral → USDC. | **Low/Med** | **Mitigated** — oracle-anchored min-out + on-chain `amount_out_min` (default 1%); never falls back after a sent-but-unknown swap. |
-| **INT‑1** | Vault | Tampering | Integer overflow in share/profit math. | **Low** | **Mitigated** — i128 with pool-favoring floors; registry counters use `saturating_add`. Audit to confirm no overflow on extreme `total_usdc`. |
-| **FR‑1** | Vault | Tampering | Deposit/withdraw front-running around a large `return_proceeds` (MEV on share price). | **Low** | Partly mitigated by `withdraw_cooldown`; note for audit. |
+Severity: impact on depositor/keeper funds assuming the mitigation were absent.
+Status/mitigation cites the frozen tag. "Residual" is what remains WITH the
+mitigation in place.
+
+| ID | Component | STRIDE | Threat | Severity | Mitigation (at `audit-freeze-v1`) | Residual risk |
+|---|---|---|---|---|---|---|
+| **VLT-1** | Vault | Tampering | Share-inflation / first-depositor attack: donate to inflate share price so a victim's deposit mints 0 shares. | High | Symmetric virtual offset `VIRTUAL_OFFSET = 1_000_000` in `to_shares`/`to_assets` (VLT:8-28) + zero-share deposits rejected (VLT:96-100). Property-tested: attack always loses money (2000 cases, incl. `add_profit` as the vector). | Offset-scale rounding dust; none profitable. |
+| **VLT-2** | Vault | Spoofing/Tampering | Anonymous donation booked as profit via `return_proceeds` (share-price distortion + metric pollution). | Medium | `NoDraw` guard: returns require an outstanding draw (VLT:366-381). The legitimate donation need is met by `add_profit`, which is registration-gated (see T3-3). | None known. |
+| **VLT-3** | Vault | Spoofing | Keeper verification implicit/incomplete (record-existence only). | Medium | Explicit `verify_keeper`: registered AND active AND `stake >= min_stake` (REG:196-218; invoked VLT:771-785; `min_stake > 0` invariant REG:29-39, 407-414). | None known. |
+| **VLT-4** | Vault | DoS | No emergency stop during an incident. | Medium | Admin `pause`/`unpause` gate deposit+draw; withdraw and `return_proceeds` stay open (VLT:535-557, 724-734). | Admin trust for the flag itself (see T3-4). |
+| **VLT-5** | Both | Elevation | Single admin key compromise re-parameterizes the protocol. | Medium | 2-of-3 classic multisig on the admin account, enforced at the classic auth layer BEFORE contract logic — verified live with reject/accept probes (`docs/evidence/f5-multisig.md`). | 2-of-3 collusion/compromise; no on-chain timelock yet (T3 candidate). Note: the live probe used an intermediate Session-F build — it proves the auth mechanics, not the final byte code. |
+| **VLT-6** | Vault | Tampering | Reentrancy/CEI ordering around token transfers. | Low | Effects-before-interaction in `withdraw` and `draw` (VLT:202-219, 313-338); Soroban's execution model + trusted Circle SAC as defense-in-depth. | Trusted-token assumption, documented. |
+| **NEW-cap** | Vault | Tampering | Per-keeper cap enforced per-call, loopable to drain available pool. | High | Cap bounds CUMULATIVE outstanding draw (VLT:297-309). | None known. |
+| **NEW-reconcile** | Cross | Tampering | Slash without vault write-off leaves phantom assets backing shares. | High | `slash` atomically cross-calls `reconcile_default`; vault rejection reverts the slash (REG:381-394; VLT:620-677). | Recovered USDC exceeding the clamped write-down stays unaccounted (conservative, donation-like) — documented FREEZE-NOTE "known properties". |
+| **NEW-drain** | Registry | Elevation | Slashed keeper re-draws the full cap every timeout window, losing only `slash_rate` each time. | High | `slash` deactivates (`active = false`, REG:369-375); re-drawing requires a fresh full stake. | Economics scale with `min_stake` vs `max_draw_per_keeper` — parameter choice, flagged for audit review. |
+| **NEW-init** | Both | Spoofing/Elevation | Initialize front-run seizes admin on a fresh deploy. | Medium | Atomic `__constructor` on both contracts (VLT:35-64; REG:19-45); registry⇄vault link via one-time admin-gated `set_vault` (REG:51-60). | None known. |
+| **REG-1** | Registry | DoS | Permissionless `slash` griefing. | Info | By design: gated by `has_active_draw` + `now - last_draw_time > slash_timeout` (REG:350-357); one slash per draw. | An honest-but-slow keeper past timeout can be slashed by anyone — intended economics. |
+| **T3-1** | Vault | Spoofing | **Self-declared draw asset** (DECISION F-2a): a malicious keeper misdeclares `asset` to route around a PER-ASSET pause. | Medium | Documented limitation, not a bug: declaration is not on-chain-verifiable. Backstops: the GLOBAL pause blocks every draw regardless of declaration (VLT:736-756); the honest path is closed keeper-side (ALL lot assets checked, fail closed — `adapter.go:704, 864`); a misdeclaring keeper that defaults is slashed + deactivated. | **Accepted**: a bonded keeper can burn its stake to draw against a per-asset pause once. Sized by `max_draw_per_keeper` vs stake. |
+| **T3-2** | Vault | DoS / Tampering | **Rate-limit bypass via multi-address sybil**: split funds across addresses to exceed the per-address 24h cap. | Low | Fixed-window per-address accounting (VLT:187-200; VLT-t:10-14). Sybil-splitting is **accepted by design** — the limit is a bleed-rate brake for a compromised-key scenario, not a global exit throttle; the cost of the control staying per-address is that it cannot bound aggregate outflow. Boundary behavior (~2× across a window rollover instant) is inherent to fixed windows, chosen by spec, review-verified. | Accepted (both the sybil path and the 2× boundary). |
+| **T3-3** | Vault | Tampering | **`add_profit` as an attack vector**: donation-driven share-price manipulation or profit-laundering through the new entry point. | Medium | Registration gate: donor must pass `verify_keeper` (bonded, active, `stake >= min_stake > 0`) (VLT:463-471); `amount > 0` (VLT:468-470); empty-vault donations rejected (`NoShares`, VLT:478-484 — freeze-review finding, prevents permanently stranding funds on the phantom offset); VLT-1 offset math keeps inflation unprofitable regardless (property-tested with `add_profit` as the vector); distinct `profit_added` event keeps donated profit separable from draw-cycle profit. Not pause-gated by design: money in is always safe. | A bonded keeper can still donate to *raise* everyone's share price (harmless by construction — no shares minted, benefits existing holders only). |
+| **T3-4** | Admin | DoS | **Pause-flag admin abuse**: compromised/hostile admin freezes the protocol. | Medium | Withdraw + `return_proceeds` are exempt from EVERY pause flag (no flag is read in either path; liq flags gate `draw` only — VLT:736-756, 559-562); every flip emits an event; admin is 2-of-3 multisig. | Deposits/draws can be halted and configs re-tuned by a compromised quorum; exits can be *throttled* (not stopped) via a hostile `max_withdraw_per_24h`. Timelock is the named T3 hardening candidate. |
+| **T3-5** | Cross | Tampering | Zero/negative-amount `draw` desyncs vault `DrawInfo.since` from registry `last_draw_time` (walks slash eligibility). | Medium | `InvalidAmount` on `amount <= 0` (VLT:269-279); `mark_draw` therefore always paired with a real draw (VLT:340-344); partial returns preserve `since` (VLT:412-430). Freeze-review finding, fixed pre-tag. | None known. |
+| **T3-6** | Admin | Elevation/DoS | Multisig key loss (lockout) or compromise. | Medium | 2-of-3: one lost key ⇒ remaining two rotate it out (procedure in `docs/evidence/f5-multisig.md`); one compromised key alone can sign nothing. | Two simultaneous compromises = full admin (bounded by T3-4's "cannot confiscate" analysis); two simultaneous losses = admin lockout (config frozen; user funds still withdrawable — withdraw needs no admin). |
+| **ORA-1** | Keeper/ext | Tampering | **Oracle manipulation → bad liquidation** (the Feb-2026 YieldBlox attack class): manipulated price makes a healthy position appear liquidatable or misprices collateral during unwind. | Med/High | Today (keeper-side only): liquidation sizing is delegated to on-chain simulation against the pool's own oracle; the unwind swap has an oracle-anchored floor that refused a ~30% adverse quote live (`docs/evidence/d-discovery.md` swap incident). The on-chain cross-referencing circuit breaker (auto-`set_asset_pause` on deviation) is the **Tranche-3 deliverable, not yet built**; the T3 pause flags at this tag are its actuation surface. | **Open until ORA-1 ships**: the vault itself has no oracle input (it never prices collateral), so vault solvency is not directly oracle-exposed — the exposure is keeper capital efficiency and Blend-side liquidation validity. Note: on testnet there is no Reflector to cross-reference (the pool oracle is a mock); the breaker targets mainnet feeds. |
+| **DEX-1** | Keeper/ext | Tampering | Swap slippage / sandwich during collateral → USDC unwind. | Low/Med | Oracle-anchored min-out + on-chain `amount_out_min` (`SLIPPAGE_BPS`, default 1%); a sent-but-unknown swap is never blindly re-sent. | Sandwich within the tolerance band; keeper-capital risk, not vault-accounting risk. |
+| **T3-7** | Keeper | DoS | **Stale-draw recovery abuse/failure**: capital stranded at a crashed keeper, or recovery selling assets it shouldn't. | Medium | Vault-side draw timestamps (`DrawInfo.since`, `get_keeper_draw → (amount, since)`, VLT:687-701) let a restarted keeper age its own stale draw from chain state alone (F4); recovery failures are surfaced, not silent (freeze-review fix); slashing is the protocol-level backstop for an unrecovered draw. | While a draw is outstanding, recovery treats the keeper's ENTIRE pool-reserve-token holding (above the XLM fee floor) as sellable — operators must not park personal funds on the keeper address (documented in CLAUDE.md/env docs). One-process-per-address rule (observed live). |
+| **FCT-1** | Faucet | DoS/Spoofing | **Faucet abuse** (testnet-only): drain the test-USDC treasury via repeated claims. | Info (testnet-only) | Dedicated treasury key (never the keeper key — `keeper/faucet.go:26`), per-address cooldown (`FAUCET_COOLDOWN_SECS`), fixed amount per claim; disabled when `FAUCET_SECRET` is unset. **Does not exist on mainnet.** | Sybil claims within cooldown limits can drain the test treasury — accepted; testnet funds only. |
+| **INT-1** | Vault | Tampering | Integer overflow/underflow in share/profit math. | Low | i128 traps atomically in Soroban (no wraparound); products bounded ~10 orders below `i128::MAX` at cap-scale values; registry counters saturate; the two signed-underflow edges are clamped (withdraw VLT:174-185, reconcile VLT:659-667). Scout's overflow class triaged finding-by-finding (SCOUT-REPORT). | Out-of-band arguments self-revert (no-op). |
+| **FR-1** | Vault | Tampering | Deposit/withdraw MEV around a large `return_proceeds` (share-price front-run). | Low | `withdraw_cooldown` (1 h default) makes deposit-snipe-exit non-atomic; floors favor the pool. | Timing yield-capture within cooldown bounds; noted for audit. |
 
 ---
 
-## 5. Trust Boundaries — Actor Capability Matrix
+## 5. What are we going to do about it? (Treatments)
 
-| Action | User | Keeper (registered) | Anyone | Admin | Vault (contract) |
-|---|---|---|---|---|---|
-| deposit / withdraw own funds | ✅ (own, cooldown) | ✅ | ❌ | ✅ | — |
-| draw vault capital | ❌ | ✅ (≤ limit, ≤ available) | ❌ | ❌ | — |
-| return_proceeds | ❌* | ✅ | ⚠️ *(VLT‑2)* | ❌ | — |
-| register / stake | ✅ | ✅ | ✅ (becomes keeper) | — | — |
-| slash a keeper | ✅ (if timed out) | ✅ | ✅ (timeout-gated) | ✅ | — |
-| mark_draw / clear_draw / record_execution | ❌ | ❌ | ❌ | ❌ | ✅ only |
-| set_config / pause | ❌ | ❌ | ❌ | ✅ | — |
+All High findings and every confirmed finding from the pre-freeze adversarial review
+are **fixed at the tag** (see the table — VLT-1..4, VLT-6, NEW-cap/reconcile/drain/init,
+T3-3's guards, T3-5). The remaining open treatments, honestly stated:
 
-\* Today any address can call `return_proceeds` for itself — VLT‑2 tightens this.
+1. **ORA-1 (open, Tranche 3):** build the oracle circuit breaker keeper-side module
+   cross-referencing Reflector on mainnet, actuating `set_asset_pause`/
+   `set_global_pause`. The contract-side actuation surface is frozen at this tag;
+   the breaker itself is new off-chain code + admin policy.
+2. **T3-1 (accepted, documented):** self-declared draw asset — accepted with the
+   stake-slash backstop; auditors are asked to review the economics
+   (`max_draw_per_keeper` vs `min_stake`) rather than the mechanism.
+3. **T3-4 residual (candidate):** config timelock to bound a compromised admin
+   quorum's re-parameterization speed — T3 hardening candidate, not at this tag.
+4. **Session H (keeper, out of contract scope):** wire the keeper's bad-debt LP
+   unwind proceeds into `add_profit` (the contract path exists and is audited at
+   this tag; the keeper does not call it yet), and redeploy the frozen contracts to
+   testnet (the live pair predates this tag — FREEZE-NOTE "known properties").
 
----
+## 6. Residual risks (imported from CORRECTION-REPORT.md — none omitted)
 
-## 6. Residual Risks (accepted or audit-bound)
+1. **Bad-debt profit reaches depositors only once Session H wires `add_profit`** —
+   until then float-funded bad-debt profit accrues to the operator
+   (CORRECTION-REPORT limitation 2; contract-side path RESOLVED at this tag,
+   keeper-side wiring pending).
+2. **LP unwind convexity:** the mainnet comet exit is one verified call but its cost
+   is convex in size (0.24% at ~$5 → ~13% at ~1M LP, live-measured) and a single
+   call caps at ≈ pool-USDC/3 — large lots need staged exits (limitation 3).
+3. **Retention-window discovery bound:** borrowers idle > ~7 days (120,960 ledgers)
+   are reachable only via the persisted borrower cache or `WATCH_ADDRESSES`
+   (limitation 4; the cache is load-bearing, not an optimization).
+4. **Cycle overrun:** keeper cycle time can exceed the 10 s poll interval (11–12 s
+   observed; `LoadPool` dominates). Counted, correctness-independent, named
+   follow-up exists (limitation 5).
+5. **Wasm-reproducibility gap:** Blend's deployed pool wasm is cited against pinned
+   source `ba22b48` but was not reproduced from source; divergence is theoretically
+   possible (limitation 8).
+6. **Interest auctions are never filled** (detect + defer, by design — limitation 1);
+   **Blend's canonical testnet pool is monitor-only** (settles a different USDC —
+   limitation 7); **emitter event shapes unverified** (limitation 10) — all
+   keeper-scope, listed for completeness.
+7. **Trusted-token assumption:** vault accounting is internal-state-based, but
+   transfers assume a well-behaved (non-reentrant) USDC SAC — true for Circle USDC.
+8. **The live testnet pair predates this tag** — the audited code is deployed fresh
+   in Session H; "audited code == deployed code" holds at those deployments, not at
+   the legacy pair (FREEZE-NOTE).
 
-1. **Trusted-token assumption.** Reentrancy safety of `draw` (VLT‑6) assumes a non-reentrant USDC SAC. True for Circle USDC on mainnet; explicitly documented.
-2. **External protocol risk.** Blend / Soroswap / Reflector are outside our trust boundary; the keeper mediates and the on-chain circuit breaker (Tranche 3) bounds oracle risk, but a critical bug in those protocols is out of scope.
-3. **Off-chain keeper compromise.** Bounded to the compromised operator's stake + slashing; the pool is not directly exposed.
-4. **Open findings VLT‑1…VLT‑5** are the primary items for the audit engagement; VLT‑1 and VLT‑2 will be remediated **before** mainnet regardless of audit timing.
+## 7. Did we do a good job? (Template question 4)
 
-**Reference:** Stellar threat-modeling guide —
-https://developers.stellar.org/docs/build/security-docs/threat-modeling
+- The model was built by re-reading both frozen contracts end to end at the tag, not
+  from prior drafts; every mitigation cite was checked against the frozen source.
+- The pre-freeze adversarial review (21 agents, 16 findings: 9 confirmed → all fixed
+  pre-tag, 7 refuted) exercised exactly the surfaces this model names; the
+  freeze-review fixes (draw amount guard, reconcile clamp, add_profit empty-vault
+  guard, keeper pause fail-closed, non-silent recovery) all appear above with cites.
+- Adversarial functional coverage at the tag: inflation attack (unit + property,
+  with and without `add_profit`), donation-assisted exit → slash write-off, pause/
+  exit invariants, rate-limit window boundaries (86399/86400), draw-timestamp
+  consistency, zero/negative amounts on every money-moving function, cross-contract
+  slash/reconcile against the real registry (FREEZE-NOTE suite table: 113 passing,
+  96 audit-scope).
+- This is a living document: any audit remediation lands as `audit-freeze-v2` with
+  this model updated in the same change.
