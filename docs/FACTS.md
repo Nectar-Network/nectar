@@ -376,6 +376,12 @@ These are **observations, not documentation**; every row names the error text ac
 | Multi-sig signing procedure (mainnet runbook) | build-only → `stellar tx simulate` (REQUIRED: an unassembled Soroban envelope submits as `TxMalformed`) → `stellar tx sign` per signer (XDR file is the handoff) → `stellar tx send`. CLI 27.1.0 | 2026-08-16 | `docs/evidence/f5-multisig.md` §runbook; observed TxMalformed on the unassembled attempt |
 | wasm build toolchain gotcha | Homebrew rustc shadows rustup and ships NO wasm32 std (its `rustlib/wasm32-unknown-unknown/lib` is empty → `E0463 can't find crate for core`); build with `PATH="$HOME/.rustup/toolchains/1.90.0-aarch64-apple-darwin/bin:$PATH" cargo build --target wasm32-unknown-unknown --release`, then `stellar contract optimize` (raw 1.90 wasm is rejected by the VM: "reference-types not enabled") | 2026-08-16 | this session's build log; deploy tx `e32c3099…` succeeded with the optimized artifact |
 
+## Audit freeze (Session F)
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| **Contracts FROZEN at `audit-freeze-v1` = commit `dbf0e5cd0a0c11bd123643fe72cf45ca2f35ccf5`** | No contract edits past this tag except audit remediation. Scope: nectar-vault (933 LOC prod) + keeper-registry (505 LOC prod); frozen artifacts `nectar_vault.optimized.wasm` sha256 `adcbaada…`, `keeper_registry.optimized.wasm` sha256 `5346d779…`. Suites at the tag: cargo test 113/113 (96 audit-scope), go test -race all ok, npm run build clean. Pre-tag adversarial review: 21 agents, 16 findings, 9 confirmed → all fixed (`ac995a9`, `861ba38`, `dce0c6e`), 7 refuted | 2026-08-16 | `git rev-parse audit-freeze-v1`; `docs/audit/FREEZE-NOTE.md` |
+
 ## Decisions
 
 | Decision | Rationale | Date | Source / evidence |
