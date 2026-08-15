@@ -176,7 +176,8 @@ impl NectarVault {
         // NOT trap on going negative — combined with a permissionless raw-token
         // donation (which lets the over-payment transfer succeed) it would persist
         // a negative total_usdc. The clamp keeps the invariant total_usdc >= 0.
-        let usdc_out = to_assets(shares, state.total_shares, state.total_usdc).min(state.total_usdc);
+        let usdc_out =
+            to_assets(shares, state.total_shares, state.total_usdc).min(state.total_usdc);
 
         // Effects before interaction (CEI, VLT-6 defense-in-depth): commit the
         // share burn and state before moving tokens out.
@@ -230,10 +231,19 @@ impl NectarVault {
     }
 
     /// Keeper draws capital for a liquidation. Verified against registry.
-    pub fn draw(env: Env, keeper: Address, amount: i128) -> Result<(), VaultError> {
+    ///
+    /// `asset` is the collateral asset this draw targets, declared by the
+    /// keeper (DECISION F-2a): the vault checks the global liquidation pause
+    /// and the per-asset pause on-chain, so honest keepers are hard-gated.
+    /// Threat-model limitation: the declaration is not verifiable on-chain —
+    /// a malicious keeper could misdeclare to route around a per-asset pause;
+    /// staking/slashing is the backstop for that, and the GLOBAL pause blocks
+    /// every draw regardless of declaration.
+    pub fn draw(env: Env, keeper: Address, amount: i128, asset: Address) -> Result<(), VaultError> {
         env.storage().instance().extend_ttl(1000, 1000);
         require_init(&env)?;
         require_not_paused(&env)?;
+        require_liq_allowed(&env, &asset)?;
         keeper.require_auth();
 
         let cfg: VaultConfig = env
@@ -285,7 +295,7 @@ impl NectarVault {
         }
 
         env.events()
-            .publish((Symbol::new(&env, "draw"), keeper.clone()), amount);
+            .publish((Symbol::new(&env, "draw"), keeper.clone()), (amount, asset));
         Ok(())
     }
 
@@ -425,6 +435,61 @@ impl NectarVault {
             .unwrap_or(false)
     }
 
+    /// Circuit breaker, global switch (T3, DECISION F-2a): pause/resume ALL
+    /// liquidation draws. Blocks draw() only — deposit stays governed by the
+    /// VLT-4 emergency pause, and withdraw is NEVER blocked by this flag, so
+    /// depositors can always exit during a liquidation pause.
+    pub fn set_global_pause(env: Env, admin: Address, paused: bool) -> Result<(), VaultError> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        require_admin(&env, &admin)?;
+        if paused {
+            env.storage()
+                .instance()
+                .set(&VaultKey::GlobalLiqPause, &true);
+        } else {
+            env.storage().instance().remove(&VaultKey::GlobalLiqPause);
+        }
+        env.events()
+            .publish((Symbol::new(&env, "liq_pause"),), paused);
+        Ok(())
+    }
+
+    /// Circuit breaker, per-asset switch (T3, DECISION F-2a): pause/resume
+    /// draws that declare `asset` as their target collateral. Same scope rules
+    /// as the global switch — draw() only, never depositor exit.
+    pub fn set_asset_pause(
+        env: Env,
+        admin: Address,
+        asset: Address,
+        paused: bool,
+    ) -> Result<(), VaultError> {
+        env.storage().instance().extend_ttl(1000, 1000);
+        require_admin(&env, &admin)?;
+        let key = VaultKey::AssetPaused(asset.clone());
+        if paused {
+            env.storage().instance().set(&key, &true);
+        } else {
+            env.storage().instance().remove(&key);
+        }
+        env.events()
+            .publish((Symbol::new(&env, "asset_pause"), asset), paused);
+        Ok(())
+    }
+
+    pub fn is_global_liq_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<VaultKey, bool>(&VaultKey::GlobalLiqPause)
+            .unwrap_or(false)
+    }
+
+    pub fn is_asset_paused(env: Env, asset: Address) -> bool {
+        env.storage()
+            .instance()
+            .get::<VaultKey, bool>(&VaultKey::AssetPaused(asset))
+            .unwrap_or(false)
+    }
+
     /// Registry-only. Called by `KeeperRegistry.slash` after a defaulted draw is
     /// slashed: writes the unrecovered principal off the pool, books the
     /// recovered slash amount (already transferred in by the registry), and
@@ -526,6 +591,28 @@ fn require_not_paused(env: &Env) -> Result<(), VaultError> {
         .unwrap_or(false)
     {
         return Err(VaultError::Paused);
+    }
+    Ok(())
+}
+
+/// Circuit-breaker gate for draw() only (DECISION F-2a): global liquidation
+/// pause first, then the per-asset flag for the keeper-declared asset.
+fn require_liq_allowed(env: &Env, asset: &Address) -> Result<(), VaultError> {
+    if env
+        .storage()
+        .instance()
+        .get::<VaultKey, bool>(&VaultKey::GlobalLiqPause)
+        .unwrap_or(false)
+    {
+        return Err(VaultError::LiquidationsPaused);
+    }
+    if env
+        .storage()
+        .instance()
+        .get::<VaultKey, bool>(&VaultKey::AssetPaused(asset.clone()))
+        .unwrap_or(false)
+    {
+        return Err(VaultError::AssetPaused);
     }
     Ok(())
 }

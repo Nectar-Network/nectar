@@ -36,6 +36,11 @@ pub enum VaultKey {
     VaultConfig,
     KeeperDraw(Address),
     Paused,
+    // Circuit-breaker flags (T3, DECISION F-2a). Distinct from Paused (VLT-4):
+    // these gate draw() only — depositor entry/exit is never governed by them,
+    // so depositors can always withdraw during a liquidation pause.
+    GlobalLiqPause,
+    AssetPaused(Address),
 }
 
 #[contracterror]
@@ -58,4 +63,10 @@ pub enum VaultError {
     // return_proceeds called with no outstanding draw for the keeper. Blocks the
     // anonymous donation-as-profit path (VLT-2).
     NoDraw = 13,
+    // draw() while the admin has ALL liquidations paused (global circuit
+    // breaker). Deposit stays governed by the VLT-4 Paused flag alone, and
+    // withdraw is never blocked by a liquidation pause.
+    LiquidationsPaused = 14,
+    // draw() declared a collateral asset the admin has individually paused.
+    AssetPaused = 15,
 }

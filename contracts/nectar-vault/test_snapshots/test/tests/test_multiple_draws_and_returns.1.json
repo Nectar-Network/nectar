@@ -172,6 +172,9 @@
                     "hi": 0,
                     "lo": 3000000000
                   }
+                },
+                {
+                  "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
                 }
               ]
             }
@@ -249,6 +252,9 @@
                     "hi": 0,
                     "lo": 2000000000
                   }
+                },
+                {
+                  "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
                 }
               ]
             }

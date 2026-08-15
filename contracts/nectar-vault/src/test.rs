@@ -70,7 +70,12 @@ mod tests {
         let registry_id = env.register(MockRegistry, ());
         let vault_id = env.register(
             NectarVault,
-            (admin.clone(), usdc.clone(), registry_id.clone(), cfg.clone()),
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                cfg.clone(),
+            ),
         );
         let client = NectarVaultClient::new(env, &vault_id);
         (client, admin, usdc, vault_id)
@@ -133,7 +138,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &500_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
         client.return_proceeds(&keeper, &510_0000000, &120u64);
 
         let state = client.get_state();
@@ -162,7 +167,7 @@ mod tests {
         // no outstanding draw initially
         assert_eq!(client.get_keeper_draw(&keeper), 0);
         // a draw is tracked under the keeper
-        client.draw(&keeper, &500_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
         assert_eq!(client.get_keeper_draw(&keeper), 500_0000000);
         // returning proceeds clears the per-keeper draw
         client.return_proceeds(&keeper, &510_0000000, &120u64);
@@ -181,7 +186,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &500_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
 
         // A partial return must NOT settle the draw: a 1-stroop return cannot
         // clear a 500 USDC debt. The remainder stays owed (and slash-eligible).
@@ -215,8 +220,8 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper_a, &100_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper_a, &100_0000000);
-        client.draw(&keeper_b, &100_0000000);
+        client.draw(&keeper_a, &100_0000000, &usdc);
+        client.draw(&keeper_b, &100_0000000, &usdc);
 
         // A returns 150 (100 principal + 50 profit). Only A's principal may be
         // repaid against active_liq — B's outstanding 100 must remain tracked.
@@ -253,7 +258,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &user, &100_0000000);
         client.deposit(&user, &100_0000000);
         let keeper = Address::generate(&env);
-        let result = client.try_draw(&keeper, &200_0000000);
+        let result = client.try_draw(&keeper, &200_0000000, &usdc);
         assert_eq!(result, Err(Ok(VaultError::InsufficientVault)));
     }
 
@@ -284,7 +289,10 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         let (client, _admin, _usdc, _vault_id) = setup(&env);
-        assert_eq!(client.get_config().deposit_cap, default_config().deposit_cap);
+        assert_eq!(
+            client.get_config().deposit_cap,
+            default_config().deposit_cap
+        );
         let state = client.get_state();
         assert_eq!(state.total_usdc, 0);
         assert_eq!(state.total_shares, 0);
@@ -332,7 +340,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &500_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &500_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
 
         client.return_proceeds(&keeper, &400_0000000, &120u64);
 
@@ -352,7 +360,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &user, &100_0000000);
         client.deposit(&user, &100_0000000);
 
-        client.draw(&keeper, &0);
+        client.draw(&keeper, &0, &usdc);
         let state = client.get_state();
         assert_eq!(state.active_liq, 0);
     }
@@ -392,10 +400,10 @@ mod tests {
 
         client.deposit(&user, &2000_0000000);
 
-        client.draw(&keeper, &300_0000000);
+        client.draw(&keeper, &300_0000000, &usdc);
         client.return_proceeds(&keeper, &310_0000000, &120u64);
 
-        client.draw(&keeper, &200_0000000);
+        client.draw(&keeper, &200_0000000, &usdc);
         client.return_proceeds(&keeper, &215_0000000, &120u64);
 
         let state = client.get_state();
@@ -455,7 +463,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &100_0000000);
+        client.draw(&keeper, &100_0000000, &usdc);
 
         let events = env.events().all();
         let has_draw = events
@@ -483,7 +491,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
 
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &100_0000000);
+        client.draw(&keeper, &100_0000000, &usdc);
         client.return_proceeds(&keeper, &110_0000000, &120u64);
 
         let events = env.events().all();
@@ -667,7 +675,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
         client.deposit(&user, &1000_0000000);
 
-        client.draw(&keeper, &MAX_DRAW);
+        client.draw(&keeper, &MAX_DRAW, &usdc);
         let state = client.get_state();
         assert_eq!(state.active_liq, MAX_DRAW);
     }
@@ -688,7 +696,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
         client.deposit(&user, &1000_0000000);
 
-        let result = client.try_draw(&keeper, &(MAX_DRAW + 1));
+        let result = client.try_draw(&keeper, &(MAX_DRAW + 1), &usdc);
         assert_eq!(result, Err(Ok(VaultError::DrawLimitExceeded)));
     }
 
@@ -719,7 +727,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
 
         client.deposit(&user_a, &1000_0000000);
-        client.draw(&keeper, &500_0000000);
+        client.draw(&keeper, &500_0000000, &usdc);
         // Return with 100 USDC profit.
         client.return_proceeds(&keeper, &600_0000000, &120u64);
 
@@ -795,7 +803,7 @@ mod tests {
         client.deposit(&c, &300_0000000);
 
         // Total = 600. Keeper draws 200, returns 260 → 60 profit.
-        client.draw(&keeper, &200_0000000);
+        client.draw(&keeper, &200_0000000, &usdc);
         client.return_proceeds(&keeper, &260_0000000, &120u64);
 
         // Total now 660 USDC across 600 shares. Share price = 1.1.
@@ -873,7 +881,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &victim, &1000_0000000);
 
         client.deposit(&attacker, &1); // 1 share
-        client.draw(&attacker, &1); // outstanding draw so the return is allowed
+        client.draw(&attacker, &1, &usdc); // outstanding draw so the return is allowed
         client.return_proceeds(&attacker, &5000_0000000, &1u64); // donate ~5000 to inflate
 
         // Victim deposits 1000 and receives shares worth ~their deposit.
@@ -899,7 +907,7 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &100_0000000);
         client.deposit(&user, &1000_0000000);
         // Raise the price above 1 via a legit profitable return.
-        client.draw(&keeper, &1);
+        client.draw(&keeper, &1, &usdc);
         client.return_proceeds(&keeper, &100_0000000, &1u64);
 
         let dust = Address::generate(&env);
@@ -925,10 +933,10 @@ mod tests {
         token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
         client.deposit(&user, &1000_0000000);
 
-        client.draw(&keeper, &300_0000000); // cumulative 300 <= 500 ok
-        let res = client.try_draw(&keeper, &300_0000000); // would be 600 > 500
+        client.draw(&keeper, &300_0000000, &usdc); // cumulative 300 <= 500 ok
+        let res = client.try_draw(&keeper, &300_0000000, &usdc); // would be 600 > 500
         assert_eq!(res, Err(Ok(VaultError::DrawLimitExceeded)));
-        client.draw(&keeper, &200_0000000); // cumulative exactly 500 ok
+        client.draw(&keeper, &200_0000000, &usdc); // cumulative exactly 500 ok
         assert_eq!(client.get_keeper_draw(&keeper), 500_0000000);
     }
 
@@ -943,7 +951,7 @@ mod tests {
         let keeper = Address::generate(&env);
         token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
         client.deposit(&user, &1000_0000000);
-        client.draw(&keeper, &100_0000000); // outstanding draw before pause
+        client.draw(&keeper, &100_0000000, &usdc); // outstanding draw before pause
 
         client.pause(&admin);
         assert!(client.is_paused());
@@ -952,7 +960,7 @@ mod tests {
             Err(Ok(VaultError::Paused))
         );
         assert_eq!(
-            client.try_draw(&keeper, &100_0000000),
+            client.try_draw(&keeper, &100_0000000, &usdc),
             Err(Ok(VaultError::Paused))
         );
 
@@ -963,6 +971,133 @@ mod tests {
 
         client.unpause(&admin);
         assert!(!client.is_paused());
+    }
+
+    // ── Tranche 3: circuit-breaker pause plumbing (DECISION F-2a) ─────────
+
+    #[test]
+    fn test_global_liq_pause_blocks_draw_and_unpause_restores() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        assert!(!client.is_global_liq_paused());
+        client.set_global_pause(&admin, &true);
+        assert!(client.is_global_liq_paused());
+        assert_eq!(
+            client.try_draw(&keeper, &100_0000000, &usdc),
+            Err(Ok(VaultError::LiquidationsPaused))
+        );
+
+        client.set_global_pause(&admin, &false);
+        assert!(!client.is_global_liq_paused());
+        client.draw(&keeper, &100_0000000, &usdc);
+        assert_eq!(client.get_state().active_liq, 100_0000000);
+    }
+
+    #[test]
+    fn test_asset_pause_blocks_only_declared_asset() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        let xlm = Address::generate(&env); // a second collateral asset
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        assert!(!client.is_asset_paused(&xlm));
+        client.set_asset_pause(&admin, &xlm, &true);
+        assert!(client.is_asset_paused(&xlm));
+        assert!(!client.is_asset_paused(&usdc));
+
+        // A draw declaring the paused asset is blocked; another asset passes.
+        assert_eq!(
+            client.try_draw(&keeper, &100_0000000, &xlm),
+            Err(Ok(VaultError::AssetPaused))
+        );
+        client.draw(&keeper, &100_0000000, &usdc);
+
+        client.set_asset_pause(&admin, &xlm, &false);
+        assert!(!client.is_asset_paused(&xlm));
+        client.draw(&keeper, &100_0000000, &xlm);
+        assert_eq!(client.get_state().active_liq, 200_0000000);
+    }
+
+    #[test]
+    fn test_withdraw_and_deposit_work_during_liq_pause() {
+        // INVARIANT (DECISION F-2a): the liquidation pause is NOT the VLT-4
+        // emergency pause — depositors must always be able to exit (and enter)
+        // while liquidations are paused. Only draw() is gated.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &500_0000000);
+
+        client.set_global_pause(&admin, &true);
+        client.set_asset_pause(&admin, &usdc, &true);
+
+        // Deposit still governed by the (unset) VLT-4 pause alone.
+        client.deposit(&user, &500_0000000);
+        // Withdraw must work while every liquidation switch is thrown.
+        let (shares, _) = client.balance(&user);
+        let out = client.withdraw(&user, &shares);
+        assert_eq!(out, 1000_0000000);
+    }
+
+    #[test]
+    fn test_liq_pause_non_admin_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _, usdc, _) = setup(&env);
+        let intruder = Address::generate(&env);
+        assert_eq!(
+            client.try_set_global_pause(&intruder, &true),
+            Err(Ok(VaultError::Unauthorized))
+        );
+        assert_eq!(
+            client.try_set_asset_pause(&intruder, &usdc, &true),
+            Err(Ok(VaultError::Unauthorized))
+        );
+        assert!(!client.is_global_liq_paused());
+        assert!(!client.is_asset_paused(&usdc));
+    }
+
+    #[test]
+    fn test_liq_pause_events_emitted_on_every_flip() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+
+        let count_topic = |name: &str| {
+            env.events()
+                .all()
+                .iter()
+                .filter(|(_, topics, _): &(Address, Vec<Val>, Val)| {
+                    topics
+                        .first()
+                        .and_then(|val| Symbol::try_from_val(&env, &val).ok())
+                        .is_some_and(|s| s == Symbol::new(&env, name))
+                })
+                .count()
+        };
+
+        // NOTE: the soroban test env only retains events of the LAST invocation,
+        // so each flip is asserted immediately after its call.
+        client.set_global_pause(&admin, &true);
+        assert_eq!(count_topic("liq_pause"), 1);
+        client.set_global_pause(&admin, &false);
+        assert_eq!(count_topic("liq_pause"), 1);
+        client.set_asset_pause(&admin, &usdc, &true);
+        assert_eq!(count_topic("asset_pause"), 1);
+        client.set_asset_pause(&admin, &usdc, &false);
+        assert_eq!(count_topic("asset_pause"), 1);
     }
 
     // ── Cross-contract integration with the real KeeperRegistry ──────────
@@ -1000,7 +1135,12 @@ mod tests {
         };
         let vault_id = env.register(
             NectarVault,
-            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                vault_cfg.clone(),
+            ),
         );
 
         let registry = KeeperRegistryClient::new(&env, &registry_id);
@@ -1021,7 +1161,7 @@ mod tests {
         vault.deposit(&depositor, &1000_0000000);
 
         // Keeper draws 500 — vault calls registry.mark_draw.
-        vault.draw(&keeper, &500_0000000);
+        vault.draw(&keeper, &500_0000000, &usdc);
         let info = registry.get_keeper(&keeper);
         assert!(info.has_active_draw);
 
@@ -1078,7 +1218,12 @@ mod tests {
         };
         let vault_id = env.register(
             NectarVault,
-            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                vault_cfg.clone(),
+            ),
         );
         let registry = KeeperRegistryClient::new(&env, &registry_id);
         let vault = NectarVaultClient::new(&env, &vault_id);
@@ -1092,7 +1237,7 @@ mod tests {
         vault.deposit(&depositor, &1000_0000000);
 
         // Keeper draws 400 and absconds (never returns).
-        vault.draw(&keeper, &400_0000000);
+        vault.draw(&keeper, &400_0000000, &usdc);
         assert_eq!(vault.get_keeper_draw(&keeper), 400_0000000);
         assert_eq!(vault.get_state().active_liq, 400_0000000);
 
@@ -1109,7 +1254,10 @@ mod tests {
         assert_eq!(state.active_liq, 0);
         assert_eq!(state.total_usdc, 610_0000000);
         // Solvency: real token balance backs total_usdc − active_liq.
-        assert_eq!(token::Client::new(&env, &usdc).balance(&vault_id), 610_0000000);
+        assert_eq!(
+            token::Client::new(&env, &usdc).balance(&vault_id),
+            610_0000000
+        );
         // Registry cleared the active draw (keeper may now deregister).
         assert!(!registry.get_keeper(&keeper).has_active_draw);
     }
@@ -1151,7 +1299,12 @@ mod tests {
         };
         let vault_id = env.register(
             NectarVault,
-            (admin.clone(), usdc.clone(), registry_id.clone(), vault_cfg.clone()),
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                vault_cfg.clone(),
+            ),
         );
         let registry = KeeperRegistryClient::new(&env, &registry_id);
         let vault = NectarVaultClient::new(&env, &vault_id);
@@ -1165,7 +1318,7 @@ mod tests {
         vault.deposit(&depositor, &1000_0000000);
 
         // Keeper draws 400 and absconds; slash writes off the loss → S > U.
-        vault.draw(&keeper, &400_0000000);
+        vault.draw(&keeper, &400_0000000, &usdc);
         set_time(&env, 4000, 100);
         registry.slash(&keeper);
         let state = vault.get_state();
@@ -1182,7 +1335,11 @@ mod tests {
         let out = vault.withdraw(&depositor, &shares);
 
         let state = vault.get_state();
-        assert!(state.total_usdc >= 0, "total_usdc underflowed to {}", state.total_usdc);
+        assert!(
+            state.total_usdc >= 0,
+            "total_usdc underflowed to {}",
+            state.total_usdc
+        );
         assert!(out <= 610_0000000, "withdrew {} > accounted 610 USDC", out);
         // The donation is NOT extractable by the withdrawer — it stays in the
         // contract (recoverable by later depositors), never over-paid out.
