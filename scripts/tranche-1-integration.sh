@@ -109,7 +109,7 @@ pause "step 5"
 
 step "6. Keeper draws \$500 — vault calls registry.mark_draw"
 invoke "$VAULT_CONTRACT" "$KEEPER_SECRET" -- draw \
-  --keeper "$KEEPER_ADDRESS" --amount 50000000000
+  --keeper "$KEEPER_ADDRESS" --amount 50000000000 --asset "$USDC_CONTRACT"
 echo "Vault state (active_liq should be 500_0000000):"
 invoke "$VAULT_CONTRACT" "$ADMIN_SECRET" -- get_state
 echo "Keeper info (has_active_draw should be TRUE):"
@@ -119,7 +119,7 @@ pause "step 6"
 step "7. Over-limit draw — must fail with DrawLimitExceeded (#10)"
 set +e
 invoke "$VAULT_CONTRACT" "$KEEPER_SECRET" -- draw \
-  --keeper "$KEEPER_ADDRESS" --amount 99999900000000
+  --keeper "$KEEPER_ADDRESS" --amount 99999900000000 --asset "$USDC_CONTRACT"
 set -e
 pause "step 7"
 

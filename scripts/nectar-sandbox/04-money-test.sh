@@ -38,7 +38,8 @@ read_state() { # -> "total_usdc total_shares total_profit active_liq"
 }
 read_draw() {
   stellar contract invoke --id "$VAULT" --source-account "$ADMIN_ADDR" \
-    --network testnet --send=no -- get_keeper_draw --keeper "$KEEPER_ADDR" 2>/dev/null | tail -1 | tr -d '"'
+    --network testnet --send=no -- get_keeper_draw --keeper "$KEEPER_ADDR" 2>/dev/null | tail -1 |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)[0])'  # (amount, since) tuple since F4
 }
 
 echo "== building keeper =="
