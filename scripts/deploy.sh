@@ -12,6 +12,7 @@ SLASH_RATE_BPS="${SLASH_RATE_BPS:-1000}"           # 10 %
 DEPOSIT_CAP="${DEPOSIT_CAP:-50000000000000}"       # $5,000,000 USDC; 0 = unlimited
 WITHDRAW_COOLDOWN="${WITHDRAW_COOLDOWN:-3600}"     # 1 h
 MAX_DRAW_PER_KEEPER="${MAX_DRAW_PER_KEEPER:-100000000000}"  # $10,000 USDC
+MAX_WITHDRAW_PER_24H="${MAX_WITHDRAW_PER_24H:-0}"  # per-address 24h cap; 0 = disabled (set explicitly for mainnet)
 
 RPC_URL="${SOROBAN_RPC:-https://soroban-testnet.stellar.org:443}"
 PASSPHRASE="${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}"
@@ -84,7 +85,7 @@ VAULT_ID=$(stellar contract deploy \
   --admin "$ADMIN_ADDRESS" \
   --usdc_token "$USDC_CONTRACT" \
   --registry "$REGISTRY_ID" \
-  --config "{\"deposit_cap\":\"$DEPOSIT_CAP\",\"withdraw_cooldown\":$WITHDRAW_COOLDOWN,\"max_draw_per_keeper\":\"$MAX_DRAW_PER_KEEPER\"}")
+  --config "{\"deposit_cap\":\"$DEPOSIT_CAP\",\"withdraw_cooldown\":$WITHDRAW_COOLDOWN,\"max_draw_per_keeper\":\"$MAX_DRAW_PER_KEEPER\",\"max_withdraw_per_24h\":\"$MAX_WITHDRAW_PER_24H\"}")
 echo "NectarVault:    $VAULT_ID"
 
 # ── 4. Link the vault into the registry (one-time, admin-gated set_vault) ─────
@@ -107,7 +108,7 @@ Frontend env vars (paste into frontend/.env.local before deploying):
   NEXT_PUBLIC_VAULT_CONTRACT=$VAULT_ID
 
 Registry config: min_stake=$MIN_STAKE slash_timeout=${SLASH_TIMEOUT}s slash_rate_bps=$SLASH_RATE_BPS
-Vault config:    deposit_cap=$DEPOSIT_CAP cooldown=${WITHDRAW_COOLDOWN}s max_draw=$MAX_DRAW_PER_KEEPER
+Vault config:    deposit_cap=$DEPOSIT_CAP cooldown=${WITHDRAW_COOLDOWN}s max_draw=$MAX_DRAW_PER_KEEPER max_withdraw_per_24h=$MAX_WITHDRAW_PER_24H
 
 Saved to $ENV_FILE
 EOF
