@@ -42,7 +42,8 @@ docs/               # Internal documentation
 - Deploy: `stellar contract deploy --wasm <path> --source $ADMIN_SECRET --rpc-url <url> --network-passphrase <passphrase>`
 - All values use 7-decimal precision (Stellar native: 10^7 stroops)
 - Storage: persistent for user data (KeeperInfo, Depositor), instance for config/state (VaultState, admin)
-- Cross-contract: NectarVault calls KeeperRegistry.get_keeper() to verify keepers before draw()
+- Cross-contract: NectarVault calls KeeperRegistry.verify_keeper() (registered + active + stake >= min_stake; min_stake > 0 is a registry invariant) before draw() and add_profit()
+- T3 frozen vault surface (audit-freeze-v1): draw(keeper, amount, asset) — asset is the keeper-DECLARED target collateral, checked against the global/per-asset liquidation pause (set_global_pause / set_asset_pause, admin; getters is_global_liq_paused / is_asset_paused); withdraw() adds a per-address 24h fixed-window rate limit (VaultConfig.max_withdraw_per_24h, 0 = off); add_profit(keeper, amount) donates registration-gated profit (no shares minted, distinct profit_added event); get_keeper_draw(keeper) -> (amount, since) with the most-recent-draw ledger timestamp. Errors 14-17: LiquidationsPaused, AssetPaused, WithdrawalRateLimited, InvalidAmount. Liquidation pause NEVER blocks withdraw (VLT-4 pause() is the only depositor gate)
 
 ### Keeper (Go)
 - Go 1.22+, uses github.com/stellar/go SDK
@@ -63,6 +64,9 @@ docs/               # Internal documentation
 - Deployed on Vercel (auto-deploy from main branch)
 
 ## Deployed Contracts (Testnet — Tranche 3 hardened + Circle USDC, 2026-07-22) — CURRENT
+**NOTE (2026-08-16):** this live pair still runs the PRE-Session-F wasm — draw(keeper, amount),
+i128 get_keeper_draw, no pause flags/rate limit/add_profit. keeper@HEAD targets the frozen
+audit-freeze-v1 interface and needs the post-freeze redeploy (Session H) before it can draw here.
 - KeeperRegistry:  CD33A7IGNCOLVQ4EEINBVMVA7IHWXGN57R6YLE5AJEEKPA6VKC2E4IQD
 - NectarVault:     CDOGQY7NAE3BP4Q7RWBCBLW23Z36RNWNDNXX5DWNIEVMFEWP3GVEPXLR
 - USDC (Circle testnet SAC): CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA

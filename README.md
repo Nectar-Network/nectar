@@ -84,7 +84,7 @@ Blend's official TestnetV2 pool (from [blend-utils/testnet.contracts.json](https
 - **Registry config**: 100 USDC min stake, slash timeout 3600s, slash rate 1000 bps (10%)
 - **Keepers**: keeper-alpha registered with 100 Circle USDC staked on-chain (beta/gamma re-register as testnet USDC is faucet-ed)
 - **Proven live full cycle** (2026-08-09, Nectar Sandbox): one liquidation moved the share price 1.0000000 → 1.0432672 — auction create, vault draw, atomic fill+repay+withdraw, collateral swap, measured proceeds returned, every step tx-hashed ([docs/evidence/b-full-cycle.md](docs/evidence/b-full-cycle.md))
-- **Profit model**: profit = measured USDC proceeds − drawn capital, credited to depositors via share-price appreciation on `return_proceeds`. (Bad-debt fills are operator-float-funded and their profit accrues to the operator — see [docs/CORRECTION-REPORT.md](docs/CORRECTION-REPORT.md))
+- **Profit model**: profit = measured USDC proceeds − drawn capital, credited to depositors via share-price appreciation on `return_proceeds`. Bad-debt fills are operator-float-funded; since the T3 freeze the vault accepts their proceeds through the registration-gated `add_profit` entry point (keeper wiring lands with the T3 off-chain work — until then the operator donates manually or holds the profit; see [docs/CORRECTION-REPORT.md](docs/CORRECTION-REPORT.md))
 
 ## Tranche 1 Status
 
@@ -112,7 +112,7 @@ Each Tranche 1 deliverable below cites the on-chain code + tests that prove the 
 
 - **Per-auction-type scope, matching the verified mechanics** (docs/FACTS.md "Auction asset flows"):
   - **User liquidation (type 0, request_type 6) — FULL**: atomic `submit([fill, repay…, withdraw_collateral…])` ([keeper/blend/submit.go](keeper/blend/submit.go)), size chosen by on-chain simulation, collateral swapped to USDC, proceeds returned to the vault. Proven live (docs/evidence/b-full-cycle.md).
-  - **Bad debt (type 1, request_type 7) — FILL-AND-HOLD**: the keeper creates the backstop's auction (settle-asset legs only), fills it atomically with the debt repay from its OWN float (never vault draws), and HOLDS the backstop-LP lot, valued at the backstop's `token_spot_price` minus a configurable haircut (`BAD_DEBT_LP_HAIRCUT_BPS`, default 50%). Unwinding the LP is deferred: on mainnet it is one verified call into the comet's Circle-USDC leg costing ~0.24% at small size ([docs/evidence/c-lp-unwind.md](docs/evidence/c-lp-unwind.md)). **Bad-debt profit accrues to the operator, not to depositors** — `return_proceeds` rejects a keeper with no outstanding draw (the VLT-2 anti-donation guard), and these fills are float-funded, so crediting the vault would need a new contract entry point. See [keeper/blend/baddebt.go](keeper/blend/baddebt.go) and docs/FACTS.md Decisions.
+  - **Bad debt (type 1, request_type 7) — FILL-AND-HOLD**: the keeper creates the backstop's auction (settle-asset legs only), fills it atomically with the debt repay from its OWN float (never vault draws), and HOLDS the backstop-LP lot, valued at the backstop's `token_spot_price` minus a configurable haircut (`BAD_DEBT_LP_HAIRCUT_BPS`, default 50%). Unwinding the LP is deferred: on mainnet it is one verified call into the comet's Circle-USDC leg costing ~0.24% at small size ([docs/evidence/c-lp-unwind.md](docs/evidence/c-lp-unwind.md)). **Crediting depositors:** `return_proceeds` rejects a keeper with no outstanding draw (the VLT-2 anti-donation guard), and these fills are float-funded — so the T3 contracts added the registration-gated `add_profit` entry point (DECISION F-1). The keeper does not call it automatically yet (Session H wiring); until then bad-debt profit reaches depositors only when the operator donates it. See [keeper/blend/baddebt.go](keeper/blend/baddebt.go) and docs/FACTS.md Decisions.
   - **Interest (type 2, request_type 8) — DETECTED, DEFERRED**: the bid is backstop LP tokens (~120% of interest value at spot) the filler must pre-hold and pre-approve — a vault-USDC keeper carries no LP inventory, so the keeper logs "interest auction seen, deferred" and never attempts a fill.
 - **Blend ABI compatibility**: the submit payload encodes `request_type` as `ScvU32` and `amount` as `ScvI128` to match Blend's `#[contracttype] struct Request { request_type: u32, address: Address, amount: i128 }` ([keeper/blend/submit.go:38-56](keeper/blend/submit.go#L38-L56)). Locked in by `TestSubmitPayload_BlendABITypes` and `TestBadDebtRequestABITypes`.
 - **Dutch auction profitability** on the verified TWO-PHASE curve (400 ledgers, docs/FACTS.md "Auction fill price curve"): phase 1 (t=0–200) lot scales 0→100% with bid at 100%; phase 2 (t=200–400) bid scales 100→0% with lot at 100%; fair point at t=200; past t=400 the bid is empty. Tests: `TestProfitability_Block0_LotZero`, `…Block200_FairPrice`, `…Block100_LotScaling`, `…Block300_BidScaling`, `…Block400_BidZero`, `…PastExpiry_StaysInfinite`, `TestPhaseAt_Boundaries`, `TestBadDebtProfitability_Curve`.
@@ -194,7 +194,7 @@ On-chain registry for keeper operators. Any operator can self-register with a ke
 
 | Function | Description |
 |----------|-------------|
-| `__constructor(admin, config)` | Atomic init at deploy (no separate initialize call to front-run; `config` carries `usdc_token`, `min_stake`, slash params); linked to the vault once via `set_vault` |
+| `__constructor(admin, config)` | Atomic init at deploy (no separate initialize call to front-run; `config` carries `usdc_token`, `min_stake`, slash params — `min_stake > 0` and `slash_rate_bps <= 10000` enforced here and in `set_config`); linked to the vault once via `set_vault` |
 | `register(keeper, name)` | Register a new keeper operator — pulls `min_stake` USDC as stake |
 | `deregister(keeper)` | Remove a keeper, returning its stake (fails with an active draw) |
 | `slash(keeper)` | Permissionless after `slash_timeout`: transfers `slash_rate_bps` of stake to the vault, deactivates the keeper |
@@ -208,11 +208,15 @@ Pooled USDC vault that funds liquidations. Depositors receive LP shares proporti
 
 | Function | Description |
 |----------|-------------|
-| `__constructor(admin, usdc_token, registry, config)` | Atomic init at deploy (cap, cooldown, per-keeper draw limit) |
+| `__constructor(admin, usdc_token, registry, config)` | Atomic init at deploy (cap, cooldown, per-keeper draw limit, per-address 24h withdrawal cap) |
 | `deposit(depositor, amount)` | Deposit USDC, receive LP shares (virtual-offset share math, deposit cap) |
-| `withdraw(depositor, shares)` | Redeem shares for USDC at current share price (cooldown-gated) |
-| `draw(keeper, amount)` | Keeper draws USDC for liquidation (registered keepers only; cumulative per-keeper cap) |
+| `withdraw(depositor, shares)` | Redeem shares for USDC at current share price (cooldown-gated; per-address 24h rate limit when `max_withdraw_per_24h > 0`, fixed window, `WithdrawalRateLimited` #16) |
+| `draw(keeper, amount, asset)` | Keeper draws USDC for a liquidation, declaring the collateral asset it targets (registered keepers only; cumulative per-keeper cap; blocked by the global/per-asset liquidation pause — `LiquidationsPaused` #14 / `AssetPaused` #15). The declaration is keeper-supplied; slashing backs the honesty assumption (FACTS.md DECISION F-2) |
 | `return_proceeds(keeper, amount, response_time_ms)` | Return capital + profit; rejects callers with no outstanding draw (`NoDraw` — the anti-donation guard) |
+| `add_profit(keeper, amount)` | Donate profit to depositors WITHOUT an outstanding draw — the T3 path for float-funded (bad-debt) proceeds. Gated on the registry (`verify_keeper`: registered + active + stake ≥ min_stake > 0); mints no shares, touches no draw accounting; emits `profit_added` (FACTS.md DECISION F-1) |
+| `set_global_pause(admin, paused)` / `set_asset_pause(admin, asset, paused)` | T3 circuit-breaker switches: gate `draw()` only — depositors can ALWAYS withdraw during a liquidation pause (the VLT-4 emergency `pause()` is separate and gates deposit+draw) |
+| `is_global_liq_paused()` / `is_asset_paused(asset)` | Cheap pause-flag reads for the keeper and frontend |
+| `get_keeper_draw(keeper)` | `(amount, since)`: outstanding draw and the ledger timestamp of the most recent draw — lets a restarted keeper age its own stale draw and makes slash eligibility computable from chain state |
 | `balance(user)` | Query user's shares and USDC value |
 
 ### LiquidationLab (`contracts/liquidation-lab/`)
