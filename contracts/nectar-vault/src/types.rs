@@ -34,6 +34,17 @@ pub struct VaultConfig {
     pub max_withdraw_per_24h: i128,
 }
 
+// Per-keeper outstanding draw record (T3, F4). `since` is the ledger timestamp
+// of the MOST RECENT draw — mirroring the registry's last_draw_time — so slash
+// eligibility can be computed consistently from vault + registry state, and a
+// restarted keeper can age its own stale draw from chain state alone.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct DrawInfo {
+    pub amount: i128,
+    pub since: u64,
+}
+
 #[contracttype]
 pub enum VaultKey {
     Admin,

@@ -166,13 +166,13 @@ mod tests {
 
         client.deposit(&user, &1000_0000000);
         // no outstanding draw initially
-        assert_eq!(client.get_keeper_draw(&keeper), 0);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 0);
         // a draw is tracked under the keeper
         client.draw(&keeper, &500_0000000, &usdc);
-        assert_eq!(client.get_keeper_draw(&keeper), 500_0000000);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 500_0000000);
         // returning proceeds clears the per-keeper draw
         client.return_proceeds(&keeper, &510_0000000, &120u64);
-        assert_eq!(client.get_keeper_draw(&keeper), 0);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 0);
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod tests {
         // A partial return must NOT settle the draw: a 1-stroop return cannot
         // clear a 500 USDC debt. The remainder stays owed (and slash-eligible).
         client.return_proceeds(&keeper, &200_0000000, &0u64);
-        assert_eq!(client.get_keeper_draw(&keeper), 300_0000000);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 300_0000000);
         let state = client.get_state();
         assert_eq!(state.active_liq, 300_0000000);
         assert_eq!(state.total_profit, 0);
@@ -201,7 +201,7 @@ mod tests {
         // Settling the remainder (plus profit) clears the draw and books the
         // profit exactly once: 200 + 310 returned vs 500 drawn = 10 profit.
         client.return_proceeds(&keeper, &310_0000000, &120u64);
-        assert_eq!(client.get_keeper_draw(&keeper), 0);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 0);
         let state = client.get_state();
         assert_eq!(state.active_liq, 0);
         assert_eq!(state.total_profit, 10_0000000);
@@ -228,8 +228,8 @@ mod tests {
         // repaid against active_liq — B's outstanding 100 must remain tracked.
         client.return_proceeds(&keeper_a, &150_0000000, &120u64);
 
-        assert_eq!(client.get_keeper_draw(&keeper_a), 0);
-        assert_eq!(client.get_keeper_draw(&keeper_b), 100_0000000);
+        assert_eq!(client.get_keeper_draw(&keeper_a).0, 0);
+        assert_eq!(client.get_keeper_draw(&keeper_b).0, 100_0000000);
         let state = client.get_state();
         assert_eq!(state.active_liq, 100_0000000);
         assert_eq!(state.total_profit, 50_0000000);
@@ -950,7 +950,7 @@ mod tests {
         let res = client.try_draw(&keeper, &300_0000000, &usdc); // would be 600 > 500
         assert_eq!(res, Err(Ok(VaultError::DrawLimitExceeded)));
         client.draw(&keeper, &200_0000000, &usdc); // cumulative exactly 500 ok
-        assert_eq!(client.get_keeper_draw(&keeper), 500_0000000);
+        assert_eq!(client.get_keeper_draw(&keeper).0, 500_0000000);
     }
 
     #[test]
@@ -1284,6 +1284,79 @@ mod tests {
         assert_eq!(out, 1000_0000000);
     }
 
+    // ── Tranche 3: vault-side draw timestamps (F4) ────────────────────────
+
+    #[test]
+    fn test_draw_timestamp_set_on_draw_cleared_on_full_return() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let t0 = 5_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        assert_eq!(client.get_keeper_draw(&keeper), (0, 0));
+        client.draw(&keeper, &500_0000000, &usdc);
+        assert_eq!(client.get_keeper_draw(&keeper), (500_0000000, t0));
+
+        // Full return clears the whole record, timestamp included.
+        set_time(&env, t0 + 120, 2);
+        client.return_proceeds(&keeper, &510_0000000, &120u64);
+        assert_eq!(client.get_keeper_draw(&keeper), (0, 0));
+    }
+
+    #[test]
+    fn test_draw_timestamp_partial_return_preserves_since() {
+        // Per the existing partial-return semantics (the remainder stays owed
+        // and slash-eligible), the timestamp must stay at the ORIGINAL draw
+        // time: a partial return cannot push out slash eligibility.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let t0 = 5_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &200_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        client.draw(&keeper, &500_0000000, &usdc);
+        set_time(&env, t0 + 1000, 2);
+        client.return_proceeds(&keeper, &200_0000000, &0u64);
+        assert_eq!(client.get_keeper_draw(&keeper), (300_0000000, t0));
+    }
+
+    #[test]
+    fn test_draw_timestamp_updates_on_subsequent_draw() {
+        // A later draw re-stamps `since` — mirroring the registry's
+        // last_draw_time, which mark_draw sets on every draw. Vault and
+        // registry therefore agree on the age used for slash eligibility.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let t0 = 5_000_000;
+        set_time(&env, t0, 1);
+
+        let user = Address::generate(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+
+        client.draw(&keeper, &100_0000000, &usdc);
+        assert_eq!(client.get_keeper_draw(&keeper), (100_0000000, t0));
+
+        set_time(&env, t0 + 300, 2);
+        client.draw(&keeper, &50_0000000, &usdc);
+        assert_eq!(client.get_keeper_draw(&keeper), (150_0000000, t0 + 300));
+    }
+
     // ── Cross-contract integration with the real KeeperRegistry ──────────
 
     #[test]
@@ -1424,7 +1497,7 @@ mod tests {
 
         // Keeper draws 400 and absconds (never returns).
         vault.draw(&keeper, &400_0000000, &usdc);
-        assert_eq!(vault.get_keeper_draw(&keeper), 400_0000000);
+        assert_eq!(vault.get_keeper_draw(&keeper).0, 400_0000000);
         assert_eq!(vault.get_state().active_liq, 400_0000000);
 
         // After the timeout, slash: sends 10% of the 100 stake (10) to the vault
@@ -1435,7 +1508,7 @@ mod tests {
 
         // Vault reconciled: draw cleared, active_liq zeroed, total_usdc written
         // down by the net loss (400 lost − 10 recovered → 1000 − 390 = 610).
-        assert_eq!(vault.get_keeper_draw(&keeper), 0);
+        assert_eq!(vault.get_keeper_draw(&keeper).0, 0);
         let state = vault.get_state();
         assert_eq!(state.active_liq, 0);
         assert_eq!(state.total_usdc, 610_0000000);

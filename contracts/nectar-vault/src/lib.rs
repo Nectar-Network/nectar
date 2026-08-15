@@ -3,7 +3,7 @@
 mod types;
 
 use soroban_sdk::{contract, contractimpl, token, vec, Address, Env, IntoVal, Symbol};
-use types::{Depositor, VaultConfig, VaultError, VaultKey, VaultState};
+use types::{Depositor, DrawInfo, VaultConfig, VaultError, VaultKey, VaultState};
 
 // Virtual-offset share accounting (OpenZeppelin ERC-4626 inflation-attack
 // mitigation, VLT-1). A constant phantom co-owner of VIRTUAL_OFFSET shares and
@@ -286,7 +286,12 @@ impl NectarVault {
         // call — otherwise a keeper could loop draw() up to the whole available
         // pool and blow past the intended exposure cap (NEW-cap, High).
         let draw_key = VaultKey::KeeperDraw(keeper.clone());
-        let prev: i128 = env.storage().persistent().get(&draw_key).unwrap_or(0);
+        let prev: i128 = env
+            .storage()
+            .persistent()
+            .get::<VaultKey, DrawInfo>(&draw_key)
+            .map(|d| d.amount)
+            .unwrap_or(0);
         if cfg.max_draw_per_keeper > 0 && prev + amount > cfg.max_draw_per_keeper {
             return Err(VaultError::DrawLimitExceeded);
         }
@@ -294,8 +299,19 @@ impl NectarVault {
         require_registered_keeper(&env, &keeper)?;
 
         // Effects before interaction (CEI, VLT-6): commit the outstanding draw
-        // and active liability before transferring capital out.
-        env.storage().persistent().set(&draw_key, &(prev + amount));
+        // and active liability before transferring capital out. The record is
+        // stamped with the draw's ledger timestamp (F4): a restarted keeper can
+        // then distinguish its own stale draw's age from chain state alone, and
+        // anyone can compute slash eligibility consistently from vault +
+        // registry state (`since` mirrors the registry's last_draw_time — the
+        // most recent draw, like mark_draw).
+        env.storage().persistent().set(
+            &draw_key,
+            &DrawInfo {
+                amount: prev + amount,
+                since: env.ledger().timestamp(),
+            },
+        );
         env.storage()
             .persistent()
             .extend_ttl(&draw_key, 535680, 535680);
@@ -339,7 +355,15 @@ impl NectarVault {
         // (VLT-2) — no one can inflate the share price by "returning" funds they
         // never drew.
         let draw_key = VaultKey::KeeperDraw(keeper.clone());
-        let drawn: i128 = env.storage().persistent().get(&draw_key).unwrap_or(0);
+        let draw_rec: DrawInfo = env
+            .storage()
+            .persistent()
+            .get(&draw_key)
+            .unwrap_or(DrawInfo {
+                amount: 0,
+                since: 0,
+            });
+        let drawn: i128 = draw_rec.amount;
         if drawn <= 0 {
             return Err(VaultError::NoDraw);
         }
@@ -378,8 +402,16 @@ impl NectarVault {
                 // Partial repayment: the keeper still owes the remainder. Keep
                 // the draw record (and the registry's active-draw mark) so the
                 // shortfall stays slash-eligible — a 1-stroop return must not
-                // settle a 10k draw.
-                env.storage().persistent().set(&draw_key, &remaining);
+                // settle a 10k draw. `since` is preserved: the outstanding
+                // remainder dates from the draw that created it, so a partial
+                // return cannot push out slash eligibility.
+                env.storage().persistent().set(
+                    &draw_key,
+                    &DrawInfo {
+                        amount: remaining,
+                        since: draw_rec.since,
+                    },
+                );
                 env.storage()
                     .persistent()
                     .extend_ttl(&draw_key, 535680, 535680);
@@ -527,7 +559,12 @@ impl NectarVault {
         require_registry(&env, &caller)?;
 
         let draw_key = VaultKey::KeeperDraw(keeper.clone());
-        let outstanding: i128 = env.storage().persistent().get(&draw_key).unwrap_or(0);
+        let outstanding: i128 = env
+            .storage()
+            .persistent()
+            .get::<VaultKey, DrawInfo>(&draw_key)
+            .map(|d| d.amount)
+            .unwrap_or(0);
         if outstanding <= 0 {
             return Ok(());
         }
@@ -571,15 +608,20 @@ impl NectarVault {
             .ok_or(VaultError::NoShares)
     }
 
-    /// Outstanding capital this keeper has drawn but not yet returned (0 if none).
-    /// Lets an off-chain keeper cap any self-recovery return at the amount it owes,
-    /// so a recovery never over-returns the keeper's own liquid balance.
-    pub fn get_keeper_draw(env: Env, keeper: Address) -> i128 {
+    /// Outstanding draw for `keeper` as `(amount, since)` — the capital drawn
+    /// but not yet returned, and the ledger timestamp of the most recent draw
+    /// (`(0, 0)` if none). The amount lets an off-chain keeper cap any
+    /// self-recovery return at what it owes; the timestamp (F4) lets a
+    /// restarted keeper age its own stale draw from chain state alone, and
+    /// lets anyone compute slash eligibility consistently from vault +
+    /// registry state.
+    pub fn get_keeper_draw(env: Env, keeper: Address) -> (i128, u64) {
         env.storage().instance().extend_ttl(1000, 1000);
         env.storage()
             .persistent()
-            .get(&VaultKey::KeeperDraw(keeper))
-            .unwrap_or(0)
+            .get::<VaultKey, DrawInfo>(&VaultKey::KeeperDraw(keeper))
+            .map(|d| (d.amount, d.since))
+            .unwrap_or((0, 0))
     }
 }
 
