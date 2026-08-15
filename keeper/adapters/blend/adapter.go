@@ -845,7 +845,18 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	sort.Strings(lotAssets) // deterministic request order
 
 	drawStart := time.Now()
-	if err := vc.Draw(drawAmt); err != nil {
+	// DECISION F-2a: the draw declares the collateral asset it targets so the
+	// vault can enforce its per-asset circuit breaker on-chain. One asset per
+	// draw: the first (sorted) non-USDC lot asset; a pure-USDC lot declares
+	// USDC itself.
+	declaredAsset := a.cfg.UsdcAddr
+	for _, asset := range lotAssets {
+		if asset != a.cfg.UsdcAddr {
+			declaredAsset = asset
+			break
+		}
+	}
+	if err := vc.Draw(drawAmt, declaredAsset); err != nil {
 		// Nothing was acquired yet. If the draw itself is ambiguous, the next
 		// cycle's stale-draw recovery reconciles against get_keeper_draw.
 		return nil, fmt.Errorf("vault draw: %w", err)

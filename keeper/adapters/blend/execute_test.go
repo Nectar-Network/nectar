@@ -43,7 +43,7 @@ type fakeVault struct {
 	bal     *balTable // credits draws to the keeper's USDC like the chain would
 }
 
-func (f *fakeVault) Draw(amount int64) error {
+func (f *fakeVault) Draw(amount int64, asset string) error {
 	if f.drawErr != nil {
 		return f.drawErr
 	}

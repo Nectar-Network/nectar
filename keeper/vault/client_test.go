@@ -23,7 +23,7 @@ func TestDraw_RejectsNonPositiveAmount(t *testing.T) {
 	kp := mustKP(t)
 
 	for _, amt := range []int64{0, -1, -100} {
-		err := Draw(rpc, "http://invalid.local", kp, "Test SDF Network", "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM", amt)
+		err := Draw(rpc, "http://invalid.local", kp, "Test SDF Network", "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM", amt, "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM")
 		if err == nil {
 			t.Errorf("draw(%d): expected error", amt)
 			continue

@@ -30,7 +30,11 @@ type BalanceResult struct {
 // — because the vault ACCUMULATES per-keeper draws — never re-broadcasts after
 // a post-send-ambiguous failure, where the first draw may still land and a
 // retry would double-draw. RetryAmbiguous stays false.
-func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64) error {
+// asset is the collateral asset this draw targets (contract DECISION F-2a) —
+// the vault checks its global and per-asset liquidation pauses against it
+// on-chain, so a paused draw fails with a deterministic contract error
+// (LiquidationsPaused=14 / AssetPaused=15) and is not retried.
+func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, vaultAddr string, amount int64, asset string) error {
 	if amount <= 0 {
 		return fmt.Errorf("draw: amount must be > 0, got %d", amount)
 	}
@@ -38,14 +42,18 @@ func Draw(rpc *soroban.Client, horizonURL string, kp *keypair.Full, passphrase, 
 	if err != nil {
 		return err
 	}
+	assetVal, err := soroban.ScvAddress(asset)
+	if err != nil {
+		return fmt.Errorf("draw: bad asset address %q: %w", asset, err)
+	}
 	amtVal := soroban.ScvI128(amount)
 	tx, err := rpc.InvokeWithRetry(horizonURL, kp, passphrase, vaultAddr, "draw",
 		soroban.RetryConfig{MaxAttempts: 2, InitialDelay: time.Second, BackoffFactor: 2.0, RetryAmbiguous: false},
-		keeperVal, amtVal)
+		keeperVal, amtVal, assetVal)
 	if err != nil {
 		return fmt.Errorf("vault draw: %w", err)
 	}
-	slog.Info("vault draw landed", "amount", amount, "tx", tx.Hash)
+	slog.Info("vault draw landed", "amount", amount, "asset", asset, "tx", tx.Hash)
 	return nil
 }
 
@@ -146,29 +154,44 @@ func Balance(rpc *soroban.Client, passphrase, vaultAddr, userAddr string) (*Bala
 	}, nil
 }
 
-// GetKeeperDraw reads a keeper's outstanding (drawn-but-unreturned) capital, 0
-// when there is none. Returns an error on vaults deployed before the getter
-// existed, which the caller treats as "no recovery possible".
-func GetKeeperDraw(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, error) {
+// GetKeeperDraw reads a keeper's outstanding (drawn-but-unreturned) capital and
+// the ledger timestamp of its most recent draw — (0, 0) when there is none.
+// The contract returns the tuple (i128 amount, u64 since) (F4): the timestamp
+// lets a restarted keeper age its own stale draw from chain state alone.
+// Returns an error on vaults deployed before the getter existed, which the
+// caller treats as "no recovery possible".
+func GetKeeperDraw(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, uint64, error) {
 	addrVal, err := soroban.ScvAddress(keeper)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	sim, err := rpc.SimulateRead(passphrase, vaultAddr, "get_keeper_draw", addrVal)
 	if err != nil {
-		return 0, fmt.Errorf("get_keeper_draw: %w", err)
+		return 0, 0, fmt.Errorf("get_keeper_draw: %w", err)
 	}
 	if sim.Error != "" {
-		return 0, fmt.Errorf("get_keeper_draw: %s", sim.Error)
+		return 0, 0, fmt.Errorf("get_keeper_draw: %s", sim.Error)
 	}
 	if len(sim.Results) == 0 {
-		return 0, nil
+		return 0, 0, nil
 	}
 	var val xdr.ScVal
 	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return scI128(val), nil
+	// (i128, u64) arrives as a 2-element Soroban vec.
+	if val.Type != xdr.ScValTypeScvVec || val.Vec == nil || *val.Vec == nil {
+		return 0, 0, fmt.Errorf("get_keeper_draw: unexpected result shape %v", val.Type)
+	}
+	vec := **val.Vec
+	if len(vec) < 2 {
+		return 0, 0, fmt.Errorf("get_keeper_draw: tuple has %d elements, want 2", len(vec))
+	}
+	var since uint64
+	if vec[1].Type == xdr.ScValTypeScvU64 && vec[1].U64 != nil {
+		since = uint64(*vec[1].U64)
+	}
+	return scI128(vec[0]), since, nil
 }
 
 func parseState(val xdr.ScVal) *VaultState {

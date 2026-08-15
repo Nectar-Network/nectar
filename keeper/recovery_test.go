@@ -27,7 +27,9 @@ type recVault struct {
 	retErr  error
 }
 
-func (v *recVault) Draw(amount int64) error { return errors.New("draw not expected in recovery") }
+func (v *recVault) Draw(amount int64, asset string) error {
+	return errors.New("draw not expected in recovery")
+}
 func (v *recVault) ReturnProceeds(amount, responseTimeMs int64) error {
 	if v.retErr != nil {
 		return v.retErr
@@ -60,8 +62,8 @@ func recSeams(t *testing.T, drawn int64, balances map[string]int64, pool *blend.
 	origDraw, origBal, origPool := getKeeperDraw, readTokenBalance, loadPoolState
 	t.Cleanup(func() { getKeeperDraw, readTokenBalance, loadPoolState = origDraw, origBal, origPool })
 
-	getKeeperDraw = func(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, error) {
-		return drawn, nil
+	getKeeperDraw = func(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (int64, uint64, error) {
+		return drawn, 0, nil
 	}
 	readTokenBalance = func(rpc *soroban.Client, passphrase, tokenAddr, owner string) (int64, error) {
 		return balances[tokenAddr], nil

@@ -391,10 +391,13 @@ func (k *Keeper) recoverStaleDraw() {
 	if k.cfg.UsdcAddr == "" {
 		return
 	}
-	drawn, err := getKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
+	drawn, drawnSince, err := getKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
 	if err != nil || drawn <= 0 {
 		return // no outstanding draw, or the vault predates the getter
 	}
+	// The vault stamps every draw with its ledger timestamp (F4), so a
+	// restarted keeper can age the stale draw from chain state alone.
+	logInfo("outstanding vault draw detected", "drawn", drawn, "since", drawnSince)
 	usdc, err := readTokenBalance(k.rpc, k.cfg.Passphrase, k.cfg.UsdcAddr, k.kp.Address())
 	if err != nil {
 		logWarn("outstanding vault draw but USDC balance unreadable — retrying next cycle", "drawn", drawn, "err", err)

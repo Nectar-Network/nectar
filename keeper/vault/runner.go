@@ -22,9 +22,10 @@ func NewClient(rpc *soroban.Client, kp *keypair.Full, horizonURL, passphrase, va
 	return &Client{rpc: rpc, kp: kp, horizonURL: horizonURL, passphrase: passphrase, vaultAddr: vaultAddr}
 }
 
-// Draw requests capital from the vault for the bound keeper.
-func (c *Client) Draw(amount int64) error {
-	return Draw(c.rpc, c.horizonURL, c.kp, c.passphrase, c.vaultAddr, amount)
+// Draw requests capital from the vault for the bound keeper, declaring the
+// collateral asset the draw targets (contract DECISION F-2a).
+func (c *Client) Draw(amount int64, asset string) error {
+	return Draw(c.rpc, c.horizonURL, c.kp, c.passphrase, c.vaultAddr, amount, asset)
 }
 
 // ReturnProceeds returns capital + profit to the vault, forwarding the observed

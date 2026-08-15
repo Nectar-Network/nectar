@@ -42,8 +42,12 @@ type Result struct {
 // VaultClient is the capital interface adapters use; the keeper supplies a
 // concrete implementation (vault.Client). Kept minimal so adapters never touch
 // RPC/keypair plumbing for draw/return.
+//
+// Draw declares the collateral asset the drawn capital targets (contract
+// DECISION F-2a): the vault enforces its global and per-asset liquidation
+// circuit breakers on-chain against this declaration.
 type VaultClient interface {
-	Draw(amount int64) error
+	Draw(amount int64, asset string) error
 	ReturnProceeds(amount, responseTimeMs int64) error
 }
 
