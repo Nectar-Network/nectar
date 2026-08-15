@@ -14,13 +14,7 @@ mod tests {
     pub struct MockVault;
     #[contractimpl]
     impl MockVault {
-        pub fn reconcile_default(
-            _env: Env,
-            _caller: Address,
-            _keeper: Address,
-            _recovered: i128,
-        ) {
-        }
+        pub fn reconcile_default(_env: Env, _caller: Address, _keeper: Address, _recovered: i128) {}
     }
 
     const MIN_STAKE: i128 = 100_0000000; // 100 USDC
@@ -299,8 +293,14 @@ mod tests {
         assert!(matches!(r, Err(Ok(Error::NotRegistered))));
     }
 
+    // T3 hardening (DECISION F-1a): min_stake <= 0 is rejected at CONSTRUCTION
+    // now, not just at register() — the vault's add_profit gate relies on
+    // verify_keeper ⇒ stake >= min_stake > 0, so no registry may ever exist
+    // with a non-positive min_stake. (register()'s own guard remains as
+    // defense in depth.)
     #[test]
-    fn test_register_zero_min_stake_rejected() {
+    #[should_panic(expected = "Error(Contract, #10)")] // InvalidConfig
+    fn test_constructor_zero_min_stake_rejected() {
         let env = Env::default();
         let admin = Address::generate(&env);
         let usdc_admin = Address::generate(&env);
@@ -312,12 +312,22 @@ mod tests {
             usdc_token: usdc,
         };
         env.mock_all_auths();
-        let contract_id = env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
-        let client = KeeperRegistryClient::new(&env, &contract_id);
+        env.register(KeeperRegistry, (admin.clone(), cfg.clone()));
+    }
 
-        let op = Address::generate(&env);
-        let result = client.try_register(&op, &String::from_str(&env, "alpha"));
-        assert_eq!(result, Err(Ok(Error::InsufficientStake)));
+    #[test]
+    fn test_set_config_zero_min_stake_rejected() {
+        let s = setup();
+        let bad = RegistryConfig {
+            min_stake: 0,
+            slash_timeout: SLASH_TIMEOUT,
+            slash_rate_bps: SLASH_RATE_BPS,
+            usdc_token: s.usdc.clone(),
+        };
+        let result = s.client.try_set_config(&s.admin, &bad);
+        assert_eq!(result, Err(Ok(Error::InvalidConfig)));
+        // Config unchanged.
+        assert_eq!(s.client.get_config().min_stake, MIN_STAKE);
     }
 
     #[test]
@@ -473,7 +483,10 @@ mod tests {
         // reconcile_default re-arms the per-keeper draw limit. verify_keeper
         // (the gate draw() uses) must now reject it. It must re-register to draw.
         assert!(!info.active);
-        assert_eq!(s.client.try_verify_keeper(&op), Err(Ok(Error::Unauthorized)));
+        assert_eq!(
+            s.client.try_verify_keeper(&op),
+            Err(Ok(Error::Unauthorized))
+        );
     }
 
     #[test]

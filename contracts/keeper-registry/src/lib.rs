@@ -29,6 +29,14 @@ impl KeeperRegistry {
         if config.slash_rate_bps > 10_000 {
             panic_with_error!(&env, Error::InvalidConfig);
         }
+        // min_stake must be strictly positive: register() bonds exactly
+        // min_stake, and the vault's add_profit gate relies on the invariant
+        // verify_keeper ⇒ stake >= min_stake > 0 (a zero-bond "keeper" must
+        // never pass any registration gate). Enforced here and in set_config
+        // so no config state can break it (T3 / DECISION F-1a).
+        if config.min_stake <= 0 {
+            panic_with_error!(&env, Error::InvalidConfig);
+        }
         let store = env.storage().instance();
         store.set(&DataKey::Admin, &admin);
         store.set(&DataKey::KeeperCount, &0u32);
@@ -312,9 +320,8 @@ impl KeeperRegistry {
         if success {
             info.successful_fills = info.successful_fills.saturating_add(1);
             info.total_profit = info.total_profit.saturating_add(profit);
-            info.total_response_time_ms = info
-                .total_response_time_ms
-                .saturating_add(response_time_ms);
+            info.total_response_time_ms =
+                info.total_response_time_ms.saturating_add(response_time_ms);
             info.response_count = info.response_count.saturating_add(1);
         }
 
@@ -398,6 +405,11 @@ impl KeeperRegistry {
         env.storage().instance().extend_ttl(1000, 1000);
         Self::require_admin(&env, &admin)?;
         if config.slash_rate_bps > 10_000 {
+            return Err(Error::InvalidConfig);
+        }
+        // Same invariant as the constructor: min_stake > 0 (the vault's
+        // add_profit gate depends on verify_keeper ⇒ stake > 0).
+        if config.min_stake <= 0 {
             return Err(Error::InvalidConfig);
         }
         env.storage().instance().set(&DataKey::Config, &config);
