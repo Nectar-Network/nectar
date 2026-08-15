@@ -194,6 +194,42 @@ func GetKeeperDraw(rpc *soroban.Client, passphrase, vaultAddr, keeper string) (i
 	return scI128(vec[0]), since, nil
 }
 
+// readBoolFn reads a no-arg or one-address-arg bool getter on the vault.
+func readBool(rpc *soroban.Client, passphrase, vaultAddr, fn string, args ...xdr.ScVal) (bool, error) {
+	sim, err := rpc.SimulateRead(passphrase, vaultAddr, fn, args...)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", fn, err)
+	}
+	if sim.Error != "" {
+		return false, fmt.Errorf("%s: %s", fn, sim.Error)
+	}
+	if len(sim.Results) == 0 {
+		return false, fmt.Errorf("%s: no result", fn)
+	}
+	var val xdr.ScVal
+	if err := xdr.SafeUnmarshalBase64(sim.Results[0].XDR, &val); err != nil {
+		return false, err
+	}
+	if val.Type != xdr.ScValTypeScvBool || val.B == nil {
+		return false, fmt.Errorf("%s: unexpected result type %v", fn, val.Type)
+	}
+	return bool(*val.B), nil
+}
+
+// IsGlobalLiqPaused reads the vault's global liquidation circuit-breaker flag.
+func IsGlobalLiqPaused(rpc *soroban.Client, passphrase, vaultAddr string) (bool, error) {
+	return readBool(rpc, passphrase, vaultAddr, "is_global_liq_paused")
+}
+
+// IsAssetPaused reads the vault's per-asset liquidation circuit-breaker flag.
+func IsAssetPaused(rpc *soroban.Client, passphrase, vaultAddr, asset string) (bool, error) {
+	assetVal, err := soroban.ScvAddress(asset)
+	if err != nil {
+		return false, err
+	}
+	return readBool(rpc, passphrase, vaultAddr, "is_asset_paused", assetVal)
+}
+
 func parseState(val xdr.ScVal) *VaultState {
 	s := &VaultState{}
 	if val.Type != xdr.ScValTypeScvMap || val.Map == nil || *val.Map == nil {

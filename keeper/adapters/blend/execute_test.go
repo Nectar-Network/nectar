@@ -36,12 +36,16 @@ const (
 )
 
 type fakeVault struct {
-	draws   []int64
-	returns []int64
-	drawErr error
-	retErr  error
-	bal     *balTable // credits draws to the keeper's USDC like the chain would
+	draws        []int64
+	returns      []int64
+	drawErr      error
+	retErr       error
+	liqPaused    bool
+	liqPausedErr error
+	bal          *balTable // credits draws to the keeper's USDC like the chain would
 }
+
+func (f *fakeVault) LiqPaused(assets []string) (bool, error) { return f.liqPaused, f.liqPausedErr }
 
 func (f *fakeVault) Draw(amount int64, asset string) error {
 	if f.drawErr != nil {
@@ -691,6 +695,49 @@ func TestExecute_BaselineReadFails_SkipsBeforeDraw(t *testing.T) {
 		t.Fatalf("no capital may move without baselines, drew %v", fv.draws)
 	}
 	if !strings.Contains(res.Note, "baseline") {
+		t.Fatalf("note: %q", res.Note)
+	}
+}
+
+// A vault-side liquidation pause (global or any lot asset) blocks execution
+// BEFORE any capital moves — the honest-path enforcement of DECISION F-2a,
+// which the contract alone cannot provide for multi-asset lots.
+func TestExecute_VaultLiqPaused_SkipsBeforeDraw(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	auction := usdcAuction()
+	installSeams(t, bal, auction, nil)
+	fv := &fakeVault{bal: bal, liqPaused: true}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(fv.draws) != 0 {
+		t.Fatalf("no capital may move while paused, drew %v", fv.draws)
+	}
+	if !strings.Contains(res.Note, "pause") {
+		t.Fatalf("note: %q", res.Note)
+	}
+}
+
+// An unreadable pause flag fails CLOSED: a pause the keeper cannot read may
+// be a pause, so nothing is drawn.
+func TestExecute_PauseFlagUnreadable_SkipsBeforeDraw(t *testing.T) {
+	bal := newBalTable()
+	fd := &fakeDex{bal: bal}
+	auction := usdcAuction()
+	installSeams(t, bal, auction, nil)
+	fv := &fakeVault{bal: bal, liqPausedErr: errors.New("rpc: boom")}
+
+	res, err := testAdapter(fd).Execute(nil, mustKPExec(t), mkTask(), fv)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(fv.draws) != 0 {
+		t.Fatalf("no capital may move on an unreadable pause flag, drew %v", fv.draws)
+	}
+	if !strings.Contains(res.Note, "fail closed") {
 		t.Fatalf("note: %q", res.Note)
 	}
 }

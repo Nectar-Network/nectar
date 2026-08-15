@@ -392,8 +392,15 @@ func (k *Keeper) recoverStaleDraw() {
 		return
 	}
 	drawn, drawnSince, err := getKeeperDraw(k.rpc, k.cfg.Passphrase, k.cfg.VaultID, k.kp.Address())
-	if err != nil || drawn <= 0 {
-		return // no outstanding draw, or the vault predates the getter
+	if err != nil {
+		// Do NOT fail silently (freeze-review finding): against a vault whose
+		// getter shape this keeper cannot decode (e.g. a pre-freeze deploy),
+		// recovery would otherwise be disabled with no operator signal.
+		logWarn("get_keeper_draw unreadable — stale-draw recovery skipped this cycle", "err", err)
+		return
+	}
+	if drawn <= 0 {
+		return // no outstanding draw
 	}
 	// The vault stamps every draw with its ledger timestamp (F4), so a
 	// restarted keeper can age the stale draw from chain state alone.

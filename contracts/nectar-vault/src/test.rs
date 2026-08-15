@@ -1429,7 +1429,10 @@ mod tests {
         env.mock_all_auths();
         let (client, admin, usdc, _) = setup(&env);
         let keeper = Address::generate(&env);
+        let user = Address::generate(&env);
         token::Client::new(&env, &usdc).transfer(&admin, &keeper, &10_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &100_0000000);
+        client.deposit(&user, &100_0000000); // donations need holders
 
         client.add_profit(&keeper, &10_0000000);
 
@@ -1473,6 +1476,31 @@ mod tests {
         let state = client.get_state();
         assert_eq!(state.active_liq, 500_0000000);
         assert_eq!(state.total_profit, 50_0000000);
+    }
+
+    #[test]
+    fn test_add_profit_empty_vault_rejected() {
+        // Freeze-review finding (CONFIRMED): with total_shares == 0 there is
+        // no depositor to credit — the donation would only raise the phantom
+        // offset's redemption value and strand the funds permanently.
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, usdc, _) = setup(&env);
+        let keeper = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &keeper, &100_0000000);
+
+        assert_eq!(
+            client.try_add_profit(&keeper, &10_0000000),
+            Err(Ok(VaultError::NoShares))
+        );
+        assert_eq!(client.get_state().total_usdc, 0);
+
+        // With a depositor in place the same donation lands.
+        let user = Address::generate(&env);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &100_0000000);
+        client.deposit(&user, &100_0000000);
+        client.add_profit(&keeper, &10_0000000);
+        assert_eq!(client.get_state().total_profit, 10_0000000);
     }
 
     #[test]

@@ -30,6 +30,7 @@ type recVault struct {
 func (v *recVault) Draw(amount int64, asset string) error {
 	return errors.New("draw not expected in recovery")
 }
+func (v *recVault) LiqPaused(assets []string) (bool, error) { return false, nil }
 func (v *recVault) ReturnProceeds(amount, responseTimeMs int64) error {
 	if v.retErr != nil {
 		return v.retErr

@@ -49,6 +49,12 @@ type Result struct {
 type VaultClient interface {
 	Draw(amount int64, asset string) error
 	ReturnProceeds(amount, responseTimeMs int64) error
+	// LiqPaused reports whether the vault currently blocks liquidation draws —
+	// globally, or for ANY of the given assets. The contract can only enforce
+	// the ONE asset a draw declares, so the honest keeper checks every asset
+	// an operation touches before committing capital (DECISION F-2a
+	// honest-path enforcement; slashing backs the dishonest case).
+	LiqPaused(assets []string) (bool, error)
 }
 
 // ProtocolAdapter is implemented by every protocol integration.

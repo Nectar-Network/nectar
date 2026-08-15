@@ -697,6 +697,17 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 		}
 	}
 	if auction == nil {
+		// Don't create auctions the circuit breaker will forbid filling
+		// (freeze-review finding): check the vault's pause flags BEFORE
+		// new_auction, not just before the draw, so a paused keeper stops
+		// producing on-chain noise it can never act on. Fail closed.
+		if paused, perr := vc.LiqPaused(td.lotAssets); perr != nil {
+			return &adapters.Result{
+				Note: fmt.Sprintf("pause-flag read failed: %v — skipping (fail closed)", perr)}, nil
+		} else if paused {
+			return &adapters.Result{
+				Note: "vault liquidation pause active (global or lot asset) — not creating auction"}, nil
+		}
 		// Blend rejects a liquidation whose post-liq health factor misses the
 		// [1.03, 1.15] band, so the percentage is chosen by simulating against
 		// the pool rather than hardcoded (a fixed 50% fails with
@@ -845,10 +856,23 @@ func (a *Adapter) Execute(rpc *soroban.Client, kp *keypair.Full, task adapters.T
 	sort.Strings(lotAssets) // deterministic request order
 
 	drawStart := time.Now()
+	// Honest-path enforcement of the per-asset circuit breaker (freeze-review
+	// finding on DECISION F-2a): the contract can only check the ONE asset the
+	// draw declares, so check the global switch and EVERY lot asset here and
+	// refuse to commit capital if any is paused. Fail closed on a read error —
+	// a pause we cannot read may be a pause.
+	if paused, perr := vc.LiqPaused(lotAssets); perr != nil {
+		return &adapters.Result{Block: ledger,
+			Note: fmt.Sprintf("pause-flag read failed: %v — skipping (fail closed)", perr)}, nil
+	} else if paused {
+		return &adapters.Result{Block: ledger,
+			Note: "vault liquidation pause active (global or lot asset) — skipping"}, nil
+	}
 	// DECISION F-2a: the draw declares the collateral asset it targets so the
 	// vault can enforce its per-asset circuit breaker on-chain. One asset per
 	// draw: the first (sorted) non-USDC lot asset; a pure-USDC lot declares
-	// USDC itself.
+	// USDC itself. The multi-asset case is covered by the LiqPaused check
+	// above.
 	declaredAsset := a.cfg.UsdcAddr
 	for _, asset := range lotAssets {
 		if asset != a.cfg.UsdcAddr {

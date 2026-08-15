@@ -470,6 +470,19 @@ impl NectarVault {
         }
         require_registered_keeper(&env, &keeper)?;
 
+        let mut state: VaultState = env
+            .storage()
+            .instance()
+            .get(&VaultKey::State)
+            .ok_or(VaultError::NotInit)?;
+        // Donations need holders (freeze-review finding, CONFIRMED): with
+        // total_shares == 0 there is no depositor to credit — the donation
+        // would only raise the phantom offset's redemption value and strand
+        // the funds permanently. Reject instead of absorbing.
+        if state.total_shares <= 0 {
+            return Err(VaultError::NoShares);
+        }
+
         let usdc: Address = env
             .storage()
             .instance()
@@ -477,11 +490,6 @@ impl NectarVault {
             .ok_or(VaultError::NotInit)?;
         token::Client::new(&env, &usdc).transfer(&keeper, &env.current_contract_address(), &amount);
 
-        let mut state: VaultState = env
-            .storage()
-            .instance()
-            .get(&VaultKey::State)
-            .ok_or(VaultError::NotInit)?;
         state.total_usdc += amount;
         state.total_profit += amount;
         env.storage().instance().set(&VaultKey::State, &state);
