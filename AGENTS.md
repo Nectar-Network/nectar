@@ -62,10 +62,15 @@ docs/               # Internal documentation
 - SSE connection to keeper API for live log stream
 - Deployed on Vercel (auto-deploy from main branch)
 
-## Deployed Contracts (Testnet)
-- KeeperRegistry: CAWT5HBM25OKGOMJHPFCXWXDWZ7FF436WXRKROTY2VW642FSKLYUKOUB
-- NectarVault: CCXDLRE3IV5225LE3Z776KFB2VWD2MTXOJHAUKFA5RPYDJVOWCMHJ4U4
-- USDC Token (SAC): CAVBAVD6CZ46FEDKJHBQIJF7EFAZDTRNS65G73QS5ZYI3VK5E2JFPQ4J
+## Deployed Contracts (Testnet — Tranche 3 hardened + Circle USDC, 2026-07-22) — CURRENT
+- KeeperRegistry:  CD33A7IGNCOLVQ4EEINBVMVA7IHWXGN57R6YLE5AJEEKPA6VKC2E4IQD
+- NectarVault:     CDOGQY7NAE3BP4Q7RWBCBLW23Z36RNWNDNXX5DWNIEVMFEWP3GVEPXLR
+- USDC (Circle testnet SAC): CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+- Blend pool (testnet V2, monitor-only): CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF
+- Nectar Sandbox pool (our Blend V2 stack, active): CBUBTHATT25SGJWXYWL47XN2J372XAJWTNKZAIKVMBBW6SYOIF6PCK3V
+- Soroswap router (testnet): CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD
+
+Source of truth for the full address book (incl. deprecated deployments): wallets.md and CLAUDE.md.
 
 ## Related Repositories
 - **keeper-sdk** (github.com/Nectar-Network/keeper-sdk): Public Go SDK for third-party keeper operators. Built in Tranche 2. The adapter interface (ProtocolAdapter) defined there is implemented by adapters in this repo's keeper/adapters/ directory.
@@ -73,7 +78,11 @@ docs/               # Internal documentation
 
 ## Current Tranche & Priorities
 
-Check docs/TRANCHE-{1,2,3}-SPEC.md for detailed deliverable specifications.
+The Tranche 1 deliverable spec lives OUTSIDE the repo at
+`/Volumes/Extreme SSD/nectar-content-local/TRANCHE-1-SPEC.md` (no T2/T3 spec
+files exist; the T2/T3 deliverables are the lists below). Where its literal
+wording conflicts with verified mechanics, docs/FACTS.md and
+docs/tranche-notes/t1-re-review-2026-08-15.md are authoritative.
 
 ### Tranche 1 (MVP, due June 15, 2026):
 1. KeeperRegistry: add staking (USDC deposit on register), performance tracking (execution count, success rate, avg response time on-chain), slashing (auto-slash on draw timeout)
@@ -130,22 +139,35 @@ KEEPER_SECRET=S...          # Keeper's Stellar secret key
 KEEPER_NAME=keeper-alpha    # Human-readable name
 REGISTRY_CONTRACT=C...      # KeeperRegistry contract ID
 VAULT_CONTRACT=C...         # NectarVault contract ID
-BLEND_POOL=C...             # Blend pool contract ID to monitor
+USDC_CONTRACT=C...          # USDC token contract (collateral is swapped into this)
+BLEND_POOLS=C...[:mode[:POOL_USDC]],...  # pools to monitor; mode=active|monitor;
+                            # POOL_USDC when a pool settles a different USDC
+                            # (BLEND_POOL still honored as legacy single-pool)
 BORROWER_CACHE=             # path for the persisted borrower index; empty disables.
                             # A cold start re-backfills the RPC retention window and
                             # recovers every borrower active inside it — but NOT one
                             # idle longer than it (~7d), which lives only in the cache
 WATCH_ADDRESSES=            # OPTIONAL additive addresses always probed. Discovery
                             # is event-driven — there is no address list to maintain
+FAUCET_SECRET=S...          # testnet USDC faucet treasury; empty disables
+SOROSWAP_ROUTER=C...        # Soroswap router (primary DEX); empty disables
+PHOENIX_ROUTER=C...         # Phoenix XYK pool (fallback DEX); empty disables
+SLIPPAGE_BPS=100            # Max swap slippage in basis points
+DEFINDEX_VAULT=C...         # DeFindex vault to rebalance; empty disables
 SOROBAN_RPC=https://...     # Soroban RPC endpoint
 HORIZON_URL=https://...     # Horizon API endpoint
 POLL_INTERVAL=10            # Seconds between monitoring cycles
 MIN_PROFIT=1.02             # Minimum lot/bid ratio to fill auction
+BAD_DEBT_MAX_SPEND=1000000000   # Keeper-FLOAT cap per bad-debt fill; never vault capital
+BAD_DEBT_LP_HAIRCUT_BPS=5000    # Discount on backstop-LP spot valuation
+KEEPER_XLM_RESERVE=1000000000   # Native XLM fee floor for stale-draw recovery sweeps
 ```
+
+See CLAUDE.md / .env.example for the complete annotated list.
 
 ## Deployment
 
 - **Contracts:** `./scripts/deploy.sh` (builds, optimizes, deploys, initializes)
-- **Keeper:** Auto-deploys to Railway on push to main. Docker: `docker-compose up keeper`
+- **Keeper:** Deploys to Railway. `cd keeper && railway up` (or push the Docker image; `railway.toml` describes the build). Local: `docker-compose up keeper`
 - **Frontend:** Auto-deploys to Vercel on push to main.
 - **Local dev:** `docker-compose up` starts all 3 services.
