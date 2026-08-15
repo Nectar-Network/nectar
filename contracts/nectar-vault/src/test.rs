@@ -351,19 +351,36 @@ mod tests {
     }
 
     #[test]
-    fn test_draw_zero_fails_or_noop() {
+    fn test_draw_zero_and_negative_rejected() {
+        // Freeze-review finding: draw(0) used to re-stamp DrawInfo.since
+        // WITHOUT the registry's mark_draw (that call was amount-gated),
+        // desyncing the two timestamps F4 promises stay consistent; a
+        // negative draw would shrink recorded debt. Both now reject with
+        // InvalidAmount and leave the draw record untouched.
         let env = Env::default();
         env.mock_all_auths();
         let (client, admin, usdc, _) = setup(&env);
+        let t0 = 5_000_000;
+        set_time(&env, t0, 1);
 
         let user = Address::generate(&env);
         let keeper = Address::generate(&env);
-        token::Client::new(&env, &usdc).transfer(&admin, &user, &100_0000000);
-        client.deposit(&user, &100_0000000);
+        token::Client::new(&env, &usdc).transfer(&admin, &user, &1000_0000000);
+        client.deposit(&user, &1000_0000000);
+        client.draw(&keeper, &100_0000000, &usdc);
 
-        client.draw(&keeper, &0, &usdc);
-        let state = client.get_state();
-        assert_eq!(state.active_liq, 0);
+        set_time(&env, t0 + 500, 2);
+        assert_eq!(
+            client.try_draw(&keeper, &0, &usdc),
+            Err(Ok(VaultError::InvalidAmount))
+        );
+        assert_eq!(
+            client.try_draw(&keeper, &-50_0000000, &usdc),
+            Err(Ok(VaultError::InvalidAmount))
+        );
+        // Record (amount AND the original timestamp) untouched.
+        assert_eq!(client.get_keeper_draw(&keeper), (100_0000000, t0));
+        assert_eq!(client.get_state().active_liq, 100_0000000);
     }
 
     #[test]
@@ -1653,6 +1670,91 @@ mod tests {
         );
         // Registry cleared the active draw (keeper may now deregister).
         assert!(!registry.get_keeper(&keeper).has_active_draw);
+    }
+
+    #[test]
+    fn test_reconcile_after_donation_assisted_exit_clamps_total_usdc() {
+        // Freeze-review finding (CONFIRMED by adversarial verify): withdraw
+        // clamps only to total_usdc, not to total_usdc - active_liq, so a
+        // permissionless raw-token donation can let the sole depositor exit
+        // with the FULL total_usdc while a keeper's draw is outstanding —
+        // leaving total_usdc(0) < active_liq(400). The later slash write-off
+        // (loss = 390) would then have persisted total_usdc = -390, poisoning
+        // the share math for every future depositor. reconcile_default now
+        // clamps the write-down at zero, like the withdraw clamp.
+        use keeper_registry::{KeeperRegistry, KeeperRegistryClient, RegistryConfig};
+        use soroban_sdk::String as SorString;
+
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let usdc_admin = Address::generate(&env);
+        let usdc = env
+            .register_stellar_asset_contract_v2(usdc_admin.clone())
+            .address();
+        let usdc_admin_client = token::StellarAssetClient::new(&env, &usdc);
+
+        let reg_cfg = RegistryConfig {
+            min_stake: 100_0000000,
+            slash_timeout: 3600,
+            slash_rate_bps: 1000,
+            usdc_token: usdc.clone(),
+        };
+        let registry_id = env.register(KeeperRegistry, (admin.clone(), reg_cfg.clone()));
+        let vault_cfg = VaultConfig {
+            deposit_cap: 0,
+            withdraw_cooldown: 0,
+            max_draw_per_keeper: 1000_0000000,
+            max_withdraw_per_24h: 0,
+        };
+        let vault_id = env.register(
+            NectarVault,
+            (
+                admin.clone(),
+                usdc.clone(),
+                registry_id.clone(),
+                vault_cfg.clone(),
+            ),
+        );
+        let registry = KeeperRegistryClient::new(&env, &registry_id);
+        let vault = NectarVaultClient::new(&env, &vault_id);
+        registry.set_vault(&admin, &vault_id);
+
+        let keeper = Address::generate(&env);
+        usdc_admin_client.mint(&keeper, &100_0000000);
+        registry.register(&keeper, &SorString::from_str(&env, "k1"));
+        let depositor = Address::generate(&env);
+        usdc_admin_client.mint(&depositor, &1000_0000000);
+        vault.deposit(&depositor, &1000_0000000);
+
+        // Keeper draws 400; a raw donation tops the vault balance back up so
+        // the depositor's FULL exit transfer succeeds.
+        vault.draw(&keeper, &400_0000000, &usdc);
+        usdc_admin_client.mint(&vault_id, &400_0000000);
+        let (shares, _) = vault.balance(&depositor);
+        let out = vault.withdraw(&depositor, &shares);
+        assert!(out >= 999_0000000); // full exit (offset dust only)
+        let state = vault.get_state();
+        assert_eq!(state.total_usdc, 0);
+        assert_eq!(state.active_liq, 400_0000000); // draw still outstanding
+
+        // Keeper absconds → slash. The write-off (400 - 10 recovered = 390)
+        // must clamp at zero, never persist a negative total_usdc.
+        set_time(&env, 4000, 100);
+        registry.slash(&keeper);
+        let state = vault.get_state();
+        // Clamped exactly at zero (0 - 390 → 0). The 10 USDC slash recovery
+        // sits in the balance unaccounted, like a donation — conservative,
+        // never negative.
+        assert_eq!(state.total_usdc, 0);
+        assert_eq!(state.active_liq, 0);
+
+        // The vault still works for the next depositor.
+        let next = Address::generate(&env);
+        usdc_admin_client.mint(&next, &100_0000000);
+        let s = vault.deposit(&next, &100_0000000);
+        assert!(s > 0);
     }
 
     #[test]

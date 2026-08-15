@@ -266,6 +266,18 @@ impl NectarVault {
         require_liq_allowed(&env, &asset)?;
         keeper.require_auth();
 
+        // Positive amounts only (freeze-review finding): a zero-amount draw
+        // would re-stamp DrawInfo.since WITHOUT the matching registry
+        // mark_draw (that call is amount-gated below), letting a keeper walk
+        // the vault-side timestamp away from the registry's last_draw_time —
+        // exactly the desync F4 exists to prevent. A negative amount would
+        // shrink the recorded debt with only the SAC transfer trap as a
+        // backstop. Both are rejected outright; draw(0) has no legitimate use
+        // (the keeper client already refuses it).
+        if amount <= 0 {
+            return Err(VaultError::InvalidAmount);
+        }
+
         let cfg: VaultConfig = env
             .storage()
             .instance()
@@ -326,9 +338,10 @@ impl NectarVault {
         token::Client::new(&env, &usdc).transfer(&env.current_contract_address(), &keeper, &amount);
 
         // Notify the registry that this keeper now has an outstanding draw.
-        if amount > 0 {
-            registry_call(&env, "mark_draw", &keeper)?;
-        }
+        // Unconditional: amount > 0 is guaranteed above, so the vault-side
+        // DrawInfo.since and the registry's last_draw_time always move
+        // together (F4 consistency invariant).
+        registry_call(&env, "mark_draw", &keeper)?;
 
         env.events()
             .publish((Symbol::new(&env, "draw"), keeper.clone()), (amount, asset));
@@ -634,8 +647,15 @@ impl NectarVault {
         // Book the net loss: the pool loses the unrecovered principal and gains
         // the recovered slash amount. total_usdc counted the drawn capital as
         // owned; write it down by the loss so share value reflects real backing.
+        //
+        // Clamp at zero (freeze-review finding, sibling of the withdraw clamp
+        // SCOUT-total_usdc-underflow): a donation-assisted full withdrawal
+        // while capital is drawn can leave total_usdc < active_liq, and an
+        // unclamped write-down would then persist a NEGATIVE total_usdc —
+        // poisoning the share math for every later depositor. total_profit is
+        // a cumulative P&L stat and may legitimately go negative.
         let loss = outstanding - recovered;
-        state.total_usdc -= loss;
+        state.total_usdc = (state.total_usdc - loss).max(0);
         state.total_profit -= loss;
         env.storage().instance().set(&VaultKey::State, &state);
 

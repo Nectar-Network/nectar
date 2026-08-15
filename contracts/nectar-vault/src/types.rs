@@ -91,6 +91,9 @@ pub enum VaultError {
     // withdraw() would exceed the per-address 24h cap
     // (VaultConfig.max_withdraw_per_24h) inside the current fixed window.
     WithdrawalRateLimited = 16,
-    // add_profit() with a non-positive amount.
+    // add_profit() or draw() with a non-positive amount. For draw(), a zero
+    // amount would re-stamp DrawInfo.since without the registry's matching
+    // mark_draw and a negative amount would shrink recorded debt — both
+    // rejected outright (freeze-review finding).
     InvalidAmount = 17,
 }
