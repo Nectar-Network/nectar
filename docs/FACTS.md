@@ -367,6 +367,15 @@ These are **observations, not documentation**; every row names the error text ac
 | **Steady-state cycle time is dominated by `LoadPool`, not by discovery** | Measured on the sandbox (1 pool, 3 tracked, 1 debtor): `pool_load_ms` 2700–3500, `sync_ms` 690–970, `probe_ms` 360–520. A cycle with `probed=0` and `events=0` still took 11–12 s against a 10 s `POLL_INTERVAL`; `nectar_cycle_overruns_total` reached 83. **The "cycle stays under the poll interval" criterion is NOT met** — the fixed pool read is the cause, and caching the reserve list/config (only oracle prices need re-reading) is the follow-up | 2026-08-14 | `docs/evidence/d-discovery.md` "Cost (D3)"; `d-discovery-active.log` |
 | The oracle-anchored swap floor blocks a sale when our mock oracle diverges from the real DEX | At a forced XLM=$0.15 the Soroswap quote implied $0.10589; the keeper refused the swap (`quote 105873397 < floor 148476543`) and held the collateral rather than selling into a ~30% adverse move. Setting the sandbox oracle to $0.098 (below observed market) let the unwind complete | 2026-08-14 | `docs/evidence/d-discovery.md` "The swap incident"; swap tx `4f95cb79…` |
 
+## Multisig admin — verified live (Session F, Task F5)
+
+| Claim | Value | Date | Source |
+|---|---|---|---|
+| **A classic 2-of-3 G-account admin gates Soroban admin calls at the CLASSIC auth layer** | Admin account `GA2EMXVA…` configured 2-of-3 (3 signers weight 1; thresholds low=1, med=2, high=2). `set_global_pause` on a throwaway Session-F vault (`CC7KUIZ7…`, wasm `a6914070…`) with M as tx source: 1 signature → REJECTED `TxFailed([OpBadAuth])` at submission, state unchanged; master+S2 → landed `ac1da4ab…`, pause flipped true; S2+S3 (no master key) → landed `f057a494…`, pause flipped false. Enforcement happens before any contract logic (simulation passes; classic op auth rejects) | 2026-08-16 | `docs/evidence/f5-multisig.md` (all set_options + probe tx hashes) |
+| Threshold semantics observed | InvokeHostFunction is a MEDIUM-threshold op; signature weights sum (1+1 ≥ med 2); any 2 of the 3 signers suffice — the master key has no extra privilege beyond its weight | 2026-08-16 | same evidence file (probes A/B/C) |
+| Multi-sig signing procedure (mainnet runbook) | build-only → `stellar tx simulate` (REQUIRED: an unassembled Soroban envelope submits as `TxMalformed`) → `stellar tx sign` per signer (XDR file is the handoff) → `stellar tx send`. CLI 27.1.0 | 2026-08-16 | `docs/evidence/f5-multisig.md` §runbook; observed TxMalformed on the unassembled attempt |
+| wasm build toolchain gotcha | Homebrew rustc shadows rustup and ships NO wasm32 std (its `rustlib/wasm32-unknown-unknown/lib` is empty → `E0463 can't find crate for core`); build with `PATH="$HOME/.rustup/toolchains/1.90.0-aarch64-apple-darwin/bin:$PATH" cargo build --target wasm32-unknown-unknown --release`, then `stellar contract optimize` (raw 1.90 wasm is rejected by the VM: "reference-types not enabled") | 2026-08-16 | this session's build log; deploy tx `e32c3099…` succeeded with the optimized artifact |
+
 ## Decisions
 
 | Decision | Rationale | Date | Source / evidence |
