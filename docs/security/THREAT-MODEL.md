@@ -222,6 +222,14 @@ Severity: impact on depositor/keeper funds assuming the mitigation were absent.
 Status/mitigation cites the frozen tag. "Residual" is what remains WITH the
 mitigation in place.
 
+Per-letter STRIDE index (every category has at least one tabled issue):
+
+- **S**poofing: VLT-2, VLT-3, NEW-init, T3-1, FCT-1 · **T**ampering: VLT-1,
+  VLT-2, VLT-6, NEW-cap, NEW-reconcile, T3-2, T3-3, T3-5, ORA-1, DEX-1, INT-1, FR-1
+- **R**epudiation: REP-1 · **I**nformation Disclosure: INF-1
+- **D**enial of Service: VLT-4, REG-1, T3-2, T3-4, T3-6, T3-7, FCT-1 ·
+  **E**levation of Privilege: VLT-5, NEW-drain, NEW-init, T3-6
+
 | ID | Component | STRIDE | Threat | Severity | Mitigation (at `audit-freeze-v1`) | Residual risk |
 |---|---|---|---|---|---|---|
 | **VLT-1** | Vault | Tampering | Share-inflation / first-depositor attack: donate to inflate share price so a victim's deposit mints 0 shares. | High | Symmetric virtual offset `VIRTUAL_OFFSET = 1_000_000` in `to_shares`/`to_assets` (VLT:8-28) + zero-share deposits rejected (VLT:96-100). Attack proven money-losing by the 2000-case property suite (share math, `prop_test.rs`) plus a dedicated unit test with `add_profit` as the vector (`test_add_profit_inflation_attack_still_unprofitable`, test.rs:1507). | Offset-scale rounding dust; none profitable. |
@@ -247,6 +255,8 @@ mitigation in place.
 | **FCT-1** | Faucet | DoS/Spoofing | **Faucet abuse** (testnet-only): drain the test-USDC treasury via repeated claims. | Info (testnet-only) | Dedicated treasury account — never the contract admin/deployer key (`keeper/faucet.go:26`), per-address cooldown (`FAUCET_COOLDOWN_SECS`), fixed amount per claim; disabled when `FAUCET_SECRET` is unset. **Does not exist on mainnet.** | Sybil claims within cooldown limits can drain the test treasury — accepted; testnet funds only. |
 | **INT-1** | Vault | Tampering | Integer overflow/underflow in share/profit math. | Low | i128 traps atomically in Soroban (no wraparound); products bounded ~10 orders below `i128::MAX` at cap-scale values; registry counters saturate; the two signed-underflow edges are clamped (withdraw VLT:174-185, reconcile VLT:659-667). Scout's overflow class triaged finding-by-finding (SCOUT-REPORT). | Out-of-band arguments self-revert (no-op). |
 | **FR-1** | Vault | Tampering | Deposit/withdraw MEV around a large `return_proceeds` (share-price front-run). | Low | `withdraw_cooldown` (1 h default) makes deposit-snipe-exit non-atomic; floors favor the pool. | Timing yield-capture within cooldown bounds; noted for audit. |
+| **REP-1** | Both | Repudiation | An actor disputes an action (keeper denies a draw; depositor denies a withdrawal; admin denies a pause/config change). | Low | Every money-moving call is a signed transaction (non-repudiable at the protocol layer); every state transition emits an event (vault: `deposit`/`withdraw`/`draw`/`return`/`profit_added`/`write_off`/`liq_pause`/`asset_pause` — VLT:129, 221, 346, 439, 497, 672, 573, 595; registry: `registered`/`deregistered`/`draw_marked`/`draw_cleared`/`execution`/`slashed`). Known gap, stated: VLT-4 `pause`/`unpause` and `set_config` emit no event (Scout `storage_change_events`, accepted) — provable from signed tx history + readable state (`is_paused`, `get_config`), just not evented. | Admin config changes reconstructable via tx history only, not the event stream — accepted. |
+| **INF-1** | Both | Info Disclosure | All contract state is public: depositor balances, cooldown timestamps, keeper stakes/metrics, and outstanding draws are enumerable; pending profitable liquidations are visible to competing searchers. | Info | By design on a public chain — no secrets or PII on-chain; keeper secrets exist off-chain only; the timing surface is covered by FR-1 (cooldown bounds deposit-snipe MEV). | Public-by-design; auction-target visibility is inherent to permissionless keeping — accepted. |
 
 ---
 

@@ -43,8 +43,9 @@ executed **live on testnet with real value**, asserted programmatically
 "Completed, thoughtful, assessed against the dataflow diagram?"
 → [`docs/security/THREAT-MODEL.md`](../security/THREAT-MODEL.md): Stellar
 4-question STRIDE structure, trust boundaries aligned 1:1 with the dataflow
-zones, per-component STRIDE incl. the T3 surfaces, 23-row threat table citing
-frozen `file:line`, residual risks imported unedited from CORRECTION-REPORT.
+zones, per-component STRIDE incl. the T3 surfaces, 25-row threat table with a
+per-letter index (every STRIDE category tabled, per the template's minimum),
+residual risks imported unedited from CORRECTION-REPORT.
 
 ### 5. Dataflow diagram — ✅ SATISFIED
 "Sufficiently explains dataflow; identifies trust boundaries and data
