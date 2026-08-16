@@ -67,7 +67,7 @@ sourced from repo evidence at tag `audit-freeze-v1`; nothing is projected.
 | Field | Value |
 |---|---|
 | App | https://testnet.nectar.monster (testnet — serves the deployment the traction claims describe); https://nectarnetwork.fun is the mainnet domain, post-audit (docs/NETWORKS.md) |
-| Repository | https://github.com/Nectar-Network/nectar ⟨USER — ⚠ ACTION REQUIRED: verified 2026-08-16, both public mirrors are STALE (`Nectar-Network/nectar` last pushed 2026-07-25; the working remote `kunal-drall/nectar` 2026-08-09). Push branch `tranche-3` AND the `audit-freeze-v1` tag to the repo you submit, or reviewers cannot see the frozen code or these artifacts.⟩ |
+| Repository | https://github.com/Nectar-Network/nectar (canonical — matches the SCF award record, docs-site and README; `main` + `tranche-3` + tag `audit-freeze-v1` pushed 2026-08-16) |
 | Docs | https://docs.nectar.monster |
 | Keeper SDK | https://github.com/Nectar-Network/keeper-sdk |
 
@@ -80,9 +80,10 @@ recorded in [`FREEZE-NOTE.md`](./FREEZE-NOTE.md).
 
 ## Anticipated audit readiness date
 
-⟨USER decides⟩ — suggested: **2026-08-16** (the code is frozen and all readiness
-artifacts are complete as of the freeze date; see
-[`READINESS-CHECK.md`](./READINESS-CHECK.md)).
+**2026-08-16** — the code is frozen and all readiness artifacts are complete as
+of the freeze date (see [`READINESS-CHECK.md`](./READINESS-CHECK.md)); SDF's own
+guidance favors early submission, and the readiness review takes up to 4 weeks
+regardless.
 
 ## Tests written and executed?
 

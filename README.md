@@ -4,6 +4,9 @@ Multi-operator keeper infrastructure for Soroban DeFi. Distributed liquidation n
 
 **Live:** [nectarnetwork.fun](https://nectarnetwork.fun) · [Docs](https://docs.nectar.monster) · [Keeper SDK](https://github.com/Nectar-Network/keeper-sdk) · [Twitter](https://x.com/nectar_xlm) · [GitHub](https://github.com/Nectar-Network/nectar)
 
+> **Canonical repository:** [github.com/Nectar-Network/nectar](https://github.com/Nectar-Network/nectar) — other mirrors may lag.
+> **Security audit:** contracts are frozen at tag [`audit-freeze-v1`](https://github.com/Nectar-Network/nectar/tree/audit-freeze-v1) for the SCF Soroban Security Audit Bank — threat model, dataflow, tooling scan and scope live in [docs/security/](docs/security/) and [docs/audit/](docs/audit/). No contract edits past the tag except audit remediation.
+
 ## The Problem
 
 On Feb 22, 2026, a USTRY/XLM oracle manipulation drained **$10.8M** from a Blend pool. Two pre-positioned single-operator bots captured nearly all of it — 60 auction fills over 4 hours, one Docker container, one keypair, no fallback. The rest of Stellar DeFi (~$187M TVL) had no coordinated response.
