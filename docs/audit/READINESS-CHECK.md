@@ -14,17 +14,20 @@ priority category under the
 [official rules](https://stellar.gitbook.io/scf-handbook/supporting-programs/audit-bank/official-rules).
 KYC/sanction checks happen as part of the submission itself (user-side).
 
-### 2. Repo hygiene — ⚠ SATISFIED IN CONTENT, **BLOCKED ON PUBLICATION**
+### 2. Repo hygiene — ✅ SATISFIED
 "Does the structure of the code repository appear well organized and
 understandable?" → The monorepo is clean and documented (top-level README with
-architecture map, CLAUDE.md, `docs/` with FACTS/evidence/security/audit trees,
-conventional commits, CI). **Blocker:** verified 2026-08-16 via `gh repo view`,
-**both public mirrors are stale** (`Nectar-Network/nectar` last push
-2026-07-25; `kunal-drall/nectar` 2026-08-09) — the `audit-freeze-v1` tag and
-every Session F/G artifact exist only locally. Reviewers cannot see the frozen
-code or this checklist until `tranche-3` + the tag are pushed. The checklist
-requires "complete context within the submission itself"; an unpushed freeze
-fails that.
+architecture map + an audit callout pointing at the tag, CLAUDE.md, `docs/`
+with FACTS/evidence/security/audit trees, conventional commits, CI).
+**Published 2026-08-16:** `main`, `tranche-3` and the `audit-freeze-v1` tag are
+live on the canonical repo (github.com/Nectar-Network/nectar — tag verified
+rendering; annotated tag → `dbf0e5c`). Before publishing, the full git history
+(100% of the object database, all 1,075 blobs incl. unreachable objects,
+commit/tag messages) was swept for secrets by two independent passes — verdict
+CLEAN: no `.env` ever committed, deployer keypair JSONs never entered git,
+`wallets.md` public-keys-only in every historical version; the only
+seed-shaped string in history is a checksum-invalid test fixture whose derived
+account has never existed on any network.
 
 ### 3. Integration tests executed — ✅ SATISFIED
 "Does the repo include integration testing code? Have they been executed?"
@@ -69,17 +72,13 @@ post-audit cleanup list.
 
 ## Verdict
 
-**NOT READY — exactly one blocker, and it is mechanical:**
+**READY** (2026-08-16). All five required items and both bonus items are
+satisfied, and the evidence is publicly reachable: canonical repo
+`github.com/Nectar-Network/nectar` carries `main` (= the audited line),
+`tranche-3`, and the rendered `audit-freeze-v1` tag. The previous sole blocker
+(stale public mirrors) was resolved by the 2026-08-16 push, preceded by a
+two-pass full-history secrets sweep (CLEAN — see item 2).
 
-1. **Push `tranche-3` and the `audit-freeze-v1` tag to the public repository**
-   (and decide which URL goes on the form — the org repo
-   `Nectar-Network/nectar` is the one README/docs advertise). Until then,
-   items 2–7's evidence is invisible to reviewers.
-
-Everything else — threat model, dataflow, tooling scan + remediation plan,
-integration-test evidence, LOC/scope statement
-([FREEZE-NOTE.md](./FREEZE-NOTE.md)), and the intake answers
-([INTAKE-DRAFT.md](./INTAKE-DRAFT.md)) — is complete at `audit-freeze-v1`.
-After the push, the submission is same-day ready; the user-side items on the
-form itself (contact details, Telegram, readiness date, KYC) are listed as
-`⟨USER⟩` placeholders in INTAKE-DRAFT.md.
+Remaining user-side items on the form itself: contact emails, Telegram
+handle(s), and KYC — listed as `⟨USER⟩` placeholders in
+[INTAKE-DRAFT.md](./INTAKE-DRAFT.md). Readiness date is set: 2026-08-16.
