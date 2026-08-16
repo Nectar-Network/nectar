@@ -75,9 +75,10 @@ timestamps), and all 9 confirmed findings of the 21-agent pre-freeze review.
 
 - **113 workspace tests passing, 96 audit-scope** (vault 69 incl. 4 property
   invariants × 2000 cases — solvency, inverse, monotonicity,
-  inflation-attack-unprofitable with and without `add_profit` as the vector;
-  registry 27), incl. real cross-contract draw→return and slash→`reconcile_default`
-  cycles. Re-verified green 2026-08-16.
+  inflation-attack-unprofitable on the share math; the `add_profit`-vector
+  inflation attack is covered by a dedicated unit test; registry 27), incl.
+  real cross-contract draw→return and slash→`reconcile_default` cycles.
+  Re-verified green 2026-08-16.
 - **`go test -race ./...`** clean (9 keeper packages); frontend build clean;
   clippy clean on production code.
 - **cargo-scout-audit 0.3.16** run against both frozen contracts —

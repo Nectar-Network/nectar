@@ -89,9 +89,9 @@ sequenceDiagram
     U->>V: deposit(user, amount)  🔒 user.require_auth (VLT:71)
     V->>V: ✅ init + not VLT-4-paused (VLT:69-70)
     V->>V: ✅ deposit_cap (VLT:89-91)
-    V->>V: shares = virtual-offset floor (VLT:95); ✅ reject 0 shares (VLT:98-100)
+    V->>V: shares = virtual-offset floor (VLT:95) · ✅ reject 0 shares (VLT:98-100)
     V->>T: transfer user → vault (VLT:102)
-    V->>V: persist Depositor (+shares, last_deposit_time=now); total_usdc/shares += (VLT:104-127)
+    V->>V: persist Depositor (+shares, last_deposit_time=now) · total_usdc/shares += (VLT:104-127)
     V-->>U: emit "deposit"(amount, shares) (VLT:129-132)
 ```
 
@@ -114,7 +114,7 @@ sequenceDiagram
     V->>V: ✅ shares ≤ depositor.shares (VLT:149-151)
     V->>V: ✅ cooldown: now − last_deposit_time ≥ withdraw_cooldown (VLT:158-161)
     V->>V: usdc_out = virtual-offset floor, CLAMPED to total_usdc (VLT:184-185)
-    V->>V: ✅ rate limit (if max_withdraw_per_24h > 0):<br/>reset window if now − window_start ≥ 86400;<br/>reject if withdrawn_in_window + usdc_out > cap (VLT:191-200)
+    V->>V: ✅ rate limit (if max_withdraw_per_24h > 0):<br/>reset window if now − window_start ≥ 86400<br/>reject if withdrawn_in_window + usdc_out > cap (VLT:191-200)
     V->>V: CEI: burn shares, decrement totals, persist (VLT:202-212)
     V->>T: transfer vault → user (VLT:219)
     V-->>U: emit "withdraw"(shares, usdc_out) (VLT:221-224)
@@ -148,13 +148,13 @@ sequenceDiagram
     Note over K,B: wait on the verified two-phase 400-ledger curve<br/>until lot/bid ≥ MIN_PROFIT (1.02)
     K->>V: ✅ pause re-check before capital commit (ADP:864)
     K->>V: draw(keeper, amount, asset)  🔒 (VLT:262-267)
-    V->>V: ✅ not VLT-4-paused (VLT:265); ✅ global + per-asset liq pause (VLT:266, 736-756)
-    V->>V: ✅ amount > 0 (VLT:277-279); ✅ amount ≤ total_usdc − active_liq (VLT:292-295)
+    V->>V: ✅ not VLT-4-paused (VLT:265) · ✅ global + per-asset liq pause (VLT:266, 736-756)
+    V->>V: ✅ amount > 0 (VLT:277-279) · ✅ amount ≤ total_usdc − active_liq (VLT:292-295)
     V->>V: ✅ CUMULATIVE cap: prev + amount ≤ max_draw_per_keeper (VLT:297-309)
-    V->>R: verify_keeper — registered + active + stake ≥ min_stake (VLT:311; REG:196-218)
-    V->>V: CEI: DrawInfo{prev+amount, since=now}; active_liq += (VLT:320-331)
+    V->>R: verify_keeper — registered + active + stake ≥ min_stake (VLT:311, REG:196-218)
+    V->>V: CEI: DrawInfo{prev+amount, since=now} · active_liq += (VLT:320-331)
     V->>K: transfer vault → keeper (VLT:338)
-    V->>R: mark_draw — require_vault; last_draw_time = now (VLT:344; REG:264-283)
+    V->>R: mark_draw — require_vault · last_draw_time = now (VLT:344, REG:264-283)
     V-->>K: emit "draw"(amount, asset) (VLT:346-347)
     K->>B: ONE atomic submit([FillUserLiquidation, Repay(gross), WithdrawCollateral])
     Note over K,B: single health check at the end — either keeper exits<br/>with tokens and no debt, or nothing happened
@@ -162,7 +162,7 @@ sequenceDiagram
     K->>V: return_proceeds(keeper, amount, response_ms)  🔒 (VLT:356-364)
     V->>V: ✅ NoDraw guard: outstanding draw required (VLT:370-381)
     V->>K: transfer keeper → vault (VLT:389)
-    V->>V: repay = min(amount, drawn, active_liq); profit = amount − min(amount, drawn) (VLT:396-409)
+    V->>V: repay = min(amount, drawn, active_liq) · profit = amount − min(amount, drawn) (VLT:396-409)
     alt fully settled
         V->>V: remove DrawInfo (VLT:433)
         V->>R: clear_draw + record_execution(success, profit, ms) (VLT:434-435)
@@ -197,7 +197,7 @@ sequenceDiagram
         K->>B: free-capture: bare submit([FillBadDebt]) — no debt assumed
     end
     B->>K: backstop LP tokens (lot) → held BY THE OPERATOR
-    Note over K,CM: mainnet unwind (T3): one verified comet call<br/>wdr_tokn_amt_in_get_lp_tokns_out → Circle USDC.<br/>Cost convex in size; single call ≈ pool-USDC/3 cap.
+    Note over K,CM: mainnet unwind (T3): one verified comet call<br/>wdr_tokn_amt_in_get_lp_tokns_out → Circle USDC.<br/>Cost convex in size — single call ≈ pool-USDC/3 cap.
     K--xV: NOT WIRED YET (Session H): unwound USDC → add_profit
 ```
 
@@ -222,10 +222,10 @@ sequenceDiagram
     K->>V: add_profit(keeper, amount)  🔒 (VLT:463-466)
     Note over V: NOT pause-gated (like return_proceeds):<br/>money in is always safe
     V->>V: ✅ amount > 0 (VLT:468-470)
-    V->>R: verify_keeper — bonded, active, stake ≥ min_stake > 0 (VLT:471; REG:196-218)
+    V->>R: verify_keeper — bonded, active, stake ≥ min_stake > 0 (VLT:471, REG:196-218)
     V->>V: ✅ total_shares > 0 — donations need holders (VLT:482-484)
     V->>T: transfer keeper → vault (VLT:491)
-    V->>V: total_usdc += ; total_profit += ; NO shares minted;<br/>draw accounting / cooldowns / rate windows untouched (VLT:493-495)
+    V->>V: total_usdc += · total_profit += · NO shares minted<br/>draw accounting / cooldowns / rate windows untouched (VLT:493-495)
     V-->>K: emit "profit_added" — DISTINCT from "return" (VLT:497-498)
 ```
 
@@ -247,7 +247,7 @@ sequenceDiagram
     participant T as USDC SAC
 
     O->>R: register(operator, name)  🔒 (REG:62-76)
-    R->>R: ✅ not Paused (REG:69-74); ✅ not already registered (REG:79-81); ✅ min_stake > 0 (REG:84-86)
+    R->>R: ✅ not Paused (REG:69-74) · ✅ not already registered (REG:79-81) · ✅ min_stake > 0 (REG:84-86)
     R->>T: stake: transfer operator → registry, exactly min_stake (REG:89-93)
     R->>R: KeeperInfo{stake, active: true, counters zeroed} (REG:95-121)
     R-->>O: emit "registered" (REG:123-126)
@@ -255,12 +255,12 @@ sequenceDiagram
     Note over O,R: deregister 🔒 refunds stake — BLOCKED while has_active_draw (REG:146-148)
 
     A2->>R: slash(keeper) — no auth required (REG:338)
-    R->>R: ✅ has_active_draw (REG:350-352); ✅ now − last_draw_time > slash_timeout (REG:354-357)
+    R->>R: ✅ has_active_draw (REG:350-352) · ✅ now − last_draw_time > slash_timeout (REG:354-357)
     R->>R: slash_amt = stake × slash_rate_bps / 10000 (REG:359)
     R->>T: transfer registry → VAULT (recovery) (REG:361-366)
-    R->>R: stake −= ; has_active_draw = false; active = FALSE —<br/>deactivated, must re-stake to ever draw again (REG:367-375)
-    R->>V: reconcile_default(registry, keeper, recovered)  ✅ require_registry (REG:385-394; VLT:620-628)
-    V->>V: clear DrawInfo; active_liq −= ; write down loss = outstanding − recovered,<br/>CLAMPED at total_usdc ≥ 0 (VLT:630-670)
+    R->>R: stake −= · has_active_draw = false · active = FALSE —<br/>deactivated, must re-stake to ever draw again (REG:367-375)
+    R->>V: reconcile_default(registry, keeper, recovered)  ✅ require_registry (REG:385-394, VLT:620-628)
+    V->>V: clear DrawInfo · active_liq −= · write down loss = outstanding − recovered,<br/>CLAMPED at total_usdc ≥ 0 (VLT:630-670)
     Note over R,V: ATOMIC — if the vault rejects, the whole slash reverts (no drift)
     V-->>A2: emit "write_off"(outstanding, recovered) (VLT:672-675)
     R-->>A2: emit "slashed"(slash_amt, remaining_stake) (REG:396-399)
@@ -285,7 +285,7 @@ flowchart LR
         KR["LiqPaused(lot assets) reads<br/>is_global_liq_paused + is_asset_paused<br/>(runner.go:40; client.go:220,225)"]
     end
 
-    A -->|"🔒 events on every flip"| P1 & P2 & P3 & P4
+    A -->|"🔒 admin-gated (events on P2/P3 flips only)"| P1 & P2 & P3 & P4
     P1 -->|blocks| D1["deposit (VLT:70)"]
     P1 -->|blocks| D2["draw (VLT:265)"]
     P2 -->|blocks| D2
@@ -296,7 +296,11 @@ flowchart LR
     P2 & P3 -.->|"NEVER block"| W
 ```
 
-Exact gating at the tag — who reads each flag and what it stops:
+Exact gating at the tag — who reads each flag and what it stops. Note the event
+asymmetry: the two liquidation flags emit on every flip (`liq_pause`,
+`asset_pause`); the VLT-4 pause, registry pause and `set_config` do NOT emit
+(Scout `storage_change_events`, accepted — state remains readable via
+`is_paused`/getters):
 
 | Flag | Set by | Read on-chain at | Stops | Never stops |
 |---|---|---|---|---|
@@ -327,7 +331,7 @@ sequenceDiagram
     F->>F: ✅ enabled only if FAUCET_SECRET set (keeper/faucet.go:72)
     F->>F: ✅ per-address cooldown (FAUCET_COOLDOWN_SECS)
     F->>T: transfer treasury → user (FAUCET_AMOUNT)
-    Note over F,T: dedicated treasury key, NEVER the keeper key (faucet.go:26).<br/>Abuse = testnet-token drain only (THREAT-MODEL FCT-1).
+    Note over F,T: dedicated treasury account, never the contract<br/>admin/deployer key (faucet.go:26).<br/>Abuse = testnet-token drain only (THREAT-MODEL FCT-1).
 ```
 
 ---

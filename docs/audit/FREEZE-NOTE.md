@@ -127,7 +127,12 @@ measure different things.
 | `keeper-registry/src/types.rs` | 49 | 0 | 4 | 53 |
 | **NectarVault total** | **672** | | | 933 |
 | **KeeperRegistry total** | **399** | | | 505 |
-| **Functional total** | **1,071** | 208 | 159 | **1,438** |
+| **Functional total** | **1,071** | — | — | **1,438** |
+
+(The Comments/Blanks columns deliberately have no totals row: tokei's summary
+aggregation classifies blank lines inside doc-comment markdown differently
+than its per-file view (summary: 208/159; per-file sums: 213/154), so the
+columns don't add. Code and Raw lines are exact in both views.)
 
 ## Audit scope statement (for the intake form)
 
