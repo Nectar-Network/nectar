@@ -1,113 +1,192 @@
-# Nectar Network — Security Tooling & Static Analysis Report
+# Nectar Network — Security Tooling & Static Analysis Report (audit-freeze-v1)
 
 Companion to [AUDIT-SCOPE.md](./AUDIT-SCOPE.md), [THREAT-MODEL.md](./THREAT-MODEL.md)
-and [DATAFLOW.md](./DATAFLOW.md). Prepared for the SCF Audit Bank. **Date:** 2026-07-24.
+and [DATAFLOW.md](./DATAFLOW.md). Prepared for the SCF Soroban Security Audit Bank.
+**Date:** 2026-08-16 (Session G — supersedes the 2026-07-24 pre-freeze report).
 
-## Summary
+## Tool provenance (verified this session, not assumed)
 
-| Tool | Scope | Result |
+- **Tool:** `cargo-scout-audit` **0.3.16** (CoinFabrik Scout) — verified as the
+  **latest published release** on crates.io (`max_version` 0.3.16, published
+  2026-02-13) at run time.
+- **Install/run procedure re-verified from Scout's own repo + docs**
+  ([github.com/CoinFabrik/scout-audit](https://github.com/CoinFabrik/scout-audit),
+  [Getting Started](https://coinfabrik.github.io/scout-audit/docs/intro)):
+  `cargo install cargo-scout-audit`, then `cargo scout-audit` in the contract
+  directory (workspace-aware; `--output-format md|json|…`).
+- **Exact invocation (2026-08-16), against the working tree byte-identical to
+  `audit-freeze-v1` for `contracts/`:**
+
+  ```
+  PATH="$HOME/.cargo/bin:$PATH"   # rustup shim MUST come first — see note
+  cd contracts/keeper-registry && cargo scout-audit --output-format md --output-path <out>/keeper-registry.md
+  cd contracts/nectar-vault    && cargo scout-audit --output-format md --output-path <out>/nectar-vault.md
+  ```
+
+  Both runs completed with status **Analyzed**. Raw tool output is committed
+  verbatim at [`scout-raw/nectar-vault.md`](./scout-raw/nectar-vault.md) and
+  [`scout-raw/keeper-registry.md`](./scout-raw/keeper-registry.md). The run used
+  detector toolchain `nightly-2025-08-07` with `rustc-dev` + `llvm-tools`,
+  auto-selected by Scout.
+
+  *Local-host note (recorded for reproducibility):* on this machine a Homebrew
+  `cargo` shadows the rustup shim; under it Scout fails with
+  `Failed to build detector library`. Putting `~/.cargo/bin` first in `PATH`
+  fixes it — this also explains the July report's "does not install reliably on
+  mixed local toolchains" observation. The CI job (clean Ubuntu toolchain,
+  `.github/workflows/ci.yml` `scout` job) remains the reference environment.
+
+## Raw results at the frozen tag
+
+| Crate | Status | Critical | Medium | Minor | Enhancement | Total |
+|---|---|---|---|---|---|---|
+| `nectar_vault` | Analyzed | 24 | 27 | 0 | 4 | 55 |
+| `keeper_registry` | Analyzed | 3 | 30 | 0 | 5 | 38 |
+| **Total** | | **27** | **57** | **0** | **9** | **93** |
+
+By detector: `integer_overflow_or_underflow` 27 (all the Criticals) ·
+`ineffective_extend_ttl` 46 · `unnecessary_admin_parameter` 9 ·
+`dynamic_storage` 2 · `storage_change_events` 7 · `soroban_version` 2.
+
+Delta vs the 2026-07-24 pre-freeze CI run (same classes, no new detector class):
+vault +4 Critical / +4 Medium — exactly the Session F additions (`add_profit`
+accounting, `reconcile_default` write-down, rate-limit window arithmetic, the
+new pause entry points and their TTL extends). `front_running` (1 pre-freeze
+hit) no longer fires.
+
+## Disposition — every finding, by class
+
+Scout's severity labels are detector-assigned and over-flag by design (every
+unchecked i128 `+`/`-` is "Critical"). Each class below was triaged against the
+frozen source finding-by-finding; the class verdicts were then adversarially
+re-checked by independent reviewers instructed to construct concrete exploits
+(see "Adversarial verification" below). Dispositions are
+**FIXED / FALSE-POSITIVE / ACCEPTED** per the Audit Bank checklist.
+**No finding required a fix — the freeze stands; no `audit-freeze-v2` was
+needed.**
+
+### 1. `integer_overflow_or_underflow` — 27 × Critical → FALSE-POSITIVE (class)
+
+In Soroban, i128/u32 arithmetic **traps and reverts the transaction atomically**
+— there is no wraparound path, so the worst reachable outcome is a
+self-reverting no-op on an out-of-band argument. Site-by-site (vault 24,
+registry 3, all at the tag):
+
+| Sites (VLT/REG:line) | Expression | Why no reachable harm |
 |---|---|---|
-| `cargo test --locked` | Both contracts | ✅ **73/73 pass** (nectar-vault 47, keeper-registry 26) + 17 test-harness (LiquidationLab 12, mock-token 5) |
-| `proptest` invariants | nectar-vault | ✅ **4 properties × 2000 cases** (solvency + share-price) — included in the 47 |
-| `go test -race ./...` | Keeper daemon | ✅ pass (unit + integration + stress, race-clean) |
-| `cargo clippy --all-targets` | Both contracts | ✅ 0 errors; 2 low-severity style warnings (duplicated attribute, manual range-contains) |
-| **`cargo-scout-audit`** (Soroban linter) | Both contracts | ✅ **ran on CI** — 23 "Critical" + 53 "Medium" raw; **every class triaged** below (all false-positive or accepted, one latent edge hardened). Raw output: CI artifact `scout-report`. |
-| Manual STRIDE review | Both contracts | Findings in THREAT-MODEL.md — all High/Medium remediated |
+| VLT:22, 27 | share/asset conversion products | Bounded by `deposit_cap`-scale magnitudes; largest product ~1e28, ~10 orders below `i128::MAX`. |
+| VLT:118, 125-126 | deposit accumulation | Cap-checked (VLT:89-91) before mutation. |
+| VLT:196, 199 | rate-limit window sums | `usdc_out ≤ total_usdc` (clamped VLT:185); comparison precedes accumulation. |
+| VLT:204, 210-211 | withdraw burn/decrements | Guarded: `shares ≤ depositor.shares` (VLT:149-151); `usdc_out ≤ total_usdc` (the **already-hardened** SCOUT-total_usdc-underflow clamp, VLT:184-185); `depositor.shares ≤ total_shares` by bookkeeping. |
+| VLT:292 | `total_usdc − active_liq` | Can legitimately go negative after a donation-assisted exit; the ONLY use is the `amount > available` comparison, which then rejects every draw — correct fail-closed behavior, no state write. |
+| VLT:323, 330 | cumulative draw + `active_liq` | Cap- and availability-checked (VLT:292-309) before commit. |
+| VLT:405-409, 413 | return split | `repay_target = min(amount, drawn)` and `repay ≤ active_liq` make every subtraction non-negative by construction (VLT:396-404). |
+| VLT:493-494 | `add_profit` accumulation | Backed by a real token transfer; trap-bounded. |
+| VLT:653, 665-667 | reconcile write-down | `clear = min(outstanding, active_liq)`; the loss write-down is **clamped at zero** (VLT:666 — the freeze-review fix); `total_profit` may go negative **by design** (cumulative P&L, documented). A negative `loss` (recovery > outstanding) credits the surplus — intended. |
+| REG:121 | `count + 1` (u32) | Each increment costs a `min_stake` bond; 2³² registrations is economically impossible. |
+| REG:359, 367 | slash math | `slash_rate_bps ≤ 10_000` enforced (REG:29-31, 407-409) ⇒ `slash_amt ≤ stake` ⇒ `stake −= slash_amt ≥ 0`; product bounded ~1e15. |
 
-## Test suite
+History note kept for auditors: the July triage of this same class surfaced one
+real latent edge (`SCOUT-total_usdc-underflow` — a persistable negative
+`total_usdc` in the post-loss `S > U` regime). It was **FIXED pre-freeze**
+(withdraw clamp VLT:184-185 + regression test), and the freeze review fixed its
+sibling in `reconcile_default` (clamp VLT:666). Both fixes are inside the tag.
+The class verdict is false-positive **because** those two edges are closed.
 
-`cargo test --locked` (native, soroban-sdk 22 testutils, `mock_all_auths`):
-- **nectar-vault: 47** — 43 unit/integration (deposit/withdraw share math, 7-decimal
-  rounding, deposit caps, cooldown, per-keeper draw caps, partial-return
-  slash-eligibility, real cross-contract slash→`reconcile_default`, and the
-  post-loss withdraw-underflow regression) + **4 property invariants**.
-- **keeper-registry: 26** — registration/staking, dedup, slashing (timeout + rate +
-  deactivation), draw marking, execution recording, admin/vault auth gates, pause.
-- **test harness (out of audit scope): 17** — LiquidationLab 12, mock-token 5.
+### 2. `unnecessary_admin_parameter` — 9 × Medium → FALSE-POSITIVE (class)
 
-### Property-based invariants (`nectar-vault/src/prop_test.rs`)
-2000 random cases each, over wide 7-decimal ranges:
-1. **Solvency** — deposit→withdraw of exactly the minted shares never returns more than deposited (rounding always favors the pool).
-2. **Inverse** — withdraw→re-deposit never yields more shares.
-3. **Monotonicity** — shares minted are non-decreasing in the deposit amount.
-4. **Inflation-attack unprofitable (VLT-1)** — the first-depositor donation attack always loses money (`attacker_out ≤ attacker_in`).
+Flagged: vault `set_config`/`pause`/`unpause`/`set_global_pause`/`set_asset_pause`
+(VLT:518, 538, 545, 563, 583), registry `set_vault`/`pause`/`unpause`/`set_config`
+(REG:51, 250, 257, 404). Every one routes through the same pattern: **identity
+check against the stored admin first, `require_auth` second** (VLT:711-722;
+REG:427-438). No bypass is constructible: a wrong address fails the identity
+check (`Unauthorized`); the right address without a signature fails
+`require_auth`. Passing the admin explicitly is a deliberate style choice — it
+makes multisig transaction construction explicit (the 2-of-3 admin account is
+the signer; see `docs/evidence/f5-multisig.md`).
 
-`go test -race ./...` on the keeper passes under the race detector (client/XDR encoding, adapter loop, DEX slippage, retry/tx-safety), hermetic against httptest mocks.
+### 3. `ineffective_extend_ttl` — 46 × Medium → ACCEPTED
 
-## `cargo-scout-audit` — ran on CI, fully triaged
+Every hit is our uniform `extend_ttl(1000, 1000)` (instance) /
+`extend_ttl(&key, 535680, 535680)` (persistent) idiom: threshold == extension,
+so the extend runs on every access. This is storage-**rent hygiene**, not a
+security property: values sit within Soroban's TTL bounds, nothing can trap,
+and the cost is a few wasted instructions per call when the TTL is already
+fresh. Accepted at the freeze (an idiom change across 46 sites for a gas
+micro-optimization is not audit remediation); noted as a post-audit cleanup
+candidate.
 
-The SDF-recommended Soroban linter now runs in CI on a clean Ubuntu toolchain
-(it does not install reliably on a mixed local Homebrew/rustup host). Raw counts:
+### 4. `dynamic_storage` — 2 × Medium → ACCEPTED
 
-| Crate | Critical | Medium | Minor | Enhancement |
-|---|---|---|---|---|
-| `nectar_vault` | 20 | 23 | 0 | 4 |
-| `keeper_registry` | 3 | 30 | 0 | 5 |
+REG:117 / REG:171 — the registry's `Vec<Address>` keeper list (push on
+register, rebuild on deregister). Growth-griefing it toward entry-size limits
+needs ~3,300 **staked** registrations (~330k USDC locked at current
+`min_stake`), refundable only by individually deregistering — economically
+absurd for a griefing outcome of "the list getter gets slow". No theft path.
+Accepted; a paginated list is a possible future refactor.
 
-Scout's severity labels are detector-assigned and **over-flag heavily** (e.g. it
-marks every unchecked i128 `+`/`-` "Critical"). Each finding **class** was triaged
-against the real code and then **adversarially re-checked by an independent
-skeptic** instructed to construct a concrete exploit; verdicts below. **No class
-was a must-fix vulnerability**; one latent accounting edge was hardened anyway.
+### 5. `storage_change_events` — 7 × Enhancement → ACCEPTED
 
-| Detector (class) | Count | Severity (Scout) | Verdict | Disposition |
-|---|---|---|---|---|
-| `integer_overflow_or_underflow` | 23 | Critical | **False positive** | i128 **traps and reverts atomically** in Soroban (no wraparound); every accounting op is bounded by `deposit_cap`/`max_draw` or explicitly guarded (`shares ≤ depositor.shares`, `repay = min(amount,drawn)`, `slash_rate_bps ≤ 10000`, saturating counters). The largest product (share math) is ~1e28, ~10 orders below `i128::MAX`. No within-caps input reaches a trap; the worst case is a self-reverting no-op on an out-of-band argument. **One latent edge hardened — see below.** |
-| `unnecessary_admin_parameter` | 7 | Medium | **False positive** | `pause`/`unpause`/`set_config`/`set_vault` in **both** contracts check `stored_admin != caller → Unauthorized` (via `require_admin`) **before** `require_auth`. No bypass is constructible: a wrong address fails the identity check; the real address fails `require_auth` (no signature). |
-| `ineffective_extend_ttl` | 43 | Medium | **False positive** | `extend_ttl` values (instance 1000, persistent 535680) sit within Soroban's min/max-TTL bounds, so no trap or refresh-DoS. Storage-rent hygiene only; not a funds/security issue. |
-| `dynamic_storage` | 2 | Medium | **Accepted risk** | Registry keeps a `Vec<Address>` keeper list. Bricking it via `Vec` growth needs ~3,300 distinct staked registrations (~330,000 USDC of stake locked) — economically absurd griefing, no theft. Documented; a paginated list is a possible future refactor. |
-| `front_running` | 1 | Medium | **False positive** | Detector wants a min-out on a token transfer. The flagged transfer is not a DEX swap; keepers are verified + draw-capped and the virtual-offset share ratio is not mempool-manipulable for profit. |
-| `storage_change_events` | 7 | Enhancement | **Accepted (enhancement)** | Emitting events on admin/config change is nice-to-have observability; gates nothing. |
-| `soroban_version` | 2 | Enhancement | **Accepted (enhancement)** | soroban-sdk 22.x is the current major line for this deployment. |
+Vault `set_config`/`pause`/`unpause` (VLT:518, 538, 545) and registry
+`set_vault`/`pause`/`unpause`/`set_config` (REG:51, 250, 257, 404) emit no
+events. Deliberate asymmetry: the T3 liquidation flags DO emit on every flip
+(`liq_pause`/`asset_pause`, VLT:573-574, 595-596) because keepers poll them;
+the VLT-4 pause and config are low-frequency admin state readable via
+`is_paused`/`get_config`. Accepted as an observability nicety; recorded in
+THREAT-MODEL §3.5 and the DATAFLOW pause matrix so nobody mistakes the
+un-evented flags for evented ones.
 
-### Latent edge found by the triage and **hardened**: `SCOUT-total_usdc-underflow`
-Not flagged as a distinct Scout finding, but surfaced while adversarially checking
-the overflow class. After a `reconcile_default` loss write-off the vault can enter
-the **`total_shares > total_usdc`** regime; there `to_assets(shares)` (which adds
-`+VIRTUAL_OFFSET` to the numerator) can exceed `total_usdc` by offset-scale dust.
-Because `total_usdc` is a **signed** `i128`, `total_usdc -= usdc_out` does **not**
-trap on going negative — and a permissionless raw-token **donation** (which
-inflates the vault's liquid balance) can let the over-payment transfer succeed and
-**persist a negative `total_usdc`**. Impact is dust and non-profitable (the donor
-loses more than is extracted; later depositors recover it), so it was **not a
-freeze-blocker** — but it is a real invariant violation, so it is **fixed**:
-`withdraw` now clamps `usdc_out = to_assets(...).min(total_usdc)`. The clamp is a
-**proven no-op** for `total_shares ≤ total_usdc` (`to_assets(sh,S,U) ≤ U ⟺ S ≤ U`)
-and keeps `total_usdc ≥ 0`. Covered by
-`test_withdraw_after_loss_cannot_underflow_total_usdc` (fails without the clamp:
-`total_usdc` reaches `-389961`; passes with it).
+### 6. `soroban_version` — 2 × Enhancement → ACCEPTED
 
-## Findings & remediation status (from THREAT-MODEL.md)
+soroban-sdk 22.x is the pinned major line for this deployment and the freeze;
+bumping the SDK mid-freeze would reopen the frozen artifacts for a
+non-security-driven change. Revisit at the next natural upgrade window
+(post-audit), per FREEZE-NOTE rules.
 
-Findings were adversarially re-verified by independent review passes, then
-remediated; the implemented fixes were adversarially reviewed again (which
-surfaced NEW‑drain and the underflow edge, both fixed below). **All 73 in-scope
-contract tests pass** and both contracts build to deployable `wasm32v1-none`.
+## Adversarial verification of this triage
 
-| ID | Finding | Severity | Status |
-|---|---|---|---|
-| VLT‑1 | Share-inflation / first-depositor attack | **High** | ✅ **Fixed** — symmetric virtual-offset share math (`VIRTUAL_OFFSET=1_000_000` in `to_shares`/`to_assets`) + reject-zero-share deposits. 5 regression tests + a 2000-case property invariant. |
-| VLT‑2 | `return_proceeds` books arbitrary donations as profit | Medium | ✅ **Fixed** — rejects `drawn == 0` (`NoDraw`); only a keeper with an outstanding draw can settle. |
-| VLT‑3 | Keeper verification discards result, no `active`/stake check | Medium | ✅ **Fixed** — `draw` → `registry.verify_keeper` asserts `active == true` **and** `stake ≥ min_stake`. |
-| VLT‑4 | No emergency pause on the vault | Medium | ✅ **Fixed** — admin `pause`/`unpause` gating `deposit`+`draw` (withdraw + return stay open). |
-| VLT‑5 | Single admin key (no multisig) | Medium | **Accepted / deployment-level** — mainnet admin is a Stellar multisig account; no contract change. See [AUDIT-SCOPE.md](./AUDIT-SCOPE.md). |
-| VLT‑6 | CEI ordering in `draw` | Low | ✅ **Fixed** — effects committed before the token transfer. |
-| NEW‑cap | Per-keeper draw cap was per-call, not cumulative | **High** | ✅ **Fixed** — `draw` enforces `outstanding + amount ≤ max_draw_per_keeper`. |
-| NEW‑reconcile | Slash didn't reconcile the vault (registry/vault drift) | **High** | ✅ **Fixed** — `slash` cross-calls `vault.reconcile_default` (atomic) to write off the defaulted draw. |
-| NEW‑drain | Slashed keeper could re-draw the full cap each window | **High** | ✅ **Fixed** (fix-review) — `slash` **deactivates** the keeper (`active=false`); must re-register to draw. |
-| NEW‑init | `initialize` front-run (attacker self-seizes admin) | Medium | ✅ **Fixed** — atomic soroban-sdk 22 `__constructor` (no separate init tx to race); registry↔vault circular ref resolved by one-time admin-gated `set_vault`. |
-| SCOUT‑underflow | `total_usdc` can persist negative in the post-loss S>U regime + donation | Low | ✅ **Fixed** — `withdraw` clamps `usdc_out` to `total_usdc`; regression test added. |
-| REG‑1 | Permissionless `slash` | Info | By design & safe (timeout + active-draw gated); `slash_rate_bps ≤ 10000` validated. |
-| ORA‑1 | Oracle manipulation / circuit breaker | Med/High | **Out of current scope** — a Tranche-3 module not yet built; interim mitigation is the keeper's oracle-anchored `amount_out_min`. See [AUDIT-SCOPE.md](./AUDIT-SCOPE.md). |
-| DEX‑1 | Swap slippage / sandwich | Low/Med | Mitigated (oracle-anchored min-out). |
-| INT‑1 | Integer overflow in share math | Low | Reviewed — safe (i128 traps on overflow; products stay < i128::MAX at realistic caps). Corroborated by the Scout triage above. |
+Per this repo's standing practice (CORRECTION-REPORT method), the triage was
+re-checked 2026-08-16 by independent adversarial review passes instructed to
+construct concrete exploits against the frozen source rather than accept the
+triage's reasoning. Scope and result: the two exploit-bearing FALSE-POSITIVE
+classes were attacked directly — all 27 `integer_overflow_or_underflow` sites
+(call-sequence construction for wraparound, state-corrupting traps, and
+invariant violations, including config changes between register and slash) and
+all 9 `unnecessary_admin_parameter` sites (bypass construction) — and both
+verdicts were **upheld with zero counterexamples**. The four ACCEPTED classes
+are hygiene items where no exploit claim is made; a separate consistency pass
+checked this report's numbers against the raw tool output (and caught an
+arithmetic slip in this section's totals, fixed before commit). (The July
+edition of this exercise is what found the real `SCOUT-total_usdc-underflow`
+edge — the loop has teeth.)
 
-**Known design limitations (documented, not bugs):** `withdraw` sizes payout from
-`total_usdc` (which counts drawn-but-unreturned capital), so a withdrawal can
-revert on insufficient *liquid* balance while utilization is high — a liveness
-limitation, never fund loss. Every deposit resets the withdraw cooldown on the
-depositor's whole balance (minor, self-inflicted).
+## Companion assurance (context for the audit)
 
-**Remaining for mainnet (Tranche 3, out of current audit scope):** VLT‑5 (admin
-multisig, account-level) and ORA‑1 (oracle circuit breaker module). All contract
-code findings are remediated; the audit will validate the fixes.
+| Check | Scope | Result at the tag |
+|---|---|---|
+| `cargo test` (workspace) | contracts | 113 passed / 0 failed (96 audit-scope: vault 69 incl. 4 proptest invariants × 2000 cases, registry 27) — re-verified green 2026-08-16 |
+| Property invariants | nectar-vault | solvency, withdraw/deposit inverse, share monotonicity, inflation-attack-unprofitable (with and without `add_profit` as the vector) |
+| `go test -race ./...` | keeper (out of audit scope) | all ok, 9 packages |
+| `cargo clippy` | both contracts, prod code | no warnings (2 pre-existing test-file lints left to keep the freeze diff minimal) |
+| `npm run build` | frontend | clean |
+
+## Remediation plan
+
+**No open findings requiring remediation.** All 93 raw findings are dispositioned
+above: 36 false-positive (27 overflow-class + 9 admin-parameter), 57 accepted
+with written reasons (46 TTL idiom, 2 dynamic storage, 7 event coverage, 2 SDK
+version), 0 fixed-at-this-tag (the two historically-real edges in the overflow
+class were fixed before the tag and are inside the frozen code).
+
+Standing rule: if the external audit (or any future Scout run on remediation
+commits) surfaces a finding that requires a code change, the fix lands as
+clearly-labeled commits, the freeze re-tags as `audit-freeze-v2`, FREEZE-NOTE
+is amended, and the full suites re-run — per the freeze contract in
+[FREEZE-NOTE.md](../audit/FREEZE-NOTE.md).
+
+Post-audit (non-blocking) cleanup candidates, in priority order:
+1. Emit events on the remaining admin state changes (`storage_change_events`).
+2. Rationalize the `extend_ttl` idiom (threshold < extension) to stop redundant
+   writes.
+3. Consider a paginated keeper list (`dynamic_storage`).
+4. SDK bump at the next natural window.
